@@ -18,7 +18,7 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   credential request delays Google's sheet. So `login_attempt` never carries `gms_version`, `upi_apps`
   or `net_*`; the outcomes do.
 - `POST /auth/login` returns an `analytics` object spread verbatim onto `login_success` (`new_user`,
-  `sub_status`, `trial_used`, `account_age_d`, `internal`, `paid_before`, `referred`): a new key is a
+  `sub_status`, `trial_used`, `account_age_d`, `internal`, `paid_before`; `referred` is gone, so it appears on older events only): a new key is a
   Worker deploy, not a release. Analytics only — the gate stays `premiumPredicate`. Divide login→trial
   by `trial_used = false`: a spent trial can only buy at ₹199.
 - Every sign-in event also carries how the app RENDERED up to it (`slow_frames`, `worst_frame_ms`,

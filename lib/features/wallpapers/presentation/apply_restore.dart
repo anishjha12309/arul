@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
+import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/wallpaper.dart';
-import '../../referral/data/install_referrer_service.dart';
 import '../providers/catalog_providers.dart';
 import '../providers/wallpaper_apply_provider.dart';
 

@@ -6,15 +6,13 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../core/analytics/analytics_events.dart';
 import '../../../core/analytics/analytics_provider.dart';
-import '../../../core/config/app_config.dart';
 import '../../../core/crash/crash_provider.dart';
+import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../data/models/wallpaper.dart';
-import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
-import '../../referral/data/install_referrer_service.dart';
 import '../data/direct_share_service.dart';
 import '../data/share_watermark_service.dart';
 import '../data/wallpaper_apply_service.dart';
@@ -171,8 +169,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
         rethrow;
       }
 
-      final link = await _installLink(wallpaper);
-      final caption = buildCaption(link.url);
+      final caption = buildCaption(_installLink(wallpaper));
       final mimeType = _mimeType(shared.path);
 
       // The sheet's future resolves only when it CLOSES -> go idle before the hand-off.
@@ -181,7 +178,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
 
       // WhatsApp FIRST — it is where these travel, and the chooser is a tap that loses shares.
       // Attempted, never assumed: a false answer is routine and falls through to the sheet.
-      // The FILE goes with it — a native targeted ACTION_SEND, not the text-only referral link.
+      // The FILE goes with it — a native targeted ACTION_SEND, not the text-only tell-a-friend link.
       final direct = await ref
           .read(directShareServiceProvider)
           .shareToWhatsApp(
@@ -214,10 +211,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
           'category': wallpaper.category,
           'result': status.name,
           'watermarked': watermarked,
-          // Reach telemetry. `link_attributed` false means the sender can never be credited.
-          // That referral leak was previously invisible.
           // `channel` says whether skipping the chooser is earning its keep.
-          'link_attributed': link.attributed,
           'channel': direct ? 'whatsapp' : 'sheet',
         },
       );
@@ -331,48 +325,18 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   }
 
   /// The ONE link a share caption carries (docs/share.md) — an App Link to THIS wallpaper.
-  /// Referral-attributed when the user's code loads in time.
   ///
   /// Points at the WALLPAPER, not the listing -> a recipient who has the app lands on it.
   /// One who does not still installs: `/w/:id` redirects to Play carrying the id, and it reopens.
   /// The same URL shape ad creatives use.
-  /// NEVER blocks the share on the referral call — the file is the payload, the link a bonus.
-  /// Reports WHICH of the two it returned, because an unattributed link credits nobody.
-  Future<({String url, bool attributed})> _installLink(
-    Wallpaper wallpaper,
-  ) async {
+  String _installLink(Wallpaper wallpaper) {
     // The caption goes out in the sharer's language -> a fresh install should open in it.
     // As `ilang`, which survives only the Play referrer, never the App Link.
     // A recipient who already has Arul keeps their OWN language.
     final installLang = ref.read(localeProvider).languageCode;
-    if (AppConfig.hasBackend) {
-      try {
-        final summary = await ref
-            .read(referralRepositoryProvider)
-            .getReferralSummary()
-            .timeout(const Duration(seconds: 2));
-        final code = summary.referralCode;
-        if (code != null && code.isNotEmpty) {
-          return (
-            url: InstallReferrerService.buildWallpaperLink(
-              wallpaper.id,
-              code: code,
-              installLang: installLang,
-            ),
-            attributed: true,
-          );
-        }
-      } catch (_) {
-        // Offline mid-flow, a slow server, or no code -> fall through.
-      }
-    }
-    // Still the wallpaper link, uncredited — losing attribution must not also cost the deep link.
-    return (
-      url: InstallReferrerService.buildWallpaperLink(
-        wallpaper.id,
-        installLang: installLang,
-      ),
-      attributed: false,
+    return InstallReferrerService.buildWallpaperLink(
+      wallpaper.id,
+      installLang: installLang,
     );
   }
 

@@ -2,7 +2,7 @@
 
 **No server-side transcoding — ever.** Transcode locally, then upload through the unified CMS or, for
 bulk jobs, direct to R2 plus one DB transaction (`tools/content-import/`, content-ops skill). Content
-kinds: wallpapers (static + live) and ringtones (audio only).
+kinds: wallpapers (static + live), ringtones (audio only) and status clips (video WITH music).
 
 ## R2 keys and formats (bucket `south-indian-wallpapers`)
 
@@ -19,6 +19,7 @@ approving a user submission copies the object into that category's prefix. The s
 | Wallpaper (static) | wallpapers/&lt;category&gt;/{uuid}.jpg | JPG/PNG/WEBP | 1080×1920 JPG | 10 MB |
 | Wallpaper (live) | wallpapers/&lt;category&gt;/{uuid}.mp4 | MP4/MOV | **1024×1824** H.264 MP4 faststart, no audio, **≤10 s** | **15 MB** |
 | Ringtone (audio) | ringtones/&lt;category&gt;/{uuid}.mp3 | MP3/M4A/AAC | MP3 (libmp3lame), ≤40 s recommended | 15 MB |
+| Status clip | statuses/&lt;category&gt;/{uuid}.mp4 + REQUIRED poster | MP4 with audio | **1024×1824** H.264 + AAC at −14 LUFS, **≤30 s** — [status-clips.md](status-clips.md) | **10 MB** |
 
 **Those "Max" figures are the IMPORT PIPELINE's, not the Worker's.** The static 10 MB cap is enforced
 on both paths, but the Worker's server-side ceiling for `video/mp4` is far higher — so a
@@ -74,8 +75,8 @@ ONLY an overshooting clip, with a `-maxrate` sized from its own duration, so one
 instead of every clip being pre-emptively starved. Bulk statics go through `sharp` (lanczos3 plus
 sharpen when upscaling) — tuned to match this recipe, not byte-identical to it.
 
-**Paywall clips** (`onboarding/<lang>.mp4`, `onboarding/return/<lang>.mp4` — the only AUDIBLE
-media): 16:9 at 1024×576 (both dimensions on the video rule), and **level every cut to −14 LUFS** —
+**Paywall clips** (`onboarding/<lang>.mp4`, `onboarding/return/<lang>.mp4` — audible, like
+status clips): 16:9 at 1024×576 (both dimensions on the video rule), and **level every cut to −14 LUFS** —
 dubs arrive near −14 while an English master arrived at −6 and clipping, so switching language
 jumped the volume. Two-pass `loudnorm` (measure, then feed `measured_*` back with `linear=true`),
 then a limiter:

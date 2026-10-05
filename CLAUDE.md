@@ -6,14 +6,15 @@ matching file; the reasoning behind them is in `docs/` (§8). Open defects: `doc
 ## 1. Product
 
 Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers (static
-and live video feed) and ringtones, premium via PhonePe UPI Autopay. Three-tab shell behind a floating
-dock (Wallpapers · Ringtones · Settings); **Settings is a dock branch, never a pushed route.** No
-screen promises a push or a reminder — campaign pushes come only from the CMS through the Worker.
+and live), ringtones and status clips (video with music), premium via PhonePe UPI Autopay. Dock:
+Wallpapers · Ringtones · Status, the last only while `feature_flags.status_tab` is `true`; **Settings
+is a pushed route from the header gear, never a dock branch.** No screen promises a push or a
+reminder — campaign pushes come only from the CMS through the Worker.
 
-- **All content is premium** (apply, share, set); browse and preview are free and media keys are
+- **All content is premium** (apply, share, set, save); browse and preview are free and media keys are
   public by design. The gate is the Worker's live entitlement read, whose rule has ONE home,
   `premiumPredicate` in `workers/src/lib/entitlement.ts` — never re-derive it client-side.
-- **`category` is THE browse axis** on both tabs; `type` (static/live) is a rendering hint, never a
+- **`category` is THE browse axis** on every tab; `type` (static/live) is a rendering hint, never a
   filter or a tab. Categories are free text, so a new one is an insert, not a migration. Feed order is
   one SQL clause in `build-catalog`, numbered into the catalog's `feed_rank`.
 
@@ -89,7 +90,7 @@ Ask, or state the assumption and stop before building it.
 
 The `[doc-sync]` hook names the doc for any file you edit: read it before debugging (the answer is
 usually there) and update it through the `doc-update` skill, which carries the house style and byte
-budgets. `docs/edge-cases.md` indexes every regression contract — walk it before a release.
+budgets. `docs/edge-cases.md` + `edge-cases-reel.md` index every regression contract; walk both pre-release.
 `docs/architecture.md` covers routes, entitlement, uploads and the catalog build. Suspect a doc is
 stale? `/doc-audit <name>`.
 

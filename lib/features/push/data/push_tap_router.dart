@@ -29,7 +29,10 @@ class PushTapRouter {
         onSelectCategory(slug);
       case PremiumLinkTarget():
         break;
-      case WallpaperLinkTarget() || RingtoneLinkTarget() || TabLinkTarget():
+      case WallpaperLinkTarget() ||
+          RingtoneLinkTarget() ||
+          StatusLinkTarget() ||
+          TabLinkTarget():
         // Parked for the tab's screen, which consumes it once its catalog can resolve the id. A held
         // cold tap needs nothing more: the shell follows a parked target when it first mounts.
         ArulDeepLink.requestTarget(target);
@@ -45,7 +48,11 @@ class PushTapRouter {
 
   static String locationFor(DeepLinkTarget target) => switch (target) {
     PremiumLinkTarget() => '/premium?source=push',
-    _ => target.tab == ArulTab.ringtones ? '/ringtones' : '/browse',
+    _ => switch (target.tab) {
+      ArulTab.wallpapers => '/browse',
+      ArulTab.ringtones => '/ringtones',
+      ArulTab.status => '/status',
+    },
   };
 
   void _onRouteChanged() {

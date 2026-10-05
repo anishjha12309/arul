@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
+import 'package:arul/app/widgets/arul_icon_tap.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
@@ -141,7 +142,10 @@ void main() {
             return const SizedBox.shrink();
           },
         ),
-        GoRoute(path: '/refer', builder: (_, _) => const SizedBox.shrink()),
+        GoRoute(
+          path: '/settings',
+          builder: (_, _) => const Text('settings-route'),
+        ),
       ],
     );
 
@@ -242,9 +246,13 @@ void main() {
       await tester.pump();
       expect(preview.state.currentId, 'r3');
 
-      // The Earn chip pushes /refer OVER this screen -> keep-alive means nothing disposes.
+      // The header gear pushes /settings OVER this screen -> keep-alive means nothing disposes.
       // So only the route listener can silence the audio.
-      await tester.tap(find.widgetWithText(GestureDetector, 'Earn'));
+      await tester.tap(
+        find.byWidgetPredicate(
+          (w) => w is ArulIconTap && w.identifier == 'arul_header_settings',
+        ),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -263,7 +271,7 @@ void main() {
       // Sign-out and the dead-session route REPLACE the location -> the screen is disposed inside
       // finalizeTree, where a provider write throws in debug and the next shell build then trips
       // over a duplicate GlobalKey.
-      GoRouter.of(tester.element(find.byType(RingtonesScreen))).go('/refer');
+      GoRouter.of(tester.element(find.byType(RingtonesScreen))).go('/settings');
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -272,6 +280,22 @@ void main() {
       expect(preview.state.currentId, isNull);
       expect(preview.halts, contains('stop:r3'));
     });
+  });
+
+  testWidgets('the header gear pushes Settings over the tab', (tester) async {
+    await pumpScreen(tester, catalog: _catalog);
+    final gear = find.byWidgetPredicate(
+      (w) => w is ArulIconTap && w.identifier == 'arul_header_settings',
+    );
+    expect(gear, findsOneWidget);
+
+    await tester.tap(gear);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text('settings-route'), findsOneWidget);
+    final router = GoRouter.of(tester.element(find.text('settings-route')));
+    expect(router.canPop(), isTrue, reason: 'pushed, so Back returns to the tab');
   });
 
   group('category chips', () {

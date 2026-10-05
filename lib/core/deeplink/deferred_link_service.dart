@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../../features/referral/data/install_referrer_service.dart';
 import 'deep_link_parser.dart';
 import 'deep_link_target.dart';
+import 'install_referrer_service.dart';
 
 /// Receives deferred deep links native Android fetched over the network — GA4F and the Meta SDK.
 class DeferredLinkService {

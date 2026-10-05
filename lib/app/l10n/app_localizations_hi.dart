@@ -199,7 +199,29 @@ class AppLocalizationsHi extends AppLocalizations {
   String get tabRingtones => 'रिंगटोन';
 
   @override
-  String get earn => 'इनाम';
+  String get statusTitle => 'स्टेटस';
+
+  @override
+  String get statusSave => 'सेव करें';
+
+  @override
+  String get statusWhatsapp => 'WhatsApp';
+
+  @override
+  String get statusSaved => 'गैलरी में सेव हो गया';
+
+  @override
+  String get statusSaveFailed => 'सेव नहीं हो सका। फिर कोशिश करें।';
+
+  @override
+  String get statusPermissionDenied =>
+      'वीडियो सेव करने के लिए स्टोरेज की अनुमति दें।';
+
+  @override
+  String get statusEmpty => 'अभी कोई स्टेटस वीडियो नहीं है';
+
+  @override
+  String get statusError => 'स्टेटस वीडियो लोड नहीं हो सके';
 
   @override
   String get ringtoneSet => 'सेट करें';
@@ -266,9 +288,6 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get settingsPremiumSubActive => 'आप प्रीमियम मेंबर हैं';
-
-  @override
-  String get settingsReferSub => '30 दिन मुफ़्त प्रीमियम पाएँ';
 
   @override
   String get settingsTellFriend => 'दोस्त को बताएँ';
@@ -421,43 +440,6 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get premiumKeepBrowsing => 'मुफ़्त में देखते रहें';
-
-  @override
-  String get referTitle => 'रेफ़र करें, इनाम पाएँ';
-
-  @override
-  String get referHeroTitle => 'दोस्त को तोहफ़ा, आपको एक महीना';
-
-  @override
-  String get referHeroBody =>
-      'आपके लिंक से सब्सक्राइब करने वाले हर दोस्त पर आपको 30 दिन मुफ़्त प्रीमियम';
-
-  @override
-  String get referShareWhatsapp => 'WhatsApp पर शेयर करें';
-
-  @override
-  String get referRewardsLabel => 'मिले इनाम';
-
-  @override
-  String referRewardDays(int days) {
-    return '$days दिन';
-  }
-
-  @override
-  String get referHowItWorks => 'यह कैसे काम करता है';
-
-  @override
-  String get referStep1 => 'अपना लिंक दोस्तों और परिवार के साथ शेयर करें';
-
-  @override
-  String get referStep2 => 'वे Arul इंस्टॉल करके प्रीमियम लेते हैं';
-
-  @override
-  String get referStep3 => '30 दिन मुफ़्त प्रीमियम आपके अकाउंट में आ जाता है';
-
-  @override
-  String get referEmpty =>
-      'अभी कोई रेफ़रल नहीं — बस एक शेयर करें, पहला दोस्त जुड़ जाएगा';
 
   @override
   String get referShareCta => 'Arul शेयर करें';

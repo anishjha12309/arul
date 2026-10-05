@@ -28,7 +28,7 @@ import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../referral/presentation/share_moment_sheet.dart';
+import '../../share/share_moment_sheet.dart';
 import '../../wallpapers/data/feed_video_player.dart';
 import '../data/return_clip_cache.dart';
 import '../domain/cancel_offer.dart';

@@ -12,19 +12,20 @@ import '../../../app/shell/app_shell.dart';
 import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_chip.dart';
-import '../../../app/widgets/arul_earn_button.dart';
+import '../../../app/widgets/arul_icon_tap.dart';
+import '../../../app/widgets/arul_line_icons.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
+import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
-import '../../referral/providers/referral_providers.dart';
 import '../data/ringtone_set_service.dart';
 import '../providers/ringtone_catalog_providers.dart';
 import '../providers/ringtone_preview_provider.dart';
@@ -253,7 +254,14 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
                 title: l10n.tabRingtones,
                 // Literally the SAME control the feed puts here, not a matching one.
                 // Two look-alike buttons is how they drifted apart the first time.
-                actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
+                actions: [
+                  ArulIconTap.glyph(
+                    glyph: ArulLineGlyph.settings,
+                    label: l10n.settingsTitle,
+                    identifier: 'arul_header_settings',
+                    onTap: () => context.push('/settings'),
+                  ),
+                ],
                 chips: const _RingtoneChips(),
               ),
 

@@ -199,7 +199,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tabRingtones => 'Ringtones';
 
   @override
-  String get earn => 'Earn';
+  String get statusTitle => 'Status';
+
+  @override
+  String get statusSave => 'Save';
+
+  @override
+  String get statusWhatsapp => 'WhatsApp';
+
+  @override
+  String get statusSaved => 'Saved to your gallery';
+
+  @override
+  String get statusSaveFailed => 'Couldn\'t save. Try again.';
+
+  @override
+  String get statusPermissionDenied => 'Allow storage access to save videos.';
+
+  @override
+  String get statusEmpty => 'No status videos yet';
+
+  @override
+  String get statusError => 'Couldn\'t load status videos';
 
   @override
   String get ringtoneSet => 'Set';
@@ -266,9 +287,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsPremiumSubActive => 'You\'re a member';
-
-  @override
-  String get settingsReferSub => 'Earn 30 days free premium';
 
   @override
   String get settingsTellFriend => 'Tell a friend';
@@ -423,43 +441,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get premiumKeepBrowsing => 'Keep browsing free';
-
-  @override
-  String get referTitle => 'Refer & Earn';
-
-  @override
-  String get referHeroTitle => 'Gift a friend, earn a month';
-
-  @override
-  String get referHeroBody =>
-      '30 days of free premium for every friend who subscribes with your link';
-
-  @override
-  String get referShareWhatsapp => 'Share via WhatsApp';
-
-  @override
-  String get referRewardsLabel => 'Rewards earned';
-
-  @override
-  String referRewardDays(int days) {
-    return '$days days';
-  }
-
-  @override
-  String get referHowItWorks => 'How it works';
-
-  @override
-  String get referStep1 => 'Share your link with friends and family';
-
-  @override
-  String get referStep2 => 'They install Arul and subscribe to premium';
-
-  @override
-  String get referStep3 => '30 days of free premium lands in your account';
-
-  @override
-  String get referEmpty =>
-      'No referrals yet — your first friend is one share away';
 
   @override
   String get referShareCta => 'Share Arul';

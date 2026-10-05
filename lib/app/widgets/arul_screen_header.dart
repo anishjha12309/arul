@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/arul_tokens.dart';
+import 'arul_icon_tap.dart';
 
 /// The one header band every top-level tab wears.
 class ArulScreenHeader extends StatelessWidget {
@@ -28,8 +29,8 @@ class ArulScreenHeader extends StatelessWidget {
 
   /// Trailing controls, right-aligned with [_actionGap] between them.
   /// Each MUST be [bandHeight] tall and DRAW [ArulTokens.headerControlSize] inside [bandPadding]
-  /// (see [ArulEarnButton]) -> the band is the same height on every tab, and the control is tapped
-  /// at Android's 48 while the eye still sees 34.
+  /// (see [ArulIconTap.glyph]) -> the band is the same height on every tab, and the control is
+  /// tapped at Android's 48 while the eye still sees 34.
   final List<Widget> actions;
 
   /// The band's full height: the control row plus the air either side. 48 — which is also
@@ -67,7 +68,14 @@ class ArulScreenHeader extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: ArulTokens.screenPadding),
+      // The trailing action's spare target width is laid out INTO the gutter, never translated
+      // there -> a transform paints outside its own hit bounds and the outer strip ignores taps.
+      padding: EdgeInsets.only(
+        left: ArulTokens.screenPadding,
+        right: actions.isEmpty
+            ? ArulTokens.screenPadding
+            : ArulTokens.screenPadding - ArulIconTap.headerSpill,
+      ),
       child: SizedBox(
         height: bandHeight,
         child: Row(
@@ -118,6 +126,9 @@ class ArulScreenHeader extends StatelessWidget {
                 ),
               ),
             ),
+            // Hands the title back the width the spill took from the gutter -> it measures as before.
+            if (actions.isNotEmpty)
+              const SizedBox(width: ArulIconTap.headerSpill),
             for (final action in actions) ...[
               const SizedBox(width: _actionGap),
               action,

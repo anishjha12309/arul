@@ -99,7 +99,6 @@ describe("POST /auth/login", () => {
         sub_status: "expired",
         trial_used: true,
         paid_before: true,
-        referred: false,
       },
     ]);
 
@@ -124,7 +123,6 @@ describe("POST /auth/login", () => {
       account_age_d: 12,
       internal: false,
       paid_before: true,
-      referred: false,
     });
   });
 
@@ -149,7 +147,7 @@ describe("POST /auth/login", () => {
     const body = (await res.json()) as { analytics: Record<string, unknown> };
     const keys = Object.keys(body.analytics);
     expect(body.analytics).toMatchObject({ isp: "Reliance Jio", rtt_ms: 61, colo: "BOM" });
-    expect(keys.indexOf("isp")).toBeGreaterThan(keys.indexOf("referred"));
+    expect(keys.indexOf("isp")).toBeGreaterThan(keys.indexOf("paid_before"));
   });
 
   it("a returning account that never reached checkout reads sub_status none, trial not used", async () => {
@@ -183,7 +181,7 @@ describe("POST /auth/login", () => {
   // ── The one-statement upsert and the trial-tombstone pre-seed ─────────────
   // The one part of the delete-then-re-signup chain the verify-payments harness CANNOT reach -> it needs a real idToken
   // The harness proves the tombstone lands with the exact HMAC this branch recomputes -> these prove the branch acts on it
-  // A ROUTED mock records each statement's text and values -> the upsert, the referral capture and a retry are told apart
+  // A ROUTED mock records each statement's text and values -> the upsert and a retry are told apart
   function routedSql(routes: Array<{ match: RegExp; rows: unknown[] | (() => Promise<unknown[]>) }>) {
     const calls: Array<{ text: string; values: unknown[] }> = [];
     const fn = vi.fn((...args: unknown[]) => {
@@ -298,7 +296,6 @@ describe("POST /auth/login", () => {
       account_age_d: 0,
       internal: false,
       paid_before: false,
-      referred: false,
     });
   });
 
@@ -372,7 +369,8 @@ describe("POST /auth/login", () => {
     expect(res.status).toBe(500);
   });
 
-  it("a new user with a referral code captures it after the upsert", async () => {
+  // Fielded builds still send the Install Referrer code -> it must sign in and attribute nothing
+  it("a new user sending a referralCode signs in and creates no referrals row", async () => {
     claimsFor("google-sub-referred");
     const { sql, calls } = routedSql([
       {
@@ -382,15 +380,20 @@ describe("POST /auth/login", () => {
         ],
       },
     ]);
-    await handleLogin(
+    const res = await handleLogin(
       makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid", referralCode: "FRIEND23" } }),
     );
-    expect(calls.length).toBeGreaterThan(1);
-    expect(calls.slice(1).some((c) => c.values.includes("FRIEND23"))).toBe(true);
+    expect(res.status).toBe(200);
+    expect(calls).toHaveLength(1);
+    expect(calls.some((c) => /referrals|referred_by/.test(c.text))).toBe(false);
+    expect(calls.some((c) => c.values.includes("FRIEND23"))).toBe(false);
+    const body = (await res.json()) as { user: Record<string, unknown>; analytics: Record<string, unknown> };
+    expect(body.user.referralCode).toBe("NEWCODE3");
+    expect(body.analytics).not.toHaveProperty("referred");
   });
 
-  // A hedged second POST for a brand-new account lands here too -> the first one owns the pre-seed and the referral
-  it("a returning user (inserted = false) gets no referral capture and no second statement", async () => {
+  // A hedged second POST for a brand-new account lands here too -> the first one owns the pre-seed
+  it("a returning user (inserted = false) gets no second statement", async () => {
     claimsFor("google-sub-back");
     const { sql, calls } = routedSql([
       {
@@ -409,9 +412,7 @@ describe("POST /auth/login", () => {
         ],
       },
     ]);
-    const res = await handleLogin(
-      makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid", referralCode: "FRIEND23" } }),
-    );
+    const res = await handleLogin(makeCtx({ env: envFor(sql), jsonBody: { idToken: "valid" } }));
     expect(res.status).toBe(200);
     expect(calls).toHaveLength(1);
     expect(((await res.json()) as { analytics: Record<string, unknown> }).analytics).toMatchObject({

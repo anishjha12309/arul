@@ -1,7 +1,8 @@
 ---
 description: Reel card geometry lives in one file, and the live mark is static.
 paths:
-  - "lib/features/wallpapers/presentation/feed_card_geometry.dart"
+  - "lib/app/widgets/reel/feed_card_geometry.dart"
+  - "lib/app/widgets/reel/reel_card.dart"
   - "lib/features/wallpapers/presentation/feed_screen.dart"
 ---
 

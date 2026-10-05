@@ -4,7 +4,7 @@
 
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/deeplink/deferred_link_service.dart';
-import 'package:arul/features/referral/data/install_referrer_service.dart';
+import 'package:arul/core/deeplink/install_referrer_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';

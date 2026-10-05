@@ -45,7 +45,6 @@ const kPostHogOnlyProperties = <String>{
   'account_age_d',
   'internal',
   'paid_before',
-  'referred',
   'checkout_n',
   'paywall_n',
   'gate_kind',

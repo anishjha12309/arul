@@ -201,7 +201,29 @@ class AppLocalizationsMl extends AppLocalizations {
   String get tabRingtones => 'റിംഗ്ടോൺ';
 
   @override
-  String get earn => 'നേടൂ';
+  String get statusTitle => 'സ്റ്റാറ്റസ്';
+
+  @override
+  String get statusSave => 'സേവ് ചെയ്യുക';
+
+  @override
+  String get statusWhatsapp => 'WhatsApp';
+
+  @override
+  String get statusSaved => 'ഗാലറിയിൽ സേവ് ചെയ്തു';
+
+  @override
+  String get statusSaveFailed => 'സേവ് ആയില്ല. വീണ്ടും ശ്രമിക്കൂ.';
+
+  @override
+  String get statusPermissionDenied =>
+      'വീഡിയോ സേവ് ചെയ്യാൻ സ്റ്റോറേജ് അനുമതി നൽകൂ.';
+
+  @override
+  String get statusEmpty => 'ഇതുവരെ സ്റ്റാറ്റസ് വീഡിയോകളില്ല';
+
+  @override
+  String get statusError => 'സ്റ്റാറ്റസ് വീഡിയോ ലോഡ് ആയില്ല';
 
   @override
   String get ringtoneSet => 'സെറ്റ്';
@@ -270,9 +292,6 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get settingsPremiumSubActive => 'നിങ്ങൾ അംഗമാണ്';
-
-  @override
-  String get settingsReferSub => '30 ദിവസം സൗജന്യ പ്രീമിയം നേടുക';
 
   @override
   String get settingsTellFriend => 'ഒരു സുഹൃത്തിനോട് പറയൂ';
@@ -428,46 +447,6 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get premiumKeepBrowsing => 'സൗജന്യമായി ബ്രൗസ് ചെയ്യൂ';
-
-  @override
-  String get referTitle => 'പങ്കിട്ട് നേടൂ';
-
-  @override
-  String get referHeroTitle => 'സുഹൃത്തിന് സമ്മാനം, നിങ്ങൾക്ക് ഒരു മാസം';
-
-  @override
-  String get referHeroBody =>
-      'നിങ്ങളുടെ ലിങ്ക് വഴി ഓരോ സുഹൃത്ത് സബ്‌സ്ക്രൈബ് ചെയ്യുമ്പോഴും നിങ്ങൾക്ക് 30 ദിവസം സൗജന്യ പ്രീമിയം';
-
-  @override
-  String get referShareWhatsapp => 'WhatsApp-ൽ അയക്കൂ';
-
-  @override
-  String get referRewardsLabel => 'നേടിയ റിവാർഡുകൾ';
-
-  @override
-  String referRewardDays(int days) {
-    return '$days ദിവസം';
-  }
-
-  @override
-  String get referHowItWorks => 'എങ്ങനെ കിട്ടും';
-
-  @override
-  String get referStep1 =>
-      'നിങ്ങളുടെ ലിങ്ക് സുഹൃത്തുക്കൾക്കും വീട്ടുകാർക്കും അയക്കൂ';
-
-  @override
-  String get referStep2 =>
-      'അവർ Arul ഇൻസ്റ്റാൾ ചെയ്ത് പ്രീമിയം സബ്‌സ്ക്രൈബ് ചെയ്യുന്നു';
-
-  @override
-  String get referStep3 =>
-      '30 ദിവസം സൗജന്യ പ്രീമിയം നിങ്ങളുടെ അക്കൗണ്ടിൽ എത്തും';
-
-  @override
-  String get referEmpty =>
-      'ഇതുവരെ ആരുമില്ല — ഒരു ഷെയർ മതി, ആദ്യ സുഹൃത്ത് എത്തും';
 
   @override
   String get referShareCta => 'Arul പങ്കിടുക';

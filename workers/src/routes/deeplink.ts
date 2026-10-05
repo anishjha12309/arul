@@ -75,6 +75,13 @@ export function handleRingtoneLink(c: Context<{ Bindings: Env }>): Response {
   return bounceToPlay(c, "r");
 }
 
+/** Builds without the `/s/` filter open a browser here -> the bounce sends them to Play, which offers Open or Update. */
+export function handleStatusLink(c: Context<{ Bindings: Env }>): Response {
+  return bounceToPlay(c, "s");
+}
+
+type LinkKind = "w" | "r" | "s";
+
 /**
  * A 404 there costs the install it was bought for -> serve the bounce page
  * Builds before the exact `/` manifest filter open a BROWSER here when installed and lose the language
@@ -106,7 +113,7 @@ export function handleRootLink(c: Context<{ Bindings: Env }>): Response {
  * The store URL for an uninstalled visitor, with everything the link carried packed into `referrer`.
  * That payload is what Android replays to the app after install -> `kind` is the key the app's parser reads back
  */
-function playStoreUrl(c: Context<{ Bindings: Env }>, kind: "w" | "r"): string {
+function playStoreUrl(c: Context<{ Bindings: Env }>, kind: LinkKind): string {
   const id = (c.req.param("id") ?? "").trim().toLowerCase();
   const ref = (c.req.query("ref") ?? "").trim().toUpperCase();
   // Strip the region tag exactly as the app's `normalizeLang` does -> `hi-IN` becomes `hi`
@@ -127,6 +134,7 @@ function playStoreUrl(c: Context<{ Bindings: Env }>, kind: "w" | "r"): string {
   // A fresh install would then land on the feed -> `screen=` is what distinguishes them
   // The app's referrer parser ALREADY reads that key -> this reaches builds older than the id-less path
   else if (kind === "r") parts.push("screen=ringtones");
+  else if (kind === "s") parts.push("screen=status");
   const install = LANG_RE.test(lang) ? lang : LANG_RE.test(ilang) ? ilang : "";
   if (install) parts.push(`lang=${install}`);
 
@@ -147,11 +155,14 @@ function esc(raw: string): string {
  * The escaping is belt-and-braces for the day someone adds an unvalidated key -> keep it
  * The `<a>` is the real fallback for a JS-off browser AND what a preview crawler renders
  */
-function bounceToPlay(c: Context<{ Bindings: Env }>, kind: "w" | "r"): Response {
+function bounceToPlay(c: Context<{ Bindings: Env }>, kind: LinkKind): Response {
   const store = playStoreUrl(c, kind);
   const here = c.req.url;
-  const title = "Arul — Devotional Wallpapers & Ringtones";
-  const blurb = "South Indian devotional wallpapers and ringtones. Opening the Arul app…";
+  const title = kind === "s" ? "Arul — Devotional Status Videos" : "Arul — Devotional Wallpapers & Ringtones";
+  const blurb =
+    kind === "s"
+      ? "South Indian devotional status videos with music. Opening the Arul app…"
+      : "South Indian devotional wallpapers and ringtones. Opening the Arul app…";
 
   const html = `<!doctype html>
 <html lang="en">

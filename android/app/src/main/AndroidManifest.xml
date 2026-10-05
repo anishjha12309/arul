@@ -160,6 +160,24 @@
                 <data
                     android:scheme="https"
                     android:host="arul.hsrutility.com"
+                    android:pathPrefix="/s/"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
+                    android:path="/s"/>
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="arul.hsrutility.com"
                     android:path="/"/>
             </intent-filter>
             <!-- fb<APP_ID>://open?wallpaper_id=…&lang=… (or ?screen=ringtones&ringtone_id=…) is what FB/IG launch for an INSTALLED user. -->

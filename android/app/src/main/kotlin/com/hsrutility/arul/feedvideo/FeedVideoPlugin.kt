@@ -1,8 +1,13 @@
 package com.hsrutility.arul.feedvideo
 
 import android.content.Context
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaCodecList
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import androidx.media3.common.AudioAttributes
@@ -66,6 +71,63 @@ class FeedVideoPlugin(
 
     private val players = HashMap<Int, PooledSurfacePlayer>()
     private var nextPlayerId = 1
+
+    // ONE focus request for every audible player. Per-player Media3 focus made each new clip take
+    // focus from the pool's previous player as a PERMANENT loss, which latched the reel paused.
+    // Only another app's loss reaches Dart now; a refused request (Android 15+, not top app) never plays.
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var focusHeld = false
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { onFocusChange(it) }
+    private val focusRequest: AudioFocusRequest? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build(),
+                )
+                .setOnAudioFocusChangeListener(focusListener, Handler(Looper.getMainLooper()))
+                .build()
+        } else {
+            null
+        }
+
+    private fun requestFocus(): Boolean {
+        if (focusHeld) return true
+        val granted = if (focusRequest != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioManager.requestAudioFocus(focusRequest)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+        }
+        focusHeld = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        if (!focusHeld) Log.w(TAG, "audio focus refused")
+        return focusHeld
+    }
+
+    private fun abandonFocusIfIdle() {
+        if (!focusHeld || players.values.any { it.wantsAudio() }) return
+        if (focusRequest != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioManager.abandonAudioFocusRequest(focusRequest)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(focusListener)
+        }
+        focusHeld = false
+    }
+
+    // A call or another app took the speaker -> pause and let Dart hold the clip until a tap.
+    // A duck is left to the system, which lowers the volume itself on Android 8+.
+    private fun onFocusChange(change: Int) {
+        if (change != AudioManager.AUDIOFOCUS_LOSS && change != AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) return
+        focusHeld = false
+        for ((id, p) in players) {
+            if (!p.wantsAudio()) continue
+            p.pause()
+            emit(id, "focusLost", mapOf("openId" to p.currentOpenId()))
+        }
+    }
 
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -201,12 +263,14 @@ class FeedVideoPlugin(
 
     private fun disposePlayer(playerId: Int) {
         players.remove(playerId)?.release()
+        abandonFocusIfIdle()
     }
 
     private fun disposeAll() {
         val all = players.values.toList()
         players.clear()
         for (p in all) p.release()
+        abandonFocusIfIdle()
     }
 
     fun dispose() {
@@ -282,8 +346,10 @@ class FeedVideoPlugin(
                     } else {
                         AudioAttributes.DEFAULT
                     },
-                    /* handleAudioFocus = */ withAudio,
+                    /* handleAudioFocus = */ false,
                 )
+                // Headphones out must not move the sound to the speaker -> Media3 pauses on NOISY.
+                .setHandleAudioBecomingNoisy(withAudio)
                 .build()
                 .apply {
                     volume = if (withAudio) 1f else 0f
@@ -309,7 +375,7 @@ class FeedVideoPlugin(
                 player.repeatMode =
                     if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
                 player.setMediaItem(MediaItem.fromUri(toUri(url)))
-                player.playWhenReady = playWhenReady
+                player.playWhenReady = playWhenReady && (!withAudio || requestFocus())
                 player.prepare()
             } catch (e: Exception) {
                 Log.e(TAG, "open failed for player $playerId", e)
@@ -330,6 +396,7 @@ class FeedVideoPlugin(
 
         fun play() {
             try {
+                if (withAudio && !requestFocus()) return
                 player.playWhenReady = true
             } catch (e: Exception) {
                 Log.w(TAG, "play failed for $playerId", e)
@@ -342,7 +409,12 @@ class FeedVideoPlugin(
             } catch (e: Exception) {
                 Log.w(TAG, "pause failed for $playerId", e)
             }
+            abandonFocusIfIdle()
         }
+
+        fun wantsAudio(): Boolean = withAudio && player.playWhenReady
+
+        fun currentOpenId(): Int = openId
 
         fun setVolume(volume: Float) {
             try {
@@ -358,9 +430,11 @@ class FeedVideoPlugin(
         fun stop() {
             try {
                 player.stop()
+                player.playWhenReady = false
             } catch (e: Exception) {
                 Log.w(TAG, "stop failed for $playerId", e)
             }
+            abandonFocusIfIdle()
         }
 
         fun release() {
@@ -399,6 +473,13 @@ class FeedVideoPlugin(
                     Log.i(TAG, "audible first frame: +${ms}ms")
                 }
                 emit(playerId, "firstFrame", mapOf("openId" to openId))
+            }
+
+            // Headphones out: Media3 already paused; Dart latches it so no reconcile restarts the clip.
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (playWhenReady || reason != Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) return
+                emit(playerId, "focusLost", mapOf("openId" to openId))
+                abandonFocusIfIdle()
             }
 
             // STATE_ENDED is only reached by a NON-looping open -> a looping player re-enters BUFFERING/READY instead.

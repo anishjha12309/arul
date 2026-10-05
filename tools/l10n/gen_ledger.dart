@@ -1,7 +1,7 @@
 // Builds `tools/l10n/coverage_ledger.csv` — one row per ARB key, with a verdict.
 //
 // The ledger is the answer to "did you actually cover the app, or only the part
-// you happened to pump?". Every one of the 184 keys gets a verdict and the
+// you happened to pump?". Every ARB key gets a verdict and the
 // totals have to reconcile; `unexercised` carries a reason, so nothing ends the
 // night silently unmeasured.
 //

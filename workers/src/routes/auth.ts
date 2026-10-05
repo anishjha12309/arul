@@ -16,7 +16,7 @@ import {
   verifyAccessToken,
 } from "../lib/jwt.js";
 import { getDb } from "../lib/db.js";
-import { generateReferralCode, captureReferral } from "../lib/referral.js";
+import { generateReferralCode } from "../lib/referral.js";
 import { hashGoogleSub } from "../lib/tombstone.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { requestSignal } from "../lib/request-signal.js";
@@ -25,7 +25,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   const env = c.env;
   let body: {
     idToken?: string;
-    referralCode?: string;
     nonce?: string;
   };
   try {
@@ -38,9 +37,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   if (!idToken || typeof idToken !== "string") {
     return errorResponse(400, "missing_field", "idToken is required");
   }
-  // The referral code the friend arrived with (Play Install Referrer) -> honoured ONLY on first login, below
-  const incomingReferralCode =
-    typeof body.referralCode === "string" && body.referralCode.trim() ? body.referralCode : null;
   let googleClaims;
   try {
     googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
@@ -99,7 +95,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
                   (SELECT s.status FROM subscriptions s WHERE s.user_id = users.id) AS sub_status,
                   (SELECT s.trial_end IS NOT NULL FROM subscriptions s WHERE s.user_id = users.id) AS trial_used,
                   (SELECT s.paid_paise > 0 FROM subscriptions s WHERE s.user_id = users.id) AS paid_before,
-                  referred_by IS NOT NULL AS referred,
                   (xmax = 0) AS inserted
       ),
       seed AS (
@@ -135,7 +130,6 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         account_age_d: typeof row.account_age_d === "number" ? row.account_age_d : null,
         internal: row.is_internal === true,
         paid_before: row.paid_before === true,
-        referred: row.referred === true,
       };
     } else {
       const tombstoned = row.tomb_trial_end != null;
@@ -146,17 +140,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
         account_age_d: 0,
         internal: false,
         paid_before: false,
-        referred: false,
       };
-
-      // New user only -> attribute the install to a referrer -> best-effort, a bad code must never break sign-in
-      if (incomingReferralCode) {
-        try {
-          analytics.referred = (await captureReferral(sql, userId, incomingReferralCode)) !== null;
-        } catch (refErr) {
-          console.error("[auth/login] referral capture failed (non-fatal):", refErr);
-        }
-      }
     }
 
     const accessToken = await signAccessToken(userId, env.JWT_SECRET);
@@ -294,7 +278,6 @@ interface LoginAnalytics {
   internal: boolean;
   /** A debit has ever landed on this account -> a returning payer, not a prospect. */
   paid_before: boolean;
-  referred: boolean;
 }
 
 function errorResponse(status: number, code: string, message: string): Response {

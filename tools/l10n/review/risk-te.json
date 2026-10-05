@@ -1,7 +1,7 @@
 {
   "locale": "te",
   "template": "en",
-  "count": 51,
+  "count": 42,
   "rows": [
     {
       "key": "signInTerms",
@@ -196,17 +196,6 @@
       "translation": "మీరు సభ్యులు",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "settingsReferSub",
-      "english": "Earn 30 days free premium",
-      "translation": "30 రోజుల ఉచిత ప్రీమియం సంపాదించండి",
-      "placeholders": [],
-      "screens": "settings.screen",
       "risk": true,
       "verdict": "",
       "note": "",
@@ -431,96 +420,6 @@
       "translation": "ఉచితంగా బ్రౌజ్ చేస్తూ ఉండండి",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroTitle",
-      "english": "Gift a friend, earn a month",
-      "translation": "స్నేహితుడికి బహుమతి, మీకు ఒక నెల",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroBody",
-      "english": "30 days of free premium for every friend who subscribes with your link",
-      "translation": "మీ లింక్‌తో సబ్‌స్క్రైబ్ చేసే ప్రతి స్నేహితుడికీ 30 రోజుల ఉచిత ప్రీమియం",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardsLabel",
-      "english": "Rewards earned",
-      "translation": "సంపాదించిన రివార్డులు",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardDays",
-      "english": "{days} days",
-      "translation": "{days} రోజులు",
-      "placeholders": [
-        "days"
-      ],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep1",
-      "english": "Share your link with friends and family",
-      "translation": "మీ లింక్‌ను స్నేహితులు, కుటుంబంతో పంచుకోండి",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep2",
-      "english": "They install Arul and subscribe to premium",
-      "translation": "వారు Arul ఇన్‌స్టాల్ చేసి ప్రీమియం సబ్‌స్క్రైబ్ చేస్తారు",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep3",
-      "english": "30 days of free premium lands in your account",
-      "translation": "30 రోజుల ఉచిత ప్రీమియం మీ ఖాతాలో చేరుతుంది",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referEmpty",
-      "english": "No referrals yet — your first friend is one share away",
-      "translation": "ఇంకా రిఫరల్స్ లేవు — ఒక షేర్‌తో మొదటి స్నేహితుడు",
-      "placeholders": [],
-      "screens": "refer.screen",
       "risk": true,
       "verdict": "",
       "note": "",

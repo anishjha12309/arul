@@ -1,7 +1,7 @@
 {
   "locale": "hi",
   "template": "en",
-  "count": 51,
+  "count": 42,
   "rows": [
     {
       "key": "signInTerms",
@@ -196,17 +196,6 @@
       "translation": "आप सदस्य हैं",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "settingsReferSub",
-      "english": "Earn 30 days free premium",
-      "translation": "30 दिन मुफ़्त प्रीमियम कमाएँ",
-      "placeholders": [],
-      "screens": "settings.screen",
       "risk": true,
       "verdict": "",
       "note": "",
@@ -431,96 +420,6 @@
       "translation": "मुफ़्त में देखते रहें",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroTitle",
-      "english": "Gift a friend, earn a month",
-      "translation": "दोस्त को तोहफ़ा, आपको एक महीना",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroBody",
-      "english": "30 days of free premium for every friend who subscribes with your link",
-      "translation": "आपकी लिंक से सब्सक्राइब करने वाले हर दोस्त पर 30 दिन मुफ़्त प्रीमियम",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardsLabel",
-      "english": "Rewards earned",
-      "translation": "कमाए रिवॉर्ड",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardDays",
-      "english": "{days} days",
-      "translation": "{days} दिन",
-      "placeholders": [
-        "days"
-      ],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep1",
-      "english": "Share your link with friends and family",
-      "translation": "अपनी लिंक दोस्तों और परिवार के साथ साझा करें",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep2",
-      "english": "They install Arul and subscribe to premium",
-      "translation": "वे Arul इंस्टॉल करके प्रीमियम लेते हैं",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep3",
-      "english": "30 days of free premium lands in your account",
-      "translation": "30 दिन मुफ़्त प्रीमियम आपके खाते में आ जाता है",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referEmpty",
-      "english": "No referrals yet — your first friend is one share away",
-      "translation": "अभी कोई रेफ़रल नहीं — एक शेयर में पहला दोस्त",
-      "placeholders": [],
-      "screens": "refer.screen",
       "risk": true,
       "verdict": "",
       "note": "",

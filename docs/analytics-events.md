@@ -7,11 +7,9 @@ allow-list are exact sets pinned by tests — a typo drops silently.
 
 - **PostHog** — PLAY installs only, and **only the journey** (`login_success` → `trial_started` →
   `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus the two exceptions below. Gated by
-  `AnalyticsCohort` (is this install in the panel?) and `AllowlistedAnalyticsService` (is the event on
-  the list?). `Application Installed` is emitted by hand in `main.dart` — the one PostHog event that
-  bypasses `AnalyticsService`.
+  `AnalyticsCohort` (install in the panel?) and `AllowlistedAnalyticsService` (event on the list?).
 - **GA4** — **every event at 100%, from every install**, under its raw name, plus ★ events as GA4
-  *standard* `login`/`begin_checkout`. The complete record.
+  *standard* `login`/`begin_checkout`.
 - **Meta App Events** — ★ events only; installs and launches are auto-logged natively.
 
 ★ = `login_success` (GA4 `login`, Meta CompleteRegistration) · `checkout_started` (GA4 `begin_checkout`,
@@ -20,12 +18,10 @@ Meta InitiateCheckout) · `trial_started` (Meta StartTrial).
 ## ONE conversion action, ONE data source — never re-open this
 
 **No paid conversion reaches any ad platform** (owner). GA4 `purchase` and Meta `Subscribe` are gone
-from both sides — client mappings, the Worker's GA4-MP and Meta-CAPI reporters, their id uploads and
-secrets. `purchase` had TWO source types (the app SDK for the app-open setup, the server for the
-app-closed settle) reconciling on different schedules, so the Ads campaign column ran a day behind and
-undercounted while GA4's raw counts looked right. **`trial_started`/StartTrial is the ONLY event
-campaigns bid on** — app SDK, in-session, one source. Accepted cost: no revenue or ROAS signal
-anywhere. Revenue truth is Neon.
+from the client and the Worker, secrets included. `purchase` had TWO sources (the app SDK at setup,
+the server at an app-closed settle) on different schedules, so Ads ran a day behind and undercounted
+while GA4 looked right. **`trial_started`/StartTrial is the ONLY event campaigns bid on** — app SDK,
+in-session, one source. Accepted cost: no revenue or ROAS signal anywhere.
 
 `trial_started` carries `plan`, `order_id`, `value` and — only when the SAME process ran the checkout —
 `method` and `target_app`. **Never omit `value`** (₹199 before `app_config` lands): Ads books a
@@ -51,8 +47,8 @@ outcome is a process that died under Google's surface — the only way that loss
 `login_surface_shown` (once per attempt) splits "never saw the sheet" from "saw it and left".
 
 - Outcomes carry `gis_code`, `ms_since_authenticate` and `surface`; `login_cancelled` adds `nudge` (the
-  classified outcome) and `ms_to_surface`, which `login_success` carries too as the denominator. The
-  message field names and how to read the buckets: [auth.md](auth.md) §Reading the failure buckets.
+  classified outcome) and `ms_to_surface`, which `login_success` carries too as the denominator. Reading
+  them: [auth.md](auth.md) §Reading the failure buckets.
 - `surface`: `sheet`, `sheet_return`, `sheet_reconnect`, `sheet_after_offline` (a return outranks it,
   it outranks a reconnect), `button`, `button_after_dismiss`, `button_after_add_account`, `button_after_offline` (a parked tap). A re-armed
   attempt that escalates to the picker carries its sheet's name on its `login_attempt` only. The stall
@@ -60,12 +56,12 @@ outcome is a process that died under Google's surface — the only way that loss
   `sheet_unavailable` (GA4-only) fires when the sheet could not RUN.
 - **`flushAt = 1`** — PostHog's default 20-event/30 s batch lost the install and sign-in outcome of
   everyone who left inside that window.
-- Sign-in events carry **`install_channel`** (`google_ads` / `meta_ads` / `organic` / `share` /
-  `link` / `other` / `unknown`, off the Play referrer, with `install_utm_source`/`_campaign` beside it)
+- Sign-in events carry **`install_channel`** (`google_ads`|`meta_ads`|`organic`|`share`|
+  `link`|`other`|`unknown`, off the Play referrer, with `install_utm_source`/`_campaign` beside it)
   — bar a fresh install's first `login_attempt`, which fires before Play answers; sign-in never waits.
   Play carries only same-session clicks, so an `organic`/`unknown`/`other` install is relabelled
   `meta_ads` when Meta's Install Referrer (`MetaInstallReferrer.kt`) holds a view-through or
-  later-session touch. A wallpaper or ringtone link adds `+wallpaper`/`+ringtone` to the SAME value —
+  later-session touch. A content link adds `+wallpaper`/`+ringtone`/`+status` to the SAME value —
   split on `+`, never compare the whole string. Also **`low_ram`** (the poster rule's verdict).
 - Free-text values stay ≤100 chars; GA4 silently drops longer ones.
 
@@ -98,7 +94,7 @@ property, a `register()` super property or a person property — [analytics-sign
   never events — a 10% numerator over a 100% denominator is meaningless.
 - **`captureApplicationLifecycleEvents = false`** — the flag is all-or-nothing, and keeping
   `Application Installed` bought `Opened`/`Backgrounded` on every launch. `main.dart` re-emits
-  `Application Installed` under the SDK's own name once per install, gated on the persisted draw, so old
+  `Application Installed` (the one PostHog event outside `AnalyticsService`) once per install, gated on the persisted draw, so old
   installs cannot be back-dated into a spike. PostHog DAU means "did a journey thing"; GA4's
   `first_open`/`session_start` are the "opened the app" record.
 - `Posthog().setup()` is not awaited — native init stays off the first-frame path.
@@ -107,6 +103,9 @@ property, a `register()` super property or a person property — [analytics-sign
   `_accepted` = the tap; `_switched` = ₹99 live.
 - **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
   risk; `deep_link_opened` stays off too and must never feed an optimiser.
+- **Status is GA4-only**: `status_engaged` (2 s dwell), `status_shared` (`watermarked`, `channel` =
+  `status`|`chat`|`sheet`; only the sheet reports a real `result`), `status_saved`, `status_save_failed`
+  (`reason`), `status_{share,save}_blocked_premium`. Its gate kinds reach PostHog via `trial_started`.
 - **Analytics never ranks the feed**; Neon counters do ([browse.md](browse.md)).
 
 ## Property conventions
@@ -116,8 +115,8 @@ property, a `register()` super property or a person property — [analytics-sign
   `wallpaper_id` + `type`.
 - **`type` is `image`/`live` in analytics but `static`/`live` in the catalog and Neon** — an event↔Neon
   join on `type` silently matches nothing.
-- Gated-action keys are `apply`/`share`: the `PremiumGateAction` enum name supplies the `?source=` route
-  param, so the short name is load-bearing.
+- Gated-action keys are `apply`/`share` (`PremiumGateAction` names the `?source=`, so the short name is
+  load-bearing); status sends `status_share`/`status_save` and its events `status_id` + `category`.
 - **`app_language`, `language_source` and `geo_region` ride EVERY event via `register`, never only
   `identify`** — a person property leaves every pre-login event blank. PostHog's reset strips super
   properties, so that sink re-applies them, and it also stamps them onto the capture itself, primed from
@@ -127,7 +126,6 @@ property, a `register()` super property or a person property — [analytics-sign
 - `language_source` (`pick`·`link`·`geo`·`phone`·`default`; `geo` = an older build's region language)
   and `geo_region` (Cloudflare's region or `none`, `none` until `GET /geo` answers). GA4 hides both
   until registered as user-scoped custom dimensions.
-- **`exp_regional` (`control`|`regional`)** is the ENDED regional A/B: no new install is dealt an arm;
-  installs dealt one keep stamping it (registered like `app_language`, the ASSIGNMENT, not the kill
-  state). `feature_flags.exp_regional = false` still switches the regional wall off from the next cold
-  start.
+- **`exp_regional` (`control`|`regional`)** is the ENDED regional A/B: no new install gets an arm; dealt
+  installs keep stamping the ASSIGNMENT, not the kill state. `feature_flags.exp_regional = false` still
+  turns the regional wall off from the next cold start.

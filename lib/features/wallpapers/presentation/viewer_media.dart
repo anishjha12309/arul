@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme/motion.dart';
 import '../../../app/theme/tokens.dart';
+import '../../../app/widgets/reel/reel_card.dart';
+import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
-import 'video_preload_controller.dart';
 import 'wallpaper_tile.dart';
 
 /// The media layer of one page: poster below, full image or ExoPlayer texture faded in above.
@@ -75,58 +76,8 @@ class ViewerMedia extends StatelessWidget {
               errorWidget: (_, _, _) => const SizedBox.shrink(),
             )
           else if (slot != null)
-            _LiveTexture(slot: slot!),
+            ReelLiveTexture(slot: slot!, alignment: cropAlignment),
         ],
-      ),
-    );
-  }
-}
-
-class _LiveTexture extends StatelessWidget {
-  const _LiveTexture({required this.slot});
-
-  final LiveVideoSlot slot;
-
-  @override
-  Widget build(BuildContext context) {
-    // The pool reassigns a player (with its textureId and notifiers) across indices -> keying by
-    // index leaves a stale element on another page's texture -> key by playerId.
-    return RepaintBoundary(
-      key: ValueKey('viewer_video_${slot.playerId}'),
-      child: ValueListenableBuilder<bool>(
-        // A shared listenable would rebuild siblings on every reveal -> jank while 2-3 players are
-        // in flight -> subscribe only to this page's own first-frame flag.
-        valueListenable: slot.ready,
-        builder: (context, ready, child) => AnimatedOpacity(
-          opacity: ready ? 1 : 0,
-          // The reveal lands in one frame instead of fading over the poster.
-          duration: context.reduceMotion ? Duration.zero : Motion.imageFade,
-          child: child,
-        ),
-        child: ValueListenableBuilder<Size?>(
-          valueListenable: slot.videoSize,
-          builder: (context, size, child) {
-            if (size == null || size.width <= 0 || size.height <= 0) {
-              return const SizedBox.shrink();
-            }
-            // A raw Texture stretches to its box and never cover-fits itself -> wrap it in
-            // FittedBox(cover) over a SizedBox at the video's intrinsic size.
-            return ClipRect(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                // A clip cropped differently from its own poster jumps on first frame -> same bias
-                // as the static path, [ViewerMedia.cropAlignment].
-                alignment: ViewerMedia.cropAlignment,
-                clipBehavior: Clip.hardEdge,
-                child: SizedBox(
-                  width: size.width,
-                  height: size.height,
-                  child: Texture(textureId: slot.textureId),
-                ),
-              ),
-            );
-          },
-        ),
       ),
     );
   }

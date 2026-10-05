@@ -7,6 +7,7 @@ import {
   handleAssetLinks,
   handleWallpaperLink,
   handleRingtoneLink,
+  handleStatusLink,
   handleRootLink,
 } from "./routes/deeplink.js";
 import { handleGeo } from "./routes/geo.js";
@@ -68,9 +69,11 @@ app.use("/*", async (c, next) => {
 app.get("/.well-known/assetlinks.json", handleAssetLinks);
 app.get("/w/:id", handleWallpaperLink);
 app.get("/r/:id", handleRingtoneLink);
+app.get("/s/:id", handleStatusLink);
 // Hono routes strictly -> a pasted `/w/<id>/?lang=ta` 404ed at every visitor without the app
 app.get("/w/:id/", handleWallpaperLink);
 app.get("/r/:id/", handleRingtoneLink);
+app.get("/s/:id/", handleStatusLink);
 // `/w/?lang=hi` is a language-only campaign link and the app's pathPrefix filter already matches it
 // A 404 here -> the same URL opens the app for one person and an error page for the next -> redirect instead
 // Ad ops paste both slash forms -> register both
@@ -78,6 +81,8 @@ app.get("/w/", handleWallpaperLink);
 app.get("/w", handleWallpaperLink);
 app.get("/r/", handleRingtoneLink);
 app.get("/r", handleRingtoneLink);
+app.get("/s/", handleStatusLink);
+app.get("/s", handleStatusLink);
 // The bare link domain only (never the API host) — see handleRootLink.
 app.get("/", handleRootLink);
 

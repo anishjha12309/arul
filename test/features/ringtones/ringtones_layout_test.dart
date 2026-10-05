@@ -113,7 +113,10 @@ void main() {
               path: '/ringtones',
               builder: (_, _) => const RingtonesScreen(),
             ),
-            GoRoute(path: '/refer', builder: (_, _) => const SizedBox.shrink()),
+            GoRoute(
+              path: '/settings',
+              builder: (_, _) => const SizedBox.shrink(),
+            ),
           ],
         );
 
@@ -221,10 +224,6 @@ void main() {
                         glyph: ArulLineGlyph.ringtones,
                         label: l10n.tabRingtones,
                       ),
-                      (
-                        glyph: ArulLineGlyph.settings,
-                        label: l10n.settingsTitle,
-                      ),
                     ],
                   );
                 },
@@ -235,7 +234,7 @@ void main() {
         await tester.pump();
 
         expect(tester.takeException(), isNull);
-        expect(find.byType(ArulLineIcon), findsNWidgets(3));
+        expect(find.byType(ArulLineIcon), findsNWidgets(2));
       });
     }
   });

@@ -239,6 +239,23 @@ describe("readCategoryOrder", () => {
     });
   });
 
+  it("files a status category under statuses, never under wallpapers", async () => {
+    // Fielded builds read category_order.wallpapers -> a status slug there would reorder their chips
+    const order = await readCategoryOrder(
+      sqlStub([
+        { kind: "ringtone", slug: "sivan" },
+        { kind: "status", slug: "murugan" },
+        { kind: "status", slug: "amman" },
+        { kind: "wallpaper", slug: "ayyappan" },
+      ]),
+    );
+    expect(order).toEqual({
+      ringtones: ["sivan"],
+      statuses: ["murugan", "amman"],
+      wallpapers: ["ayyappan"],
+    });
+  });
+
   it("answers {} when the categories table does not exist yet", async () => {
     const missing = Object.assign(new Error('relation "categories" does not exist'), {
       code: "42P01",

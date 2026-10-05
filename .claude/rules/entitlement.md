@@ -12,12 +12,13 @@ a revenue bug in either direction.
 
 - **`premiumPredicate` in `workers/src/lib/entitlement.ts` is the rule's ONE home.** The app consumes
   the `premium` flag `GET /me` computes from it and NEVER re-derives it from the subscription row. A
-  client copy drifted once — it missed `reward_premium_until` — and paywalled reward-only referrers.
+  client copy drifted once — it missed `reward_premium_until` — and paywalled reward-only users.
 - **Entitlement is never authoritative in the JWT.** The `prm` claim is a UI hint only; every gated
   action live-reads Neon, so purchase, refund and expiry apply instantly.
 - The 6 h debit grace past `current_period_end` is for `trialing`/`active` ONLY, because the renewal
   debit rides the cron. `cancelled` keeps premium to period end with NO grace; `pending` with a live
-  period counts; `paused`/`expired` get nothing; `reward_premium_until` is ORed in.
+  period counts; `paused`/`expired` get nothing; `reward_premium_until` (legacy referral credit and
+  hand-set comps) is ORed in forever.
 - **`ensurePremium()` must AWAIT `entitlementProvider.future`** — a loading snapshot must never bounce
   a premium user. A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to
   `/premium?source=`: no nudge, no teaser sheet, no interstitial.

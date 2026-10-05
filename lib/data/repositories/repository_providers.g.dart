@@ -153,54 +153,6 @@ final class ContentSubmissionRepositoryProvider
 String _$contentSubmissionRepositoryHash() =>
     r'aac01efd8a9d735c77ff75c9fca8e45222000b4e';
 
-@ProviderFor(referralRepository)
-final referralRepositoryProvider = ReferralRepositoryProvider._();
-
-final class ReferralRepositoryProvider
-    extends
-        $FunctionalProvider<
-          ReferralRepository,
-          ReferralRepository,
-          ReferralRepository
-        >
-    with $Provider<ReferralRepository> {
-  ReferralRepositoryProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'referralRepositoryProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$referralRepositoryHash();
-
-  @$internal
-  @override
-  $ProviderElement<ReferralRepository> $createElement(
-    $ProviderPointer pointer,
-  ) => $ProviderElement(pointer);
-
-  @override
-  ReferralRepository create(Ref ref) {
-    return referralRepository(ref);
-  }
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(ReferralRepository value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<ReferralRepository>(value),
-    );
-  }
-}
-
-String _$referralRepositoryHash() =>
-    r'aa7e77c25655f3089f5731c13f55c44be234cbbe';
-
 @ProviderFor(appConfigRepository)
 final appConfigRepositoryProvider = AppConfigRepositoryProvider._();
 

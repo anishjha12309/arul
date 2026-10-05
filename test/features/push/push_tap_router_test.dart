@@ -35,7 +35,7 @@ void main() {
         GoRoute(path: '/browse', builder: (_, _) => const Text('feed')),
         GoRoute(path: '/ringtones', builder: (_, _) => const Text('ringtones')),
         GoRoute(path: '/premium', builder: (_, _) => const Text('premium')),
-        GoRoute(path: '/refer', builder: (_, _) => const Text('refer')),
+        GoRoute(path: '/settings', builder: (_, _) => const Text('settings')),
       ],
     );
     taps = PushTapRouter(
@@ -77,15 +77,15 @@ void main() {
       'a ringtone tap under a pushed screen closes it and opens Ringtones',
       (tester) async {
         await pumpApp(tester);
-        unawaited(router.push('/refer'));
+        unawaited(router.push('/settings'));
         await tester.pumpAndSettle();
-        expect(find.text('refer'), findsOneWidget);
+        expect(find.text('settings'), findsOneWidget);
 
         taps.open(const RingtoneLinkTarget('r1', source: DeepLinkSource.push));
         await tester.pumpAndSettle();
 
         expect(find.text('ringtones'), findsOneWidget);
-        expect(find.text('refer'), findsNothing);
+        expect(find.text('settings'), findsNothing);
         expect(location(), '/ringtones');
         expect(router.canPop(), isFalse, reason: 'nothing left stacked on top');
       },
@@ -214,6 +214,11 @@ void main() {
     expect(
       PushTapRouter.locationFor(const PremiumLinkTarget()),
       '/premium?source=push',
+    );
+    expect(
+      PushTapRouter.locationFor(const StatusLinkTarget('s')),
+      '/status',
+      reason: 'the shell bounces it to Wallpapers when the tab is off',
     );
   });
 }

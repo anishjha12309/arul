@@ -3,14 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/l10n/app_localizations.dart';
-import '../../../app/widgets/arul_sheet.dart';
-import '../../../app/widgets/cta_button.dart';
-import '../../../core/haptics/arul_haptics.dart';
-import '../../../theme/arul_tokens.dart';
-import '../../premium/presentation/paywall_ornaments.dart';
-import '../../premium/presentation/paywall_view.dart';
-import '../data/tell_a_friend.dart';
+import '../../app/l10n/app_localizations.dart';
+import '../../app/widgets/arul_sheet.dart';
+import '../../app/widgets/cta_button.dart';
+import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_tokens.dart';
+import '../premium/presentation/paywall_ornaments.dart';
+import '../premium/presentation/paywall_view.dart';
+import 'tell_a_friend.dart';
 
 /// A short, dismissible invitation to pass Arul on, at the two moments a user was just given something.
 /// Their subscription starting, and their own wallpaper going in for review.

@@ -116,7 +116,12 @@ class _FeedVideoChannelHub {
       _instance ??= _FeedVideoChannelHub(
         const MethodChannel('com.hsrutility.arul/feed_video'),
         const EventChannel('com.hsrutility.arul/feed_video_events'),
-      );
+      ).._sweepOrphansFirst = true;
+
+  /// A hot restart resets Dart but not the native plugin, so a status clip that was playing kept its
+  /// sound with nothing left to pause it. The first create of a new isolate releases every orphan.
+  bool _sweepOrphansFirst = false;
+  Future<void>? _orphanSweep;
 
   /// Test seam: a fresh hub on fake channels, never the singleton -> per-test channel isolation.
   factory _FeedVideoChannelHub.forTesting(
@@ -137,6 +142,11 @@ class _FeedVideoChannelHub {
   void unregister(int playerId) => _byId.remove(playerId);
 
   Future<Map<String, dynamic>?> invokeCreate({bool audio = false}) async {
+    if (_sweepOrphansFirst) {
+      await (_orphanSweep ??= _method
+          .invokeMethod<void>('disposeAll')
+          .catchError((Object _) {}));
+    }
     try {
       return await _method.invokeMapMethod<String, dynamic>('create', {
         'audio': audio,
@@ -241,6 +251,10 @@ class FeedVideoPlayer {
   /// error event fires) — the owning controller uses it as decoder-contention
   /// signal to shrink its window. Stale-guarded by openId like [onError].
   void Function(String name, bool isSoftware)? onDecoder;
+
+  /// Called when native paused this player for good: another app took audio focus, or the audio
+  /// output became noisy (headphones out). Only an audible player can lose focus.
+  void Function()? onFocusLost;
 
   /// True once the current open has errored natively. Reset per [open]. Gates
   /// [forceFirstFrame]: revealing a card whose media never decoded paints a
@@ -414,6 +428,8 @@ class FeedVideoPlayer {
             event['codeName'] as String? ?? 'ERROR_CODE_UNSPECIFIED',
           );
         }
+      case 'focusLost':
+        onFocusLost?.call();
       case 'decoder':
         // Same staleness guard: a decoder report for a since-swapped media is
         // meaningless for the current open — drop it.

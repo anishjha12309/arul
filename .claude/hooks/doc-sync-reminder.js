@@ -89,20 +89,20 @@ const ROUTES = [
       "workers/src/lib/media-constraints.ts",
       "workers/src/lib/media-verify.ts",
     ],
-    docs: ["docs/caching.md §Cache-Control written by this repo", "docs/media-conventions.md"],
+    docs: [
+      "docs/caching.md §Cache-Control written by this repo",
+      "docs/media-conventions.md",
+      "docs/status-clips.md (status role)",
+    ],
   },
   {
     when: ["workers/src/routes/internal.ts", "lib/features/upload/**"],
     docs: ["docs/architecture.md §Uploads", "docs/edge-cases.md §Upload"],
   },
-  // The three delivery paths for a wallpaper target (App Link, Play referrer, Google Ads DDL) share one
-  // persisted one-shot, so the install-referrer service outranks the generic referral row below.
+  // The three delivery paths for a target (App Link, Play referrer, Google Ads DDL) share one persisted
+  // one-shot in lib/core/deeplink/install_referrer_service.dart.
   {
-    when: [
-      "lib/core/deeplink/**",
-      "lib/features/referral/data/install_referrer_service.dart",
-      "lib/features/wallpapers/presentation/apply_restore.dart",
-    ],
+    when: ["lib/core/deeplink/**", "lib/features/wallpapers/presentation/apply_restore.dart"],
     docs: ["docs/deep-links.md", "docs/share.md §Attribution"],
   },
   // The language precedence and the region ask, ahead of the generic routes row.
@@ -114,10 +114,13 @@ const ROUTES = [
     ],
     docs: ["docs/deep-links.md §Language precedence", "workers/README.md §Routes"],
   },
+  // Capture stopped; what remains pays out pending rows and serves old builds.
   {
-    when: ["workers/src/lib/referral.ts", "lib/features/referral/**"],
-    docs: ["docs/architecture.md §API", "docs/data-model.md"],
+    when: ["workers/src/lib/referral.ts"],
+    docs: ["docs/data-model.md §Identity and entitlement", "docs/known-issues.md (referral entry)"],
   },
+  { when: ["workers/tools/local-seed-statuses.mjs"], docs: ["docs/local-stack.md", "docs/status-clips.md"] },
+  { when: ["workers/tools/local-*.mjs", "workers/tools/local-cdn/**"], docs: ["docs/local-stack.md"] },
   {
     when: ["workers/src/env.ts", "env.example.json"],
     docs: ["workers/README.md §Secrets", "CLAUDE.md §4 Secrets"],
@@ -137,14 +140,28 @@ const ROUTES = [
       "docs/google-ads.md",
     ],
   },
+  // Geometry and the card chrome sit under the reel glob below, so they go first.
+  {
+    when: ["lib/app/widgets/reel/feed_card_geometry.dart", "lib/app/widgets/reel/reel_card.dart"],
+    docs: ["docs/feed-card.md"],
+  },
   {
     when: [
       "android/**/feedvideo/**",
       "lib/features/wallpapers/data/**",
-      "lib/features/wallpapers/presentation/video_preload_controller.dart",
+      "lib/app/widgets/reel/**",
       "lib/features/wallpapers/presentation/viewer_media.dart",
     ],
-    docs: ["docs/video-feed.md", "docs/media-conventions.md §THE video rule"],
+    docs: ["docs/video-feed.md", "docs/edge-cases-reel.md", "docs/media-conventions.md §THE video rule"],
+  },
+  // The shell sequences both reels' decoders and hides the flagged Status tab.
+  {
+    when: ["lib/app/shell/**"],
+    docs: ["docs/video-feed.md §Two reels, one device", "docs/ui-direction.md §Dock"],
+  },
+  {
+    when: ["lib/features/status/**", "android/app/src/main/kotlin/com/hsrutility/arul/status/**"],
+    docs: ["docs/status.md", "docs/edge-cases-reel.md §Status tab", "docs/share.md §Status clips"],
   },
   {
     when: ["android/**/wallpaper/**", "lib/features/wallpapers/providers/wallpaper_apply_provider.dart"],
@@ -154,10 +171,11 @@ const ROUTES = [
     when: ["android/**/MainActivity.kt", "android/app/src/main/AndroidManifest.xml", "android/**/share/**"],
     docs: ["docs/known-issues.md §Traps already paid for", "docs/share.md", "docs/deferred-links.md"],
   },
-  { when: ["lib/features/wallpapers/**/*share*"], docs: ["docs/share.md", "docs/edge-cases.md §Share"] },
+  {
+    when: ["lib/features/share/**", "lib/features/wallpapers/**/*share*"],
+    docs: ["docs/share.md", "docs/edge-cases.md §Share"],
+  },
   { when: ["lib/theme/**", "lib/app/theme/**"], docs: ["docs/ui-direction.md", ".claude/rules/theming.md"] },
-  // Geometry sits under the browse glob below, so it goes first.
-  { when: ["lib/features/wallpapers/**/feed_card_geometry.dart"], docs: ["docs/feed-card.md"] },
   {
     when: [
       "workers/src/cron/build-catalog.ts",

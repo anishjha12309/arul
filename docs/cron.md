@@ -24,6 +24,11 @@ against the 30 s.
 2. → **sweep-canonical**, only after a rebuild that fully succeeded AND touched a scope. On-change
    convenience, not the safety net.
 
+Three scopes (`wallpapers`, `ringtones`, `statuses`); one scope's error withholds `version.json` for all
+of them. The `statuses` reads (catalog, sweep, popularity) treat 42P01 as empty, so the Worker can ship
+before `30_statuses.sql` and a dropped table never freezes the other two. Proof after a scope change:
+`cron-rehearse hourly` logs `"statuses":{"pages":1,"items":0}` and `version.json` advances.
+
 ## `*/15 * * * *` — autopay only
 
 Workers Paid gives one invocation 10,000 subrequests, so the ceiling is the 15-minute wall clock:
@@ -40,15 +45,17 @@ only when it deleted something. Rules: [push.md](push.md).
 
 ## `30 21 * * *` — daily backstop (21:30 UTC = 03:00 IST, off-peak)
 
-3. **sweep-canonical**, unconditional. Deletes `wallpapers/`, `ringtones/` AND `thumbs/` objects no DB
-   row references; `full_key`, `audio_key` and `cover_key` all count, and **`thumbs/` references are
-   DERIVED from `full_key`** (`thumbKeyFor`), stored in no column. This is why the bucket can never be
+3. **sweep-canonical**, unconditional. Deletes `wallpapers/`, `ringtones/`, `statuses/` AND `thumbs/`
+   objects no DB row references; `full_key`, `audio_key` and `cover_key` all count, and **`thumbs/`
+   references are DERIVED from wallpaper and status `full_key`** (`thumbKeyFor`: `thumbs/<cat>/<stem>.jpg`
+   and `thumbs/statuses/<cat>/<stem>.jpg`), stored in no column. A poster kind missing from that set
+   loses every poster 12 h after upload — the ~9% a status library adds slips under the blast cap. This is why the bucket can never be
    shared with another app. Objects younger than 12 h are never swept (`CANONICAL_GRACE_MS`) — a CMS
    create in progress has no row yet.
 4. **sweep-submissions** — reclaims orphaned `user/<sub>/submissions/` objects and expires 30-day-old
    pending rows as a status flip to `rejected` with a reason, never a delete.
-5. **Popularity refresh** — bumps `app_config.content_version` when `SUM(apply_count) + SUM(set_count)`
-   moved since the last bump (KV `popularity_total`); the next hourly run republishes. The ONLY thing
+5. **Popularity refresh** — bumps `app_config.content_version` when `SUM(apply_count) + SUM(set_count)
+   + SUM(share_count + download_count)` (statuses, its own guarded query) moved since the last bump (KV `popularity_total`); the next hourly run republishes. The ONLY thing
    that publishes accumulated applies, because the feed never reads the DB. Daily, not hourly: every
    bump re-downloads the whole catalog on every client.
 6. Push cleanup — see [push.md](push.md).
@@ -56,7 +63,8 @@ only when it deleted something. Rules: [push.md](push.md).
 ## Sweep failsafes — never weaken either
 
 - **Zero referenced keys ABORTS that prefix** rather than reading "no references" as "delete
-  everything". A sweep once wiped live media; this is the fix.
+  everything". A sweep once wiped live media; this is the fix. The one skip: an empty table over an
+  EMPTY folder (a new kind before launch) is skipped, not reported as an ABORT every night.
 - **A blast-radius cap** refuses a delete covering too large a fraction of the prefix, with a floor
   below which the fraction is not applied. The empty-set guard alone let the original wipe through.
 

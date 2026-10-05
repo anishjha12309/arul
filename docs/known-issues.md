@@ -22,13 +22,14 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   (`am_kill … stop by com.vivo.abe`, no LMK), state-dependent, not deterministic. The next return is a
   cold start with a second automatic attempt and no outcome for the first — the shape of the ≤11
   "attempted, then nothing" bucket. OEM behaviour; nothing app-side to fix.
-- **The feed's decoder grace can starve the paywall clip on a 2-decoder SoC — ACCEPTED (owner).**
-  Leaving Wallpapers holds the decoders for `_leaveGrace` and `premium_screen.dart` builds its OWN pool,
-  so Ringtones → a gated Set inside that window contends. It degrades to the mounted shutter, never a
-  crash. The fix if it ever surfaces: `releaseDecoders()` before the premium screen builds its pool.
-- **The referral reward has never been proven end to end.** `w=<uuid>` through a fresh Play install is
-  signed off; `?ref=<code>` → new user → inviter reward is not. A visual landing proves nothing about
-  credit — read the `referrals` row.
+- **A reel's decoder grace can starve the paywall clip on a 2-decoder SoC — ACCEPTED (owner).**
+  A reel left by a tab switch or a pushed `/premium` holds its decoders for `_leaveGrace` while
+  `premium_screen.dart` builds its OWN pool, so a gated action inside that window contends. It
+  degrades to the mounted shutter, never a crash. The fix if it ever surfaces: `releaseDecoders()` before the premium screen builds its pool.
+- **Referral is half-retired.** Capture has stopped, but pending `referrals` rows still pay out
+  (`grantReferralReward`), and `/me/referrals`, `referral_code` minting and the Worker's `ref=`
+  passthrough stay for old builds' Refer screen and links. Sunset them only once builds ≤92 (the last with that
+  screen) fall under ~2% of actives; `reward_premium_until` and its entitlement OR stay regardless.
 - **`ANDROID_CERT_SHA256` and `POSTHOG_HOST` in `wrangler.toml` are dead config** — bare top-level keys
   with no `[vars]` table, discarded with a warning ([workers/README.md](../workers/README.md) §Dev /
   deploy). The same-named SECRETS serve, and the cert secret differs: live `assetlinks.json` carries two
@@ -69,8 +70,8 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   `ExoPlayerAssetLoader.Factory` holds unguarded `LogSessionId` (API 31) references, so
   `Transformer.start()` throws `NoClassDefFoundError` on Android 9–11 (androidx/media#2535). No version
   bump or ProGuard rule fixes it. `NoClassDefFoundError` is an `Error`, so `ShareWatermarkChannel`
-  catches **`Throwable`** — never narrow it. Consequence: live shares below API 31 go out unwatermarked
-  ([share.md](share.md)). Fixing it means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
+  catches **`Throwable`** — never narrow it. Consequence: live shares AND status shares and saves below API 31 go
+  out unwatermarked ([share.md](share.md)). Fixing it means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
 - **Never pass a `--dart-define` containing `&` on the command line.** On Windows `flutter` is a `.bat`
   and cmd.exe treats an unquoted `&` as a command separator, so the define arrives cut and the rest
   fails silently. Use `--dart-define-from-file`.

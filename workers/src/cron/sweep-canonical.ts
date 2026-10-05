@@ -7,7 +7,7 @@ export const CANONICAL_GRACE_MS = 12 * 60 * 60 * 1000;
 /**
  * No DB column stores a thumb key -> a poster key is DERIVED from full_key (thumbKeyFor) -> and the bucket is ours alone
  */
-export const CANONICAL_PREFIXES = ["wallpapers/", "ringtones/", "thumbs/"] as const;
+export const CANONICAL_PREFIXES = ["wallpapers/", "ringtones/", "statuses/", "thumbs/"] as const;
 
 /**
  * Blast-radius cap — wanting to delete more than this fraction of a prefix means the REFERENCE SET is wrong.
@@ -26,9 +26,21 @@ export const DELETE_FRACTION_FLOOR = 25;
  */
 export function thumbKeyFor(fullKey: string): string | null {
   const m = /^wallpapers\/([^/]+)\/([^/]+)$/.exec(fullKey);
-  if (!m) return null;
-  const stem = m[2]!.replace(/\.[^.]+$/, "");
-  return `thumbs/${m[1]}/${stem}.jpg`;
+  if (m) return `thumbs/${m[1]}/${m[2]!.replace(/\.[^.]+$/, "")}.jpg`;
+  // A status poster sits one level deeper -> a status category may share a wallpaper category's slug
+  const st = /^statuses\/([^/]+)\/([^/]+)$/.exec(fullKey);
+  if (st) return `thumbs/statuses/${st[1]}/${st[2]!.replace(/\.[^.]+$/, "")}.jpg`;
+  return null;
+}
+
+/** A missing `statuses` table (42P01) is an empty set -> its prefix then sweeps nothing, the others sweep on. */
+async function selectStatusKeys(sql: ReturnType<typeof getDb>): Promise<{ full_key: string }[]> {
+  try {
+    return (await sql`SELECT full_key FROM statuses`) as unknown as { full_key: string }[];
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code === "42P01") return [];
+    throw err;
+  }
 }
 
 export interface CanonicalCandidate {
@@ -127,8 +139,10 @@ export async function sweepCanonical(
       audio_key: string;
       cover_key: string | null;
     }[];
+    const stRows = await selectStatusKeys(sql);
     // Reference sets stay PER PREFIX, never merged -> a `wallpapers/` object may only be justified by a wallpaper row
     const wallpaperKeys = wpRows.map((r) => r.full_key).filter(Boolean);
+    const statusKeys = stRows.map((r) => r.full_key).filter(Boolean);
     const referencedByPrefix: Record<string, Set<string>> = {
       "wallpapers/": new Set(wallpaperKeys),
       // Ringtone covers live at ringtones/covers/<category>/… -> same prefix as the audio -> same reference set
@@ -136,8 +150,11 @@ export async function sweepCanonical(
         ...rtRows.map((r) => r.audio_key).filter(Boolean),
         ...rtRows.map((r) => r.cover_key).filter((k): k is string => !!k),
       ]),
+      "statuses/": new Set(statusKeys),
       // Derived, never stored -> one expected poster per wallpaper -> this set IS the only thing protecting them
-      "thumbs/": new Set(wallpaperKeys.map((k) => thumbKeyFor(k)).filter((k): k is string => k !== null)),
+      "thumbs/": new Set(
+        [...wallpaperKeys, ...statusKeys].map((k) => thumbKeyFor(k)).filter((k): k is string => k !== null),
+      ),
     };
 
     const nowMs = Date.now();
@@ -145,6 +162,9 @@ export async function sweepCanonical(
       const referenced = referencedByPrefix[prefix] ?? new Set<string>();
 
       if (referenced.size === 0) {
+        // An empty table over an empty folder is the honest pre-launch state of a new kind -> nothing to judge
+        const probe = await env.R2.list({ prefix, limit: 1 });
+        if (probe.objects.length === 0) continue;
         const reason = "0 referenced keys for this prefix in DB";
         console.error(`[sweep-canonical] ABORT ${prefix} — ${reason} (failsafe)`);
         result.aborted = true;

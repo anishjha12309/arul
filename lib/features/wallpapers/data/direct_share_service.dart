@@ -43,6 +43,23 @@ class DirectShareService {
     return false;
   }
 
+  /// Opens WhatsApp's own status composer on the clip at [filePath]; returns whether it opened.
+  ///
+  /// Consumer WhatsApp only — the composer API is not on Business. The composer carries no caption,
+  /// so no link leaves with it. NEVER throws: false falls back to [shareToWhatsApp], then the sheet.
+  Future<bool> shareToStatus({required String filePath}) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('shareToStatus', {
+        'filePath': filePath,
+      });
+      return ok ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// Hands [text] alone to WhatsApp; returns whether it opened. NEVER throws.
   ///
   /// A targeted `ACTION_SEND` keeps WhatsApp's picker in Arul's task, so one Back comes home; the

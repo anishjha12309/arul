@@ -156,11 +156,17 @@ void main() {
     });
 
     test("a reference screen Arul doesn't have is ignored", () {
-      // `status` / `prayers` are Noor/Shubh tabs; only lang survives.
-      final req = _parse('fb875866992041168://open?screen=status&lang=hi');
+      final req = _parse('fb875866992041168://open?screen=prayers&lang=hi');
       expect(req?.target, isNull);
       expect(req?.lang, 'hi');
       expect(_parse('fb875866992041168://open?screen=prayers'), isNull);
+    });
+
+    test('screen=status names the Status tab', () {
+      expect(
+        _parse('fb875866992041168://open?screen=status&lang=hi')?.target,
+        const TabLinkTarget(ArulTab.status),
+      );
     });
 
     test('an id beats a contradicting screen', () {
@@ -310,5 +316,65 @@ void main() {
         }
       },
     );
+  });
+
+  group('status links', () {
+    const s = 'c0ffee00-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+
+    test('/s/<uuid> is a status clip', () {
+      expect(
+        _parse('https://arul.hsrutility.com/s/$s?ilang=ta')?.target,
+        const StatusLinkTarget(s),
+      );
+      expect(
+        _parse('https://arul.hsrutility.com/s/$s/')?.target,
+        const StatusLinkTarget(s),
+        reason: 'native skips empty segments, so Dart must too',
+      );
+    });
+
+    test('id-less /s and /s/ name the Status tab', () {
+      for (final url in [
+        'https://arul.hsrutility.com/s',
+        'https://arul.hsrutility.com/s/',
+        'https://arul.hsrutility.com/s/not-a-uuid',
+      ]) {
+        expect(
+          _parse(url)?.target,
+          const TabLinkTarget(ArulTab.status),
+          reason: url,
+        );
+      }
+    });
+
+    test(
+      'query keys: status_id and s pick the clip, screen=status the tab',
+      () {
+        expect(
+          _parse('https://arul.hsrutility.com/?status_id=$s')?.target,
+          const StatusLinkTarget(s),
+        );
+        expect(
+          parseReferrerPayload('s=$s&lang=hi')?.target,
+          const StatusLinkTarget(s, source: DeepLinkSource.installReferrer),
+        );
+        for (final screen in ['status', 'statuses', 'STATUS']) {
+          expect(
+            parseReferrerPayload('screen=$screen')?.target,
+            const TabLinkTarget(
+              ArulTab.status,
+              source: DeepLinkSource.installReferrer,
+            ),
+          );
+        }
+      },
+    );
+
+    test('a wallpaper or ringtone id still beats a status id', () {
+      expect(
+        parseReferrerPayload('s=$s&w=$_w')?.target,
+        const WallpaperLinkTarget(_w, source: DeepLinkSource.installReferrer),
+      );
+    });
   });
 }

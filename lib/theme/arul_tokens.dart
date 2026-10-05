@@ -71,42 +71,6 @@ abstract final class ArulTokens {
 
   static const Color goldTintFill12 = Color.fromRGBO(212, 160, 23, 0.12);
 
-  // Earn button surface, ported from Pakiza's `goldFillSoft` / `goldFillSoftBorder` / `controlLift`.
-  // The GRADIENT is the "shimmer" in the reference art — a soft sheen, never a moving highlight.
-  // Alphas and stops are Pakiza's; the gold is ARUL's [gold] — a palette is never shared (§0).
-
-  /// Earn button fill, LIGHT — white falling to cream; the sheen is the STEP, so neither stop is gold.
-  static const LinearGradient earnFillLight = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFFFFFFF), Color(0xFFF8F0DC)],
-  );
-
-  static const LinearGradient earnFillDark = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [
-      Color.fromRGBO(212, 160, 23, 0.20),
-      Color.fromRGBO(212, 160, 23, 0.08),
-    ],
-  );
-
-  static const Color earnBorderLight = Color.fromRGBO(212, 160, 23, 0.38);
-  static const Color earnBorderDark = Color.fromRGBO(212, 160, 23, 0.35);
-
-  /// Barely-there lift under a LIGHT-theme header control, and null on dark.
-  ///
-  /// The app is otherwise FLAT by design.
-  /// But pure white on a cream ground with only a rim reads as painted on, not raised.
-  /// Pakiza's `controlLift`, struck from Arul's ink.
-  static const List<BoxShadow> controlLift = [
-    BoxShadow(
-      color: Color.fromRGBO(43, 17, 22, 0.05),
-      blurRadius: 6,
-      offset: Offset(0, 2),
-    ),
-  ];
-
   static const Color goldTintFill13 = Color.fromRGBO(212, 160, 23, 0.13);
 
   static const Color goldBorder35 = Color.fromRGBO(212, 160, 23, 0.35);
@@ -364,8 +328,8 @@ abstract final class ArulTokens {
 
   /// The title in a top-level tab's header band. 26px Marcellus, ls `.04em` (26 × .04 = 1.04).
   ///
-  /// ONE size for all three tabs — they cross-fade, so a resizing title read as the screen jumping.
-  /// Never tune it per screen: change it here and all three move together.
+  /// ONE size for every tab — they cross-fade, so a resizing title read as the screen jumping.
+  /// Never tune it per screen: change it here and every tab moves together.
   /// 26 × 1.15 is 29.9, which still clears the 34 band -> the header did not grow with the type.
   /// That headroom runs out around 29 — past there the band grows, and a bigger band resizes the reel.
   static const TextStyle screenHeaderTitle = TextStyle(
@@ -377,7 +341,7 @@ abstract final class ArulTokens {
 
   /// The WORDMARK in the feed's header band — "Arul", 28px Marcellus, ls `.04em` (28 × .04 = 1.12).
   ///
-  /// The ONE deliberate exception to "one size for all three tabs".
+  /// The ONE deliberate exception to "one size for every tab".
   /// The other tabs show a page TITLE; the feed shows the brand.
   /// A wordmark matching the labels around it read as a third tab name, not as the app's mark.
   /// A different kind of object -> its own token, never a per-screen override of [screenHeaderTitle].
@@ -509,7 +473,7 @@ abstract final class ArulTokens {
 
   static const double cardPadding20 = 20;
 
-  // Top-level tab header band — ONE band for all three tabs; see [ArulScreenHeader].
+  // Top-level tab header band — ONE band for every tab; see [ArulScreenHeader].
   // These ARE the feed's existing metrics -> changing them MOVES the reel.
   // The card geometry is solved from the height left below the band.
 
@@ -519,14 +483,10 @@ abstract final class ArulTokens {
 
   /// The height of the band, and of every control in it. 34.
   ///
-  /// The handoff draws the Earn button at the SAME height as the category chips under it, which is 34.
+  /// The handoff draws a header control at the SAME height as the category chips under it, which is 34.
   /// It is also the ONE number the reel's card geometry is solved against.
   /// So this is the value that keeps the card its designed size.
   static const double headerControlSize = 34;
-
-  /// Header control corner. 14 — Pakiza's `AppRadius.headerButton`.
-  /// NOT [pillRadius]: a rounded rectangle, not a capsule, is most of why it reads as a button.
-  static const double headerButtonRadius = 14;
 
   static const double chipsBottomGap = 20;
 

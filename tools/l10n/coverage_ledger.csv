@@ -10,7 +10,6 @@ applyTargetLock,proven-fits,apply.sheet,
 applyTargetTitle,proven-fits,apply.sheet,
 cancel,proven-fits,settings.confirm_logout settings.confirm_delete settings.confirm_delete_premium,
 categoryAll,proven-fits,feed.chips ringtones.screen ringtones.screen.locked,
-earn,proven-fits,ringtones.screen ringtones.screen.locked,
 errorGeneric,slot-measured,,not pump-reachable; measured against its real slot width
 errorGenericRetry,slot-measured,,not pump-reachable; measured against its real slot width
 feedBrowseAll,proven-fits,feed.empty,
@@ -87,20 +86,9 @@ purchaseInterrupted,slot-measured,,not pump-reachable; measured against its real
 purchaseNotCompleted,slot-measured,,not pump-reachable; measured against its real slot width
 purchaseUpiLaunchFailed,slot-measured,,not pump-reachable; measured against its real slot width
 pushChannelName,slot-measured,,not pump-reachable; measured against its real slot width
-referEmpty,proven-fits,refer.screen,
-referHeroBody,proven-fits,refer.screen,
-referHeroTitle,proven-fits,refer.screen,
-referHowItWorks,proven-fits,refer.screen,
 referNotNow,proven-fits,refer.share_moment refer.share_moment.ringtone,
-referRewardDays,proven-fits,refer.screen,
-referRewardsLabel,proven-fits,refer.screen,
 referShareCta,proven-fits,refer.share_moment refer.share_moment.ringtone,
 referShareMessage,system-ui,,rendered by the OS (share sheet / notification shade)
-referShareWhatsapp,proven-fits,refer.screen,
-referStep1,proven-fits,refer.screen,
-referStep2,proven-fits,refer.screen,
-referStep3,proven-fits,refer.screen,
-referTitle,proven-fits,settings.screen refer.screen,
 remindersTimeLabel,slot-measured,,not pump-reachable; measured against its real slot width
 retry,proven-fits,feed.error feed.offline ringtones.error,
 ringtoneCurrentBadge,slot-measured,,not pump-reachable; measured against its real slot width
@@ -143,7 +131,6 @@ settingsPremiumSubActive,slot-measured,,not pump-reachable; measured against its
 settingsPremiumSubCancelled,slot-measured,,not pump-reachable; measured against its real slot width
 settingsPremiumSubTrial,proven-fits,settings.help_sheet.trialing,
 settingsPrivacy,proven-fits,settings.screen,
-settingsReferSub,proven-fits,settings.screen,
 settingsRefund,proven-fits,settings.screen,
 settingsSupport,slot-measured,,not pump-reachable; measured against its real slot width
 settingsSupportEmailDetails,slot-measured,,not pump-reachable; measured against its real slot width
@@ -152,7 +139,7 @@ settingsTellFriend,proven-fits,settings.screen,
 settingsTellFriendSub,proven-fits,settings.screen,
 settingsTerms,proven-fits,settings.screen,
 settingsTheme,proven-fits,settings.screen settings.theme_sheet,
-settingsTitle,proven-fits,settings.screen shell.dock,
+settingsTitle,proven-fits,settings.screen,
 settingsUpload,proven-fits,settings.screen,
 settingsUploadSub,proven-fits,settings.screen,
 settingsVersion,slot-measured,,not pump-reachable; measured against its real slot width
@@ -162,6 +149,14 @@ signInGoogle,proven-fits,signin.screen signin.backedOutQuick signin.backedOutSlo
 signInNudgeRetry,proven-fits,signin.backedOutQuick signin.backedOutSlow signin.neverOpened signin.addAccountAbandoned signin.reauthFailed signin.activityClosed signin.noProvider signin.selectorStripped,
 signInSubtitleExchanging,slot-measured,,not pump-reachable; measured against its real slot width
 signInSubtitleIdle,proven-fits,signin.screen,
+statusEmpty,proven-fits,status.empty,
+statusError,proven-fits,status.error,
+statusPermissionDenied,slot-measured,,not pump-reachable; measured against its real slot width
+statusSave,slot-measured,,not pump-reachable; measured against its real slot width
+statusSaveFailed,slot-measured,,not pump-reachable; measured against its real slot width
+statusSaved,slot-measured,,not pump-reachable; measured against its real slot width
+statusTitle,proven-fits,status.screen shell.dock.status,
+statusWhatsapp,proven-fits,status.screen,
 tabRingtones,proven-fits,ringtones.screen ringtones.screen.locked upload.screen shell.dock,
 tabWallpapers,proven-fits,upload.screen shell.dock,
 themeDark,proven-fits,settings.theme_sheet,

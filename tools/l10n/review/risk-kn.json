@@ -1,7 +1,7 @@
 {
   "locale": "kn",
   "template": "en",
-  "count": 51,
+  "count": 42,
   "rows": [
     {
       "key": "signInTerms",
@@ -196,17 +196,6 @@
       "translation": "ನೀವು ಸದಸ್ಯರು",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "settingsReferSub",
-      "english": "Earn 30 days free premium",
-      "translation": "30 ದಿನ ಉಚಿತ ಪ್ರೀಮಿಯಂ ಗಳಿಸಿ",
-      "placeholders": [],
-      "screens": "settings.screen",
       "risk": true,
       "verdict": "",
       "note": "",
@@ -431,96 +420,6 @@
       "translation": "ಉಚಿತವಾಗಿ ಬ್ರೌಸ್ ಮಾಡುತ್ತಿರಿ",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroTitle",
-      "english": "Gift a friend, earn a month",
-      "translation": "ಸ್ನೇಹಿತರಿಗೆ ಉಡುಗೊರೆ, ನಿಮಗೆ ಒಂದು ತಿಂಗಳು",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroBody",
-      "english": "30 days of free premium for every friend who subscribes with your link",
-      "translation": "ನಿಮ್ಮ ಲಿಂಕ್‌ನಿಂದ ಚಂದಾದಾರರಾಗುವ ಪ್ರತಿ ಸ್ನೇಹಿತರಿಗೂ 30 ದಿನ ಉಚಿತ ಪ್ರೀಮಿಯಂ",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardsLabel",
-      "english": "Rewards earned",
-      "translation": "ಗಳಿಸಿದ ರಿವಾರ್ಡ್‌ಗಳು",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardDays",
-      "english": "{days} days",
-      "translation": "{days} ದಿನ",
-      "placeholders": [
-        "days"
-      ],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep1",
-      "english": "Share your link with friends and family",
-      "translation": "ನಿಮ್ಮ ಲಿಂಕ್ ಅನ್ನು ಸ್ನೇಹಿತರು, ಕುಟುಂಬದೊಂದಿಗೆ ಹಂಚಿಕೊಳ್ಳಿ",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep2",
-      "english": "They install Arul and subscribe to premium",
-      "translation": "ಅವರು Arul ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ ಪ್ರೀಮಿಯಂ ಚಂದಾದಾರರಾಗುತ್ತಾರೆ",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep3",
-      "english": "30 days of free premium lands in your account",
-      "translation": "30 ದಿನ ಉಚಿತ ಪ್ರೀಮಿಯಂ ನಿಮ್ಮ ಖಾತೆಗೆ ಸೇರುತ್ತದೆ",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referEmpty",
-      "english": "No referrals yet — your first friend is one share away",
-      "translation": "ಇನ್ನೂ ರೆಫರಲ್‌ಗಳಿಲ್ಲ — ಒಂದು ಶೇರ್‌ನಲ್ಲಿ ಮೊದಲ ಸ್ನೇಹಿತ",
-      "placeholders": [],
-      "screens": "refer.screen",
       "risk": true,
       "verdict": "",
       "note": "",

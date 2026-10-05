@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../app/widgets/reel/reel_item.dart';
+
 part 'wallpaper.freezed.dart';
 part 'wallpaper.g.dart';
 
@@ -16,7 +18,7 @@ enum WallpaperKind {
 ///
 /// The field surface is what the finished widgets consume — keep it stable.
 @freezed
-abstract class Wallpaper with _$Wallpaper {
+abstract class Wallpaper with _$Wallpaper implements ReelItem {
   const Wallpaper._();
 
   @JsonSerializable(fieldRename: FieldRename.snake)
@@ -81,6 +83,10 @@ abstract class Wallpaper with _$Wallpaper {
 
   String url(String cdnBase) => '$cdnBase/$key';
 
+  @override
+  String? videoUrl(String cdnBase) =>
+      kind == WallpaperKind.live ? url(cdnBase) : null;
+
   /// The 720px still used by the grid, and as the viewer's instant poster.
   /// At `thumbs/<category>/<stem>.jpg`, where the stem is [key]'s basename without its extension.
   /// The catalog `id` is a DB UUID with NO relation to the thumb name -> derive from the KEY, not id.
@@ -96,6 +102,7 @@ abstract class Wallpaper with _$Wallpaper {
   /// A static asking for [thumbUrl] spends a guaranteed 404 before falling back to the same JPG.
   /// So a static goes STRAIGHT to [url] -> no extra bytes, one less request per static card.
   /// Tile and viewer poster share a decode width -> keep every caller here, or the item decodes twice.
+  @override
   String posterUrl(String cdnBase) =>
       kind == WallpaperKind.live ? thumbUrl(cdnBase) : url(cdnBase);
 }

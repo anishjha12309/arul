@@ -7,19 +7,22 @@ import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/legal/presentation/policy_screen.dart';
 import '../features/premium/presentation/premium_screen.dart';
-import '../features/referral/presentation/refer_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
+import '../features/status/presentation/status_screen.dart';
 import '../features/upload/presentation/upload_screen.dart';
 import '../features/wallpapers/presentation/feed_screen.dart';
 import 'push_route.dart';
 import 'shell/app_shell.dart';
+import 'shell/shell_route_observer.dart';
 import 'theme/theme.dart';
 
 /// Every push goes through [ArulPushPage] -> read its doc before writing a pageBuilder here: a
 /// plain `CustomTransitionPage` opts the route out of predictive back.
 final router = GoRouter(
   initialLocation: '/',
+  // A reel under a pushed screen must stop decoding and fall silent -> the shell is RouteAware.
+  observers: [shellRouteObserver],
   // Incoming links — the installed half of every ad/share URL (docs/deep-links.md).
   // Meta's form has no path -> normalises to `/` -> redirect top-level, or it runs on every nav.
   // The PhonePe `arul://` return parses to nothing and resolves to `/` -> keep it that way.
@@ -40,6 +43,7 @@ final router = GoRouter(
     // Declared so an App Link path can never surface as "no routes for location" — the redirect ran first.
     GoRoute(path: '/w/:id', redirect: (_, _) => '/'),
     GoRoute(path: '/r/:id', redirect: (_, _) => '/'),
+    GoRoute(path: '/s/:id', redirect: (_, _) => '/'),
     StatefulShellRoute(
       // Not .indexedStack -> branches go through ArulBranchCrossfade -> a tab switch dissolves, never cuts.
       navigatorContainerBuilder: (_, navigationShell, children) =>
@@ -49,6 +53,7 @@ final router = GoRouter(
           ),
       builder: (_, _, navigationShell) =>
           AppShell(navigationShell: navigationShell),
+      // Indexed by `AppShell.*Branch` -> a new tab is one branch here, its constant and its dock item.
       branches: [
         StatefulShellBranch(
           routes: [
@@ -63,25 +68,24 @@ final router = GoRouter(
             ),
           ],
         ),
+        // Always declared -> go_router's branch list is fixed; the remote flag hides the DOCK item.
         StatefulShellBranch(
           routes: [
-            GoRoute(
-              path: '/settings',
-              builder: (_, _) => const SettingsScreen(),
-            ),
+            GoRoute(path: '/status', builder: (_, _) => const StatusScreen()),
           ],
         ),
       ],
     ),
+    // Pushed OVER the shell from the header gear -> the dock never paints across it.
     GoRoute(
-      path: '/refer',
-      pageBuilder: (_, state) => _push(state, const ReferScreen()),
+      path: '/settings',
+      pageBuilder: (_, state) => _push(state, const SettingsScreen()),
     ),
     GoRoute(
       path: '/upload',
       pageBuilder: (_, state) => _push(state, const UploadScreen()),
     ),
-    // Pushed OVER the shell -> the Settings branch's own dock does not paint across it.
+    // Pushed OVER the shell, like Settings that links to it.
     // Push it with `PolicyDoc.route`, never a literal path.
     GoRoute(
       path: '/policy/:doc',

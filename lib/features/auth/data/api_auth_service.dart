@@ -12,9 +12,9 @@ import '../../../core/auth/google_sign_in_init.dart';
 import '../../../core/auth/session_backup.dart';
 import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/perf/boot_trace.dart';
-import '../../referral/data/install_referrer_service.dart';
 import '../domain/auth_service.dart';
 import '../domain/sign_in_outcome.dart';
 import 'sign_in_surface_clock.dart';
@@ -32,7 +32,7 @@ class ApiAuthService implements AuthService {
     this._freshInstall = false,
     SignInSurfaceClock? surfaceClock,
   }) : _api = apiClient,
-       _referral = installReferrer,
+       _referrer = installReferrer,
        _surfaceClock = surfaceClock ?? BindingSignInSurfaceClock() {
     // The encrypted secure-storage read can outrun a fixed brand-beat on a cold start -> sampling
     // `currentState` on a timer routes a returning user to sign-in -> the splash awaits
@@ -62,7 +62,7 @@ class ApiAuthService implements AuthService {
 
   /// Optional — supplies a pending Play Install Referrer code, attached to the FIRST login -> the
   /// Worker can attribute the install.
-  final InstallReferrerService? _referral;
+  final InstallReferrerService? _referrer;
 
   /// Times how long Google's own surface took to come up, per attempt (see [SignInSurfaceClock]).
   /// Injectable so tests can hand in a fixed reading instead of driving the lifecycle.
@@ -370,7 +370,7 @@ class ApiAuthService implements AuthService {
   /// one: where the install came from, the poster rule, which try of the install this is, how long
   /// the person had been in the app, and the link as it stood behind Google's surface.
   Map<String, Object> get _attemptProps => {
-    ...?_referral?.attributionProps,
+    ...?_referrer?.attributionProps,
     'low_ram': ?DeviceMemory.resolved,
     if (_attemptN > 0) 'attempt_n': _attemptN,
     'ms_since_launch': JourneyStamps.msSinceLaunch,
@@ -774,11 +774,6 @@ class ApiAuthService implements AuthService {
         );
       }
 
-      // Referral attribution: attach any pending code from the Play Install
-      // Referrer. The Worker only honors it on new-user creation, so re-sending
-      // on later logins is harmless. Cleared after a successful exchange below.
-      final referralCode = _referral?.pendingCode;
-
       // Exchange Google ID token for our own Worker-issued JWT pair,
       // retrying connectivity-class failures (see postWithNetworkRetry for
       // the measured failure modes and the budget math). Losing this POST
@@ -801,7 +796,6 @@ class ApiAuthService implements AuthService {
           body: {
             'idToken': idToken,
             'nonce': ?GoogleSignInInit.nonce,
-            'referralCode': ?referralCode,
           },
           requiresAuth: false,
           withToken: false,
@@ -853,11 +847,6 @@ class ApiAuthService implements AuthService {
       );
       _restored = false;
 
-      // Consumed — never re-attribute a later account on this device.
-      if (referralCode != null) {
-        await _referral?.clearPendingCode();
-      }
-
       final displayName = user['displayName'] as String? ?? account.displayName;
       final email = user['email'] as String?;
 
@@ -888,7 +877,7 @@ class ApiAuthService implements AuthService {
           'app_language': ?_appLanguage?.call(),
           // Person properties ride the identify the app already sends: the server-side
           // subscription events carry no channel or phone, and break down by these instead.
-          ...?_referral?.attributionProps,
+          ...?_referrer?.attributionProps,
           'device_tier': ?(DeviceQuality.isResolved
               ? DeviceQuality.resolved.name
               : null),

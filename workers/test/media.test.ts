@@ -17,6 +17,7 @@ vi.mock("../src/lib/db.js", () => ({
 }));
 
 import { handleSignedUrl, handleUploadUrl, handleConfirmUpload } from "../src/routes/media.js";
+import { verifyMediaObject } from "../src/lib/media-verify.js";
 
 const JWT_SECRET = "test-jwt-secret-must-be-at-least-32-bytes!!";
 const USER_ID = "11111111-1111-1111-1111-111111111111";
@@ -178,6 +179,90 @@ describe("POST /media/signed-url", () => {
       );
       expect(res.status).toBe(403);
       expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+    });
+  });
+
+  // ── Status: its own table, one counter per action ──────────────────────────
+  // Share and save stay apart so the CMS can read each -> the feed orders on their sum
+  describe("status kind", () => {
+    const sqlText = (capturedArgs: unknown[][]) =>
+      capturedArgs
+        .flat()
+        .map((a) => (Array.isArray(a) ? (a as string[]).join("?") : String(a)))
+        .join(" | ");
+    const statusRow = { private_key: "statuses/murugan/abc.mp4", is_premium: true };
+
+    it("resolves kind=status through statuses.full_key and returns a signed URL", async () => {
+      const { env, capturedArgs } = envWithSql([statusRow]);
+      const res = await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "share" } }),
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { url: string; expiresIn: number };
+      expect(body.expiresIn).toBe(300);
+      expect(body.url).toContain("statuses");
+      const text = sqlText(capturedArgs);
+      expect(text).toContain("statuses");
+      expect(text).toContain("full_key");
+    });
+
+    it("a SHARE bumps share_count only", async () => {
+      const { env, capturedArgs } = envWithSql([statusRow]);
+      await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "share" } }),
+      );
+      const text = sqlText(capturedArgs);
+      expect(text).toContain("UPDATE");
+      expect(text).toContain("share_count");
+      expect(text).not.toContain("download_count");
+    });
+
+    it("a DOWNLOAD bumps download_count only", async () => {
+      const { env, capturedArgs } = envWithSql([statusRow]);
+      await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "download" } }),
+      );
+      const text = sqlText(capturedArgs);
+      expect(text).toContain("UPDATE");
+      expect(text).toContain("download_count");
+      expect(text).not.toContain("share_count");
+    });
+
+    it("no action, or an unknown one, bumps nothing", async () => {
+      for (const action of [undefined, "apply", "set"]) {
+        const { env, capturedArgs } = envWithSql([statusRow]);
+        const res = await handleSignedUrl(
+          makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action } }),
+        );
+        expect(res.status).toBe(200);
+        expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+      }
+    });
+
+    it("403 premium_required and no bump when the live entitlement read says not premium", async () => {
+      const { env, capturedArgs } = envWithSql([{ ...statusRow, is_premium: false }]);
+      const res = await handleSignedUrl(
+        makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "share" } }),
+      );
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("premium_required");
+      expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+    });
+
+    it("wallpaper and ringtone grants never touch a status counter", async () => {
+      for (const body of [
+        { id: "w1", kind: "wallpaper", action: "apply" },
+        { id: "w1", kind: "wallpaper", action: "share" },
+        { id: "w1", kind: "wallpaper", action: "download" },
+        { id: "r1", kind: "ringtone" },
+      ]) {
+        const { env, capturedArgs } = envWithSql([{ private_key: "k", is_premium: true }]);
+        await handleSignedUrl(makeCtx({ env, token: await token(), jsonBody: body }));
+        const text = sqlText(capturedArgs);
+        expect(text).not.toContain("statuses");
+        expect(text).not.toContain("share_count");
+        expect(text).not.toContain("download_count");
+      }
     });
   });
 
@@ -610,5 +695,48 @@ describe("POST /media/confirm-upload", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");
     expect(deletes).toContain(key);
+  });
+});
+
+// ── The status QC role (the CMS's copy enforces it at upload; this copy stays in step) ──
+describe("verifyMediaObject — status role", () => {
+  const verify = (bytes: Uint8Array, contentType = "video/mp4") =>
+    verifyMediaObject(makeQcR2({ k: { bytes, contentType } }).bucket, "k", "status");
+
+  it("accepts a 1024×1824 H.264 clip with music, at most 30 s", async () => {
+    const r = await verify(mp4Fixture({ withAudio: true, durationS: 30 }));
+    expect(r).toMatchObject({ ok: true, width: 1024, height: 1824, durationMs: 30000 });
+  });
+
+  it("rejects a clip with no audio track", async () => {
+    expect(await verify(mp4Fixture({ durationS: 20 }))).toMatchObject({ ok: false, code: "bad_type" });
+  });
+
+  it("rejects a clip over 30 s", async () => {
+    expect(await verify(mp4Fixture({ withAudio: true, durationS: 31 }))).toMatchObject({
+      ok: false,
+      code: "too_large",
+    });
+  });
+
+  it("rejects any geometry but exactly 1024×1824 — even one a live wallpaper accepts", async () => {
+    const r = await verify(mp4Fixture({ withAudio: true, width: 896, height: 1600 }));
+    expect(r).toMatchObject({ ok: false, code: "bad_dimensions" });
+  });
+
+  it("rejects a file over 10 MB before reading a byte", async () => {
+    const bucket = {
+      head: async () => ({
+        key: "k",
+        size: 10 * 1024 * 1024 + 1,
+        httpMetadata: { contentType: "video/mp4" },
+      }),
+      get: vi.fn(),
+    } as unknown as R2Bucket;
+    expect(await verifyMediaObject(bucket, "k", "status")).toMatchObject({ ok: false, code: "too_large" });
+  });
+
+  it("rejects an image", async () => {
+    expect(await verify(jpegFixture(), "image/jpeg")).toMatchObject({ ok: false, code: "bad_type" });
   });
 });

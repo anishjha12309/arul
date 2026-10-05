@@ -76,7 +76,7 @@ async function releaseBuildLock(env: Env, holder: string): Promise<void> {
 }
 
 async function buildCatalogLocked(env: Env, scope: string | null, force: boolean): Promise<BuildResults> {
-  const allScopes = ["wallpapers", "ringtones"];
+  const allScopes = ["wallpapers", "ringtones", "statuses"];
   const scopes = scope ? [scope] : allScopes;
 
   const sql = getDb(env);
@@ -262,7 +262,8 @@ export async function readCategoryOrder(sql: ReturnType<typeof getDb>): Promise<
     const out: CategoryOrder = {};
     for (const r of rows) {
       // CMS kinds are singular ('wallpaper'), catalog scopes plural ('wallpapers').
-      const scope = r.kind === "ringtone" ? "ringtones" : "wallpapers";
+      // A status slug must never land in the wallpaper chip order -> fielded builds read only that key
+      const scope = r.kind === "ringtone" ? "ringtones" : r.kind === "status" ? "statuses" : "wallpapers";
       // biome-ignore lint/suspicious/noAssignInExpressions: create-or-append idiom
       (out[scope] ??= []).push(r.slug);
     }
@@ -348,7 +349,7 @@ export async function refreshPopularityOrder(
         (SELECT COALESCE(SUM(apply_count), 0) FROM wallpapers) +
         (SELECT COALESCE(SUM(set_count),   0) FROM ringtones)  AS total
     `;
-    const total = pgBigintToNumber(rows[0]?.["total"]);
+    const total = pgBigintToNumber(rows[0]?.["total"]) + (await statusUseTotal(sql));
 
     let last: string | null = null;
     try {
@@ -366,6 +367,17 @@ export async function refreshPopularityOrder(
     return { bumped: true, total };
   } finally {
     await sql.end().catch(() => {});
+  }
+}
+
+/** Its own statement -> a missing statuses table (42P01) must not stop the wallpaper and ringtone bump. */
+async function statusUseTotal(sql: ReturnType<typeof getDb>): Promise<number> {
+  try {
+    const rows = await sql`SELECT COALESCE(SUM(share_count + download_count), 0) AS total FROM statuses`;
+    return pgBigintToNumber(rows[0]?.["total"]);
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code === "42P01") return 0;
+    throw err;
   }
 }
 
@@ -405,6 +417,8 @@ export async function buildScope(
       WHERE is_published = true
       ORDER BY feed_rank ASC NULLS LAST, set_count DESC, created_at DESC NULLS LAST, id ASC
     `;
+  } else if (scope === "statuses") {
+    rows = await selectStatuses(sql);
   } else {
     throw new Error(`[build-catalog] unknown scope: ${scope}`);
   }
@@ -427,6 +441,16 @@ export async function buildScope(
     if (scope === "ringtones") {
       if (!row["audio_key"]) {
         console.warn(`[build-catalog] skipping ringtone id=${row["id"]}: missing audio_key`);
+        skipped++;
+        return false;
+      }
+      return true;
+    }
+    if (scope === "statuses") {
+      if (!row["full_key"] || row["mime"] !== "video/mp4") {
+        console.warn(
+          `[build-catalog] skipping status id=${row["id"]}: full_key=${row["full_key"]} mime=${row["mime"]}`,
+        );
         skipped++;
         return false;
       }
@@ -461,6 +485,12 @@ export async function buildScope(
     if (scope === "wallpapers") {
       r["apply_count"] = pgBigintToNumber(r["apply_count"]);
       for (const k of ["audio_key", "mime", "duration_ms", "width", "height", "bytes", "apply_score"]) {
+        delete r[k];
+      }
+      return r;
+    }
+    if (scope === "statuses") {
+      for (const k of ["mime", "bytes", "width", "height", "share_count", "download_count"]) {
         delete r[k];
       }
       return r;
@@ -500,6 +530,23 @@ export async function buildScope(
   const deleted = await deleteOrphanedPages(r2Bucket, scope, writtenKeys);
 
   return { pages: totalPages, items: orderedRows.length, skipped, deleted };
+}
+
+/**
+ * The Worker may deploy before 30_statuses.sql lands -> a missing table (42P01) is an empty scope, never an error
+ * An error here would withhold version.json for EVERY scope -> fielded builds would stop seeing new wallpapers
+ */
+async function selectStatuses(sql: ReturnType<typeof getDb>): Promise<ContentRow[]> {
+  try {
+    return await sql`
+      SELECT * FROM statuses
+      WHERE is_published = true
+      ORDER BY feed_rank ASC NULLS LAST, (share_count + download_count) DESC, created_at DESC, id ASC
+    `;
+  } catch (err) {
+    if ((err as { code?: string } | null)?.code === "42P01") return [];
+    throw err;
+  }
 }
 
 /**

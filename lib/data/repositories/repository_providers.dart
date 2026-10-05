@@ -7,8 +7,6 @@ import '../../core/connectivity/connectivity_provider.dart';
 import '../../features/auth/providers/auth_providers.dart';
 import '../../features/premium/data/api_subscription_repository.dart';
 import '../../features/premium/domain/subscription_repository.dart';
-import '../../features/referral/data/api_referral_repository.dart';
-import '../../features/referral/domain/referral_repository.dart';
 import '../../features/settings/data/api_app_config_repository.dart';
 import '../../features/settings/domain/app_config_repository.dart';
 import '../../features/upload/data/api_content_submission_repository.dart';
@@ -41,10 +39,6 @@ SubscriptionRepository subscriptionRepository(Ref ref) =>
 @Riverpod(keepAlive: true)
 ContentSubmissionRepository contentSubmissionRepository(Ref ref) =>
     ApiContentSubmissionRepository(apiClient: ref.watch(apiClientProvider));
-
-@Riverpod(keepAlive: true)
-ReferralRepository referralRepository(Ref ref) =>
-    ApiReferralRepository(apiClient: ref.watch(apiClientProvider));
 
 @Riverpod(keepAlive: true)
 AppConfigRepository appConfigRepository(Ref ref) =>

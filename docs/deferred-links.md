@@ -25,10 +25,11 @@ from inside this repo** without the recipe under each.
 - [ ] `source` (`google_ads` / `meta`) rides through to `deep_link_opened` and to the persisted
       `pending_deeplink_source`, so a target restored after a process death still reports its channel.
 
-## Play Install Referrer (a browser tap on `/w/` or `/r/` with no app)
+## Play Install Referrer (a browser tap on `/w/`, `/r/` or `/s/` with no app)
 
 The Worker answers **200 with a bounce page** whose `location.replace()` sends the browser to Play
-with `referrer=ref=<code>&w=<uuid>&lang=hi` (or `r=<uuid>`). **Never a 302 nor a `<meta refresh>`:**
+with `referrer=w=<uuid>&lang=hi` (or `r=<uuid>`, `s=<uuid>`; id-less `/r` and `/s` send
+`screen=ringtones` / `screen=status`, because the path does not survive Play). **Never a 302 nor a `<meta refresh>`:**
 "Google Ads doesn't support redirects or third-party deep linking solutions, which use redirects"
 (support.google.com/google-ads/answer/16416275) — a redirect lands users on an intermediate domain
 instead of the app. A JS navigation is real, so Play still gets the referrer.
@@ -36,9 +37,12 @@ instead of the app. A JS navigation is real, so Play still gets the referrer.
 A preview crawler (WhatsApp, on every share) renders that page rather than Play's card — hence the
 `og:` tags and an `og:image` under `brand/`, a prefix deliberately outside every sweep's prefixes.
 Android replays the referrer to `captureOnce` on first launch, once per install (the `_kChecked`
-pref). The `ref=` code rides the next `/auth/login` as `referralCode` (the Worker links the accounts)
-and is cleared only once that login's tokens are stored, so a later account on the phone is never
-re-attributed.
+pref). A legacy `ref=` (old builds' share links, passed through by the Worker) only marks the install
+`install_channel=share`; login no longer sends it and the Worker would ignore it. `captureOnce` also
+deletes the dead `pending_referral_code` pref on launch. A replayed `s=` persists as
+`pending_deeplink_status` — one slot shared with the wallpaper and ringtone keys, last write wins — and
+waits on the `status_tab` flag like an App Link; with the tab off it is consumed and the install lands on
+Wallpapers. A staged rollout can still serve a new install an older build that ignores `s=`.
 
 Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
 `adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`

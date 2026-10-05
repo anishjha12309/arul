@@ -13,8 +13,9 @@ parameterized query to the verified `sub`; the app never reaches the DB.
   `premiumPredicate` ([architecture.md](architecture.md) §Entitlement).
 - **`trial_tombstones`** holds `HMAC-SHA256(google_sub, TRIAL_TOMBSTONE_SECRET)` and `trial_end`, no PII —
   written by `DELETE /me`, read by `/auth/login` to pre-seed a consumed trial. The secret never rotates.
-- **`users.reward_premium_until`** is referral credit, ORed into entitlement and decoupled from
-  subscriptions. The referrer's reward lands on the friend's first paid debit, once; a later
+- **`users.reward_premium_until`** is legacy referral credit plus hand-set comps, ORed into
+  entitlement forever and decoupled from subscriptions — never drop the column or the OR. Capture has
+  stopped, but a pending `referrals` row still rewards on the friend's first paid debit, once; a later
   cancellation never claws it back.
 - **`users.is_internal` is set BY HAND and read only for reporting and test sends** (the CMS
   subscriptions page; campaign push's test audience and counts — [push.md](push.md)). No entitlement,
@@ -59,7 +60,7 @@ Rows debited before the columns existed were backfilled once (`23_debit_backfill
 - **`addOneMonth` uses JavaScript's `setMonth`, which overflows**: 31 Aug + 1 month is 1 Oct. SQL that
   walks a period end back to a settle date must not assume `interval '1 month'`.
 
-## Content rows (`wallpapers`, `ringtones`)
+## Content rows (`wallpapers`, `ringtones`, `statuses`)
 
 - `type` (static|live) is a rendering hint, never a filter. `category` is free text, so a new category
   is an insert, not a migration. Ringtones have their OWN category set; `deity` is display only
@@ -75,11 +76,18 @@ Rows debited before the columns existed were backfilled once (`23_debit_backfill
 - `apply_count` / `set_count` are the feed's popularity key — see §Popularity counters.
   `apply_score`, `set_score` and `scored_at` are retired: frozen, unread, never sorted on.
 - `ringtones.cover_key` stays null ([ringtones.md](ringtones.md) §Row art).
+- **`statuses` is its own table, never rows in `wallpapers`** — fielded builds' catalogs are built from
+  their own tables alone. It reuses wallpaper column names where the meaning matches (`full_key`,
+  `feed_rank`, the `published_at` trigger, `renewed_at`/`pre_renew_published_at`) so build-catalog, the
+  sweep and the CMS share code; `mime` is CHECKed to `video/mp4`. Its poster is derived, never stored
+  ([status-clips.md](status-clips.md)).
 
 ## `categories` — CMS-only
 
-Written and read ONLY by the unified CMS; no Worker route or cron touches it, and `build-catalog` must
-never start. A category reaches the app by being on a PUBLISHED row — chips derive from the catalog's
+Written ONLY by the unified CMS. The Worker's one read is `build-catalog`'s chip order (`picker_order >
+0` → `app_config.category_order.<scope>`, a missing table = no order). `kind` ∈ `wallpaper`,
+`ringtone`, `status`, each mapped to its OWN scope key — a status slug in the wallpaper key would reach
+every fielded build. The kind CHECK only ever widens. A category reaches the app by being on a PUBLISHED row — chips derive from the catalog's
 items. The table holds only operator-created categories staged unpublished; seeded slugs and anything
 already on a row are never inserted, so nothing live can be retracted from here. `picker_order` sorts
 the CMS dropdowns only.
@@ -90,7 +98,8 @@ the CMS dropdowns only.
 `waitUntil`, so the most latency-sensitive route never waits. They mean **a PREMIUM user was GRANTED
 the file**: a blocked user never reaches the route, the OS chooser can still be cancelled, and wallpaper
 SHARES are excluded via the request's `action` — a request with no `action` counts for nothing, so old
-builds cannot pollute it. Every ringtone grant counts. No index: `build-catalog` full-scans hourly.
+builds cannot pollute it. Every ringtone grant counts. A status keeps `share_count` (`action: share`) and
+`download_count` (`action: download`) apart; its feed orders on their sum. No index: `build-catalog` full-scans hourly.
 
 ## Paths
 

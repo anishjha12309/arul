@@ -5,6 +5,7 @@
 // The reel itself needs a device and is out of scope -> the online case is exercised via the normal empty state.
 
 import 'package:arul/app/l10n/app_localizations.dart';
+import 'package:arul/app/widgets/reel/video_preload_controller.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/wallpaper.dart';
@@ -12,7 +13,6 @@ import 'package:arul/features/wallpapers/data/feed_video_player.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_prefetch_service.dart';
 import 'package:arul/features/wallpapers/presentation/feed_screen.dart';
 import 'package:arul/features/wallpapers/presentation/feed_states.dart';
-import 'package:arul/features/wallpapers/presentation/video_preload_controller.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
 import 'package:arul/features/wallpapers/providers/video_preload_provider.dart';
 import 'package:flutter/material.dart';
@@ -44,14 +44,15 @@ const _events = MethodChannel('arul_test/feed_video_events');
 
 /// A VideoPreloadController wired to fake channels so it never hits the real FeedVideoPlugin.
 /// The reel is not built in these tests -> it only ever constructs and disposes.
-VideoPreloadController _testController() => VideoPreloadController(
-  cdnBaseUrl: 'https://cdn.test',
-  prefetch: WallpaperPrefetchService(cdnBaseUrl: 'https://cdn.test'),
-  pool: FeedVideoPlayerPool.withChannels(
-    _method,
-    const EventChannel('arul_test/feed_video_events'),
-  ),
-);
+VideoPreloadController<Wallpaper> _testController() =>
+    VideoPreloadController<Wallpaper>(
+      cdnBaseUrl: 'https://cdn.test',
+      prefetch: WallpaperPrefetchService(cdnBaseUrl: 'https://cdn.test'),
+      pool: FeedVideoPlayerPool.withChannels(
+        _method,
+        const EventChannel('arul_test/feed_video_events'),
+      ),
+    );
 
 void main() {
   const offlineTitle = 'No internet';

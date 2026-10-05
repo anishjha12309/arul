@@ -1,68 +1,13 @@
-// InstallReferrerService parses a Play Install Referrer payload into a referral code and a deep-link request.
+// InstallReferrerService parses a Play Install Referrer payload into attribution and a deep-link request.
 // This pins that parsing, the links it builds and the persisted handoff -> no platform channel is involved.
 
 import 'package:arul/core/deeplink/deep_link_parser.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
-import 'package:arul/features/referral/data/install_referrer_service.dart';
+import 'package:arul/core/deeplink/install_referrer_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  group('InstallReferrerService.parseReferralCode', () {
-    test('extracts ref= from our own share payload', () {
-      expect(
-        InstallReferrerService.parseReferralCode('ref=ABCD1234'),
-        'ABCD1234',
-      );
-    });
-
-    test('finds ref among utm params Play may append', () {
-      expect(
-        InstallReferrerService.parseReferralCode(
-          'utm_source=whatsapp&ref=abcd1234&utm_medium=social',
-        ),
-        'ABCD1234', // normalized to uppercase
-      );
-    });
-
-    test('accepts a bare code with no query syntax', () {
-      expect(InstallReferrerService.parseReferralCode('WXYZ7890'), 'WXYZ7890');
-    });
-
-    test('returns null for empty / null / organic (no code)', () {
-      expect(InstallReferrerService.parseReferralCode(null), isNull);
-      expect(InstallReferrerService.parseReferralCode(''), isNull);
-      expect(InstallReferrerService.parseReferralCode('   '), isNull);
-      expect(
-        InstallReferrerService.parseReferralCode('utm_source=google-play'),
-        isNull,
-      );
-    });
-
-    test('rejects junk that is not a plausible code', () {
-      // Contains query syntax but no known key.
-      expect(
-        InstallReferrerService.parseReferralCode('foo=bar&baz=qux'),
-        isNull,
-      );
-      // Too long / has illegal chars as a bare value.
-      expect(
-        InstallReferrerService.parseReferralCode('this-is-not-a-code!!'),
-        isNull,
-      );
-    });
-
-    test('buildShareLink embeds the code as an encoded referrer payload', () {
-      final link = InstallReferrerService.buildShareLink('ABCD1234');
-      expect(link, contains('id=com.hsrutility.arul'));
-      // "ref=ABCD1234" URL-encoded -> "ref%3DABCD1234".
-      expect(link, contains('referrer=ref%3DABCD1234'));
-      // Round-trips back to the same code.
-      final referrer = Uri.parse(link).queryParameters['referrer'];
-      expect(InstallReferrerService.parseReferralCode(referrer), 'ABCD1234');
-    });
-  });
-
   // The deferred half of a deep link -> an ad or share tap by someone WITHOUT the app.
   // The Worker's /w/:id or /r/:id sends them to Play with `ref=<code>&w=<id>&lang=<code>` (or `r=<id>`).
   // Play replays that on first launch -> these turn it back into what to open and in which language.
@@ -124,6 +69,25 @@ void main() {
         );
       },
     );
+
+    test('a raw ref= from a link older builds shared still reads share', () {
+      expect(
+        InstallReferrerService.parseAttribution(
+          'ref=ABCD1234',
+        )['install_channel'],
+        'share',
+      );
+      expect(
+        InstallReferrerService.parseAttribution(
+          'utm_source=whatsapp&ref=abcd1234&utm_medium=social',
+        )['install_channel'],
+        'share',
+      );
+      expect(
+        InstallReferrerService.parseAttribution('ref=')['install_channel'],
+        'unknown',
+      );
+    });
 
     test('raw tags are lower-cased and clipped, never dropped for case', () {
       final props = InstallReferrerService.parseAttribution(
@@ -218,17 +182,11 @@ void main() {
       );
     });
 
-    test('is independent of the referral code — either half can be absent', () {
-      // An ad click carries no referral code and a Refer & Earn share carries no wallpaper -> neither discards the other.
+    test('a ref= alone is never a target', () {
       expect(InstallReferrerService.parseWallpaperTarget('w=$id'), id);
-      expect(InstallReferrerService.parseReferralCode('w=$id'), isNull);
       expect(
         InstallReferrerService.parseWallpaperTarget('ref=ABCD1234'),
         isNull,
-      );
-      expect(
-        InstallReferrerService.parseReferralCode('ref=ABCD1234'),
-        'ABCD1234',
       );
     });
 
@@ -252,17 +210,8 @@ void main() {
     });
 
     test('buildWallpaperLink is an App Link on the verified host', () {
-      final link = InstallReferrerService.buildWallpaperLink(
-        id,
-        code: 'ABCD1234',
-      );
       // https on OUR host is what lets Android intercept it for an installed user.
       // A Play URL or an arul:// scheme cannot do that from an ad.
-      expect(link, 'https://$kDeepLinkHost/w/$id?ref=ABCD1234');
-    });
-
-    test('buildWallpaperLink still deep-links when there is no code', () {
-      // Losing attribution must never also cost the deep link -> that is the half that converts.
       expect(
         InstallReferrerService.buildWallpaperLink(id),
         'https://$kDeepLinkHost/w/$id',
@@ -273,13 +222,9 @@ void main() {
       'the ad-creative forms carry lang, and round-trip through the parser',
       () {
         final w = InstallReferrerService.buildWallpaperLink(id, lang: 'hi');
-        final r = InstallReferrerService.buildRingtoneLink(
-          rid,
-          code: 'ABCD1234',
-          lang: 'ta',
-        );
+        final r = InstallReferrerService.buildRingtoneLink(rid, lang: 'ta');
         expect(w, 'https://$kDeepLinkHost/w/$id?lang=hi');
-        expect(r, 'https://$kDeepLinkHost/r/$rid?ref=ABCD1234&lang=ta');
+        expect(r, 'https://$kDeepLinkHost/r/$rid?lang=ta');
 
         final parsedW = parseDeepLink(w, source: DeepLinkSource.appLink);
         expect(parsedW?.target, const WallpaperLinkTarget(id));
@@ -296,10 +241,9 @@ void main() {
       // `ilang` survives only the Play referrer -> the same URL parsed as an App Link yields the target and no language.
       final link = InstallReferrerService.buildWallpaperLink(
         id,
-        code: 'ABCD1234',
         installLang: 'ta',
       );
-      expect(link, 'https://$kDeepLinkHost/w/$id?ref=ABCD1234&ilang=ta');
+      expect(link, 'https://$kDeepLinkHost/w/$id?ilang=ta');
 
       final parsed = parseDeepLink(link, source: DeepLinkSource.appLink);
       expect(parsed?.target, const WallpaperLinkTarget(id));
@@ -339,6 +283,17 @@ void main() {
       SharedPreferences.setMockInitialValues(initial);
       return InstallReferrerService(await SharedPreferences.getInstance());
     }
+
+    test('a code stored by an older build is dropped on launch', () async {
+      // Already checked -> captureOnce never reaches Play, only the cleanup.
+      final s = await service({
+        'pending_referral_code': 'ABCD1234',
+        'install_referrer_checked': true,
+      });
+      await s.captureOnce();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.containsKey('pending_referral_code'), isFalse);
+    });
 
     test('queueRequest persists both halves and seeds the live slot', () async {
       final s = await service();
@@ -436,5 +391,64 @@ void main() {
         expect(s.pendingLang, isNull);
       },
     );
+  });
+
+  group('InstallReferrerService status targets', () {
+    const sid = 'c0ffee00-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+    const wid = '95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f';
+
+    setUp(ArulDeepLink.reset);
+    tearDown(ArulDeepLink.reset);
+
+    Future<InstallReferrerService> service() async {
+      SharedPreferences.setMockInitialValues({});
+      return InstallReferrerService(await SharedPreferences.getInstance());
+    }
+
+    test('a deferred s= is persisted, survives as the pending target, and '
+        'is cleared with the rest', () async {
+      final s = await service();
+      await s.queueRequest(parseReferrerPayload('s=$sid')!);
+      expect(s.pendingStatusId, sid);
+      expect(
+        s.pendingTarget,
+        const StatusLinkTarget(sid, source: DeepLinkSource.installReferrer),
+      );
+      expect(ArulDeepLink.pendingTarget, s.pendingTarget);
+      expect(
+        s.attributionProps,
+        {'install_channel': 'unknown+status'},
+        reason: 'the link kind is kept for attribution, never cleared',
+      );
+
+      await s.clearPendingTarget();
+      expect(s.pendingStatusId, isNull);
+      expect(s.pendingTarget, isNull);
+    });
+
+    test(
+      'last write wins across kinds — a wallpaper replaces a status',
+      () async {
+        final s = await service();
+        await s.queueTarget(const StatusLinkTarget(sid));
+        await s.queueTarget(const WallpaperLinkTarget(wid));
+        expect(s.pendingStatusId, isNull);
+        expect(s.pendingTarget, const WallpaperLinkTarget(wid));
+      },
+    );
+
+    test('an s= install is a link install', () {
+      expect(
+        InstallReferrerService.parseAttribution('s=$sid')['install_channel'],
+        'link',
+      );
+    });
+
+    test('the share link is /s/<id> with the install language', () {
+      expect(
+        InstallReferrerService.buildStatusLink(sid, installLang: 'ta'),
+        'https://arul.hsrutility.com/s/$sid?ilang=ta',
+      );
+    });
   });
 }

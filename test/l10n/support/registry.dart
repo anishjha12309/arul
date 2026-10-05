@@ -12,7 +12,10 @@ library;
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
+import 'package:arul/app/widgets/arul_browse_header.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
+import 'package:arul/app/widgets/reel/reel_card.dart';
+import 'package:arul/app/widgets/state_views.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
@@ -27,8 +30,6 @@ import 'package:arul/features/premium/presentation/premium_confirm_dialog.dart';
 import 'package:arul/features/premium/presentation/trial_nudge_row.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/trial_nudge_provider.dart';
-import 'package:arul/features/referral/presentation/refer_screen.dart';
-import 'package:arul/features/referral/presentation/share_moment_sheet.dart';
 import 'package:arul/features/ringtones/presentation/ringtone_states.dart';
 import 'package:arul/features/ringtones/presentation/ringtones_screen.dart';
 import 'package:arul/features/ringtones/providers/ringtone_catalog_providers.dart';
@@ -39,6 +40,10 @@ import 'package:arul/features/settings/presentation/help_sheet.dart';
 import 'package:arul/features/settings/presentation/language_sheet.dart';
 import 'package:arul/features/settings/presentation/settings_screen.dart';
 import 'package:arul/features/settings/presentation/theme_sheet.dart';
+import 'package:arul/features/share/share_moment_sheet.dart';
+import 'package:arul/features/status/domain/status_video.dart';
+import 'package:arul/features/status/presentation/status_screen.dart';
+import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/upload/presentation/upload_screen.dart';
 import 'package:arul/features/wallpapers/presentation/apply_sheet.dart';
 import 'package:arul/features/wallpapers/presentation/feed_states.dart';
@@ -203,6 +208,27 @@ class _FakeRingtoneCatalog extends RingtoneCatalogNotifier {
   Future<List<Ringtone>> build() async => kFakeRingtones;
 }
 
+/// Realistic titles and two categories -> the chip row and the pill compete for width as shipped.
+const List<StatusVideo> kFakeStatuses = <StatusVideo>[
+  StatusVideo(
+    id: 's1',
+    title: 'Vel Vel Muruga',
+    category: 'murugan',
+    key: 'statuses/murugan/s1.mp4',
+  ),
+  StatusVideo(
+    id: 's2',
+    title: 'Karthigai Deepam',
+    category: 'sivan',
+    key: 'statuses/sivan/s2.mp4',
+  ),
+];
+
+class _FakeStatusCatalog extends StatusCatalogNotifier {
+  @override
+  Future<List<StatusVideo>> build() async => kFakeStatuses;
+}
+
 class _FakeCatalog extends CatalogNotifier {
   _FakeCatalog(this._items);
   final List<Wallpaper> _items;
@@ -316,6 +342,74 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       ringtoneCatalogProvider.overrideWith(_FakeRingtoneCatalog.new),
       ringtonePreviewProvider.overrideWith(_StubPreview.new),
     ],
+  ),
+
+  ScreenEntry(
+    // The screen's own words without its reel: the reel's posters go through the network image
+    // cache, which needs platform directories the matrix does not have (the feed reel is absent
+    // for the same reason). Same header, chip row and action bar the screen builds.
+    id: 'status.screen',
+    build: () => Scaffold(
+      body: SafeArea(
+        child: Builder(
+          builder: (context) {
+            final l10n = AppLocalizations.of(context);
+            return Column(
+              children: [
+                ArulBrowseHeader(
+                  title: l10n.statusTitle,
+                  chips: const StatusChips(),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 30),
+                  child: ReelActionBar(
+                    busy: false,
+                    primary: ReelAction(
+                      icon: Icons.send_rounded,
+                      label: l10n.statusWhatsapp,
+                      semanticsId: 'arul_status_whatsapp',
+                      onTap: () {},
+                    ),
+                    secondary: ReelAction(
+                      icon: Icons.download_rounded,
+                      label: l10n.statusSave,
+                      semanticsId: 'arul_status_save',
+                      onTap: () {},
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+    overrides: [statusCatalogProvider.overrideWith(_FakeStatusCatalog.new)],
+  ),
+  ScreenEntry(
+    id: 'status.empty',
+    build: () => Scaffold(
+      body: Builder(
+        builder: (context) =>
+            StateView.empty(title: AppLocalizations.of(context).statusEmpty),
+      ),
+    ),
+  ),
+  ScreenEntry(
+    id: 'status.error',
+    build: () => Scaffold(
+      body: Builder(
+        builder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return StateView.error(
+            title: l10n.statusError,
+            message: l10n.feedErrorBody,
+            actionLabel: l10n.retry,
+            onAction: () {},
+          );
+        },
+      ),
+    ),
   ),
 
   ScreenEntry(id: 'settings.screen', build: () => const SettingsScreen()),
@@ -441,7 +535,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     ),
   ),
 
-  ScreenEntry(id: 'refer.screen', build: () => const ReferScreen()),
   ScreenEntry(
     id: 'refer.share_moment',
     build: () => SheetHost(
@@ -514,7 +607,28 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
             items: [
               (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
               (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
-              (glyph: ArulLineGlyph.settings, label: l10n.settingsTitle),
+            ],
+          );
+        },
+      ),
+    ),
+  ),
+  ScreenEntry(
+    // The flag-on dock: three cells share the capsule, so each label gets less width.
+    id: 'shell.dock.status',
+    build: () => Scaffold(
+      extendBody: true,
+      body: const SizedBox.expand(),
+      bottomNavigationBar: Builder(
+        builder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return ArulNavDock(
+            currentIndex: 2,
+            onTap: (_) {},
+            items: [
+              (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
+              (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
+              (glyph: ArulLineGlyph.status, label: l10n.statusTitle),
             ],
           );
         },
@@ -540,8 +654,8 @@ Widget buildHarness({
       for (final path in const [
         '/browse',
         '/ringtones',
+        '/status',
         '/settings',
-        '/refer',
         '/upload',
         '/premium',
         '/sign-in',

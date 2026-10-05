@@ -23,9 +23,9 @@ user's ONE row: paid days must survive the attempt, and a failed setup RESTORES 
 bypass.
 
 **The rule's ONE home is `premiumPredicate` in `workers/src/lib/entitlement.ts`**; the app consumes the
-flag `GET /me` computes. A client-side copy drifted once — it missed `reward_premium_until`, so
-reward-only referrers were paywalled while `/media/signed-url` would have signed for them. Never
-re-create one. The access token's `prm` claim is a UI hint; never gate on it.
+flag `GET /me` computes. A client-side copy drifted once — it missed `reward_premium_until` (legacy
+referral credit and hand-set comps, ORed in forever), so reward-only users were paywalled while
+`/media/signed-url` would have signed for them. Never re-create one. The access token's `prm` claim is a UI hint; never gate on it.
 
 **The app's side of the gate:** `ensurePremium()` AWAITS `entitlementProvider.future` — a loading
 snapshot must never bounce a premium user. A blocked action tracks `${action}_blocked_premium` and routes
@@ -59,7 +59,7 @@ copies bytes verbatim ([media-conventions.md](media-conventions.md)).
 ## Catalog generation
 
 Trigger: a CMS mutation, `POST /internal/build-catalog`, or the hourly cron (a no-op while
-`app_config.content_version` is unchanged). Output per scope (`wallpapers`, `ringtones`):
+`app_config.content_version` is unchanged). Output per scope (`wallpapers`, `ringtones`, `statuses`):
 `catalog/<scope>/all_<page>.json`, ONE page set each at 200 rows/page, no per-category files — plus the
 shared `catalog/version.json` (the pointer the app reads first, then `?v=<version>` on pages) and
 `catalog/app_config.json` (the public config subset).
@@ -70,12 +70,21 @@ shared `catalog/version.json` (the pointer the app reads first, then `?v=<versio
 - **A zero-row scope still writes a valid empty `all_1.json`** — a 404 there means the build FAILED,
   never "no content". Orphaned page files are deleted each rebuild. Cache headers:
   [caching.md](caching.md).
-- **The backend is never conditional on the front end:** both scopes build unconditionally; keep the
+- **The backend is never conditional on the front end:** every scope builds unconditionally; keep the
   ringtone scope, `kind='ringtone'` and the `ringtones/` sweep prefix whatever the app ships.
+- **`version.json` commits only when EVERY scope builds**, so one failing scope freezes all of them for
+  installs that never update. `statuses` therefore reads a missing table (42P01) as a valid empty page —
+  the Worker may deploy before `30_statuses.sql`. A new scope copies that guard.
+- **Fielded builds read only their own scope keys** — pages and `category_order.<scope>` alike — so a new
+  kind gets its own scope, table and category kind, never rows in an old one.
 - A CMS mutation is bytes + row + version bump in ONE transaction; the rebuild fires async over the
   `ARUL_API` binding and self-heals on the hourly cron.
-- Exposed media keys are public by design (soft gate): wallpaper `full_key`, ringtone `audio_key`. The
-  gate is the Worker's live entitlement read, never object privacy.
+- Exposed media keys are public by design (soft gate): wallpaper and status `full_key`, ringtone
+  `audio_key`. The gate is the Worker's live entitlement read, never object privacy.
+- `/media/signed-url` bumps ONE popularity counter per grant, chosen by `kind` + `action`: wallpaper
+  `apply` → `apply_count`, every ringtone grant → `set_count`, status `share` → `share_count` and
+  `download` → `download_count`; anything else (a wallpaper share, no `action` from an old build) bumps
+  nothing, so a column keeps meaning what it says.
 
 ## Schema
 

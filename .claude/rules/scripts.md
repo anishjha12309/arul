@@ -30,3 +30,5 @@ These run on a developer machine only. Biome covers them (`npm run check` in `wo
 - **Production is read-only by default.** `prod-query.mjs` runs one SELECT/WITH and its guard is the
   security boundary behind a permission allow-rule; writes go through `prod-sql.mjs --write`, which
   refuses an UPDATE/DELETE without WHERE. A new prod script reads unless a write flag says otherwise.
+- **The local-stack tools (`workers/tools/local-*`) touch the debug branch and local R2 only**, through
+  `local-lib.mjs`'s fail-closed guards; a new one imports them ([docs/local-stack.md](../../docs/local-stack.md)).

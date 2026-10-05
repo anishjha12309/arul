@@ -27,7 +27,15 @@ export const WALLPAPER_IMAGE = {
   maxSide: 8192,
 } as const;
 
-export type MediaRole = "wallpaper" | "ringtone";
+/** Status clip: a reel video WITH music, shared to WhatsApp Status. Encode recipe: Arul media-conventions. */
+export const STATUS_VIDEO = {
+  width: 1024,
+  height: 1824,
+  maxDurationMs: 30_000,
+  maxBytes: 10 * 1024 * 1024,
+} as const;
+
+export type MediaRole = "wallpaper" | "ringtone" | "status";
 
 export interface VerifyOk {
   ok: true;
@@ -35,6 +43,7 @@ export interface VerifyOk {
   width?: number;
   height?: number;
   durationMs?: number;
+  bytes?: number;
 }
 
 export interface VerifyFail {
@@ -75,9 +84,18 @@ export async function verifyMediaObject(
     const mb = Math.round(maxBytes / (1024 * 1024));
     return fail("too_large", `File is larger than the ${mb}MB limit for ${ct}`);
   }
+  if (role === "status" && head.size > STATUS_VIDEO.maxBytes) {
+    const mb = (head.size / (1024 * 1024)).toFixed(1);
+    return fail("too_large", `A status clip must be at most 10MB (this one is ${mb}MB)`);
+  }
   if (head.size < 64) return fail("corrupt", "File is too small to be valid media");
 
   const reader = new R2Reader(bucket, key, head.size);
+
+  if (role === "status") {
+    if (ct !== "video/mp4") return fail("bad_type", `A status must be an MP4 video (got "${ct}")`);
+    return verifyStatusClip(reader, ct);
+  }
 
   if (role === "wallpaper") {
     if (ct === "video/mp4") return verifyLiveWallpaper(reader, ct);
@@ -445,4 +463,28 @@ async function verifyRingtoneAudio(reader: R2Reader, ct: string): Promise<Verify
   const result: VerifyOk = { ok: true, contentType: ct };
   if (mp4.durationMs !== null) result.durationMs = mp4.durationMs;
   return result;
+}
+
+async function verifyStatusClip(reader: R2Reader, ct: string): Promise<VerifyResult> {
+  const mp4 = await parseMp4(reader);
+  if (!mp4) return fail("corrupt", "The file's contents are not a valid MP4 video");
+  const video = mp4.videoTracks[0];
+  if (!video) return fail("corrupt", "The MP4 has no video track — a status must be a video");
+  const codecs: readonly string[] = WALLPAPER_VIDEO.allowedCodecs;
+  if (!codecs.includes(video.codec)) {
+    return fail("bad_codec", `Video codec "${video.codec}" is not supported — re-encode as H.264`);
+  }
+  const { width, height, maxDurationMs } = STATUS_VIDEO;
+  if (video.width !== width || video.height !== height) {
+    const got = `${video.width}×${video.height}`;
+    return fail("bad_dimensions", `Video is ${got} — a status must be exactly ${width}×${height}`);
+  }
+  if (mp4.audioTracks < 1) return fail("bad_type", "The MP4 has no audio track — a status has music");
+  const ms = mp4.durationMs;
+  if (ms === null) return fail("corrupt", "Could not read the clip's duration");
+  if (ms > maxDurationMs) {
+    const secs = (ms / 1000).toFixed(1);
+    return fail("too_large", `Clip is ${secs} s — a status must be at most ${maxDurationMs / 1000} s`);
+  }
+  return { ok: true, contentType: ct, width, height, durationMs: ms, bytes: reader.size };
 }

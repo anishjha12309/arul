@@ -1,7 +1,7 @@
-# The live-video feed — decoder budget and the reveal
+# The video reels — decoder budget, visibility and the reveal
 
-Read before touching `android/**/feedvideo/**`, `lib/features/wallpapers/data/**` or
-`video_preload_controller.dart`. Encoding rules and the dimension law:
+Read before touching `android/**/feedvideo/**`, `lib/app/widgets/reel/**` or
+`lib/features/wallpapers/data/**`. The Status tab's own contracts: [status.md](status.md). Encoding rules and the dimension law:
 [media-conventions.md](media-conventions.md). Card geometry and the live mark: [feed-card.md](feed-card.md).
 
 Budget SoCs fit roughly two concurrent 1080p hardware decoder sessions. Everything here exists
@@ -20,13 +20,40 @@ never with an error.
   Attempt and degrade; the try IS the probe. Keep the diagnostic query OFF the main thread:
   `MediaCodecList`'s first enumeration is a binder round-trip to the codec service that some phones
   answer in seconds, and on main it ANR'd the first feed frame.
-- **Leaving the Wallpapers tab PAUSES at once and frees the decoders only after a grace period**
-  (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild —
+- **Leaving a reel — a tab switch or a full screen pushed over it — PAUSES at once and frees the
+  decoders only after a 3 s grace** (`releaseDecodersOnLeave`). Emptying the pool costs three `MediaCodec` instantiations to rebuild —
   hundreds of ms with no frame on the video surface and a burst of janky frames on every tab switch.
   The pause is what stops audio and decode
   behind the ringtone list, and it is free; only the freeing is worth deferring. The other three
   release paths stay IMMEDIATE and must: the apply flow AWAITS one so the OS finds decoders free,
   backgrounding hands them to the OEM chooser, and `detach()` is a teardown.
+
+## Two reels, one device
+
+`VideoPreloadController<T extends ReelItem>` drives both the feed (pool 3: previous + current + next)
+and the status reel (pool 2: current + next, audible). **The decoder budget is static and shared** —
+one device, one set of hardware sessions — so a demotion in either reel binds both.
+
+- **Two pools never decode at once.** Wallpapers↔Status releases the leaving pool IN FULL (awaited)
+  before the entering one claims, with no grace: 3 + 2 players against ~2 hardware sessions is the
+  silent-failure class. A swap overtaken during its await never reclaims (`_swapSeq`). Every other
+  switch keeps the grace.
+- **`visible` gates every `play()`** — reconcile, assignment and the `resumed` handler — and a hidden
+  reel claims no decoders: an audible pool playing hidden is sound from nowhere. The shell owns the
+  flag: tab switches, and `RouteAware` on the root navigator (`shellRouteObserver`) for any PAGE route
+  pushed over it (Settings, paywall, upload, policy) — pause now, release after the grace, restore on
+  pop. A dialog or sheet is not a page route and pauses nothing. A cold start straight onto Status (a
+  push tap) runs no switch, so the shell sets visibility in its first post-frame.
+- **Focus loss latches.** Native reports `focusLost` and the reel controller holds the clip until a
+  TAP — no reconcile, resume or swipe restarts it over the call or music that took the speaker. A
+  user's tap-pause clears on a swipe; the focus latch only on a tap.
+- **The plugin owns ONE focus request for every audible player** (`handleAudioFocus` is false on each
+  ExoPlayer). Per-player Media3 focus made every swipe's new clip take focus from the pool's previous
+  player as a PERMANENT loss, which latched the reel paused on the phone. Only another app's
+  `LOSS`/`LOSS_TRANSIENT`, or headphones out (Media3's noisy handling), reaches Dart; a refused
+  request (Android 15+, app not on top) never plays.
+- **A hot restart resets Dart, not the plugin**, so a status clip kept its sound with no handle left
+  to pause it. The first `create` of a new isolate calls native `disposeAll` to release orphans.
 
 ## The feed opens FILES. A CDN stream is a failure path, never the plan
 
@@ -64,6 +91,9 @@ tracked time spent scrolling, not cards reached. The 160 ms settle debounce alre
 pages from enqueuing; the disk LRU (120 objects) stays deep so a cached cold start opens from files.
 Encode size is not the lever — the 15 MB ceiling is quality-first by the owner's call.
 
+**Status clips stage into their OWN store** (`arulStatuses`, 20 objects at ~8 MB; 2 ahead, 1 until the
+first paint), so a reel of 10 MB clips never evicts live wallpapers from the feed's LRU.
+
 **Under Android's Data Saver on a metered link, stage NOTHING ahead** (`DataSaver`, native
 `isActiveNetworkMetered && RESTRICT_BACKGROUND_STATUS_ENABLED`): the visible card still loads, the
 look-ahead and the return clip's speculative warm do not. Data Saver on Wi-Fi restricts nothing.
@@ -80,15 +110,17 @@ The one thing that does distinguish them is `LiveMark`, and it is static by desi
 ([feed-card.md](feed-card.md)).
 
 Poster, full image and video texture must all share `ViewerMedia.cropAlignment`, or the frame jumps
-on fade-in.
+on fade-in. Status cards share `Alignment.center` instead: a status is composed around its middle text
+line, and the top bias showed a fill band above the clip while cutting its lower words.
 
 ## Audio is decided at CREATE, not per open
 
 `create(audio:)` picks the `AudioAttributes` and focus handling once, so a player built muted never takes
-audio focus — raising its volume later changes focus behaviour not at all. Everything except the paywall's
-ONE audible player stays `audio: false`: a preview that took focus would pause the user's music while they
-browsed. The onboarding clip and the return page's clip SHARE that player — the feed under `/premium` still
-holds its decoders, so a second one would break the budget. Hand it over by giving the other card `null`,
+audio focus — raising its volume later changes focus behaviour not at all. Only the paywall's ONE
+player and the status pool are audible; every feed player stays `audio: false`, because a preview that took
+focus would pause the user's music while they browsed. The onboarding clip and the return page's clip SHARE
+the paywall player — the reel under `/premium` holds its decoders through the 3 s grace, so a second one
+would break the budget. Hand it over by giving the other card `null`,
 and take it back only after the return page's exit plus one frame: its card pauses the player as it
 disposes, which silenced a clip handed back any earlier. The clip's URL is the one thing
 `Log.i("audible open")` prints, which matters because the language cuts are the same footage and a

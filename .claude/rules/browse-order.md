@@ -9,11 +9,13 @@ paths:
 - **`category` is THE browse axis**; `type` (static/live) is a rendering hint, never a filter or tab.
   Chips derive from each tab's own catalog; the two lists differing is correct.
 - **Chip ROW order is the operator's** when set: CMS `categories.picker_order` → `app_config
-  .category_order` keyed by SCOPE → `orderedByCms`. It SORTS only (never adds or hides a chip); absent
+  .category_order` keyed by SCOPE (old builds read their own key, so a status slug never lands in
+  `wallpapers`) → `orderedByCms`. It SORTS only (never adds or hides a chip); absent
   or empty falls back to `compareBrowseCategories` / `compareRingtoneCategories`; a partial list puts
   the named slugs first. An explicit order beats `others`-last.
 - **Order is ONE SQL clause in `build-catalog`**: `feed_rank ASC NULLS LAST, apply_count DESC,
-  created_at DESC, id ASC` (`set_count` + a second `NULLS LAST` for ringtones), numbered into the
+  created_at DESC, id ASC` (`set_count` + a second `NULLS LAST` for ringtones, `share_count +
+  download_count` for statuses), numbered into the
   catalog's `feed_rank`, which the shipped comparator sorts on. Same order on All and every category
   chip — a category IS All restricted. Never add a per-chip rank. New is the one exception (below).
 - **The trailing `id` is REQUIRED**: an import batch ties on `created_at`, and without a unique key

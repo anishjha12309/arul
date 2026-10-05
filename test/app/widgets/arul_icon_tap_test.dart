@@ -2,6 +2,8 @@
 // the box is Android's 48 whatever the glyph size, the control is NAMED for TalkBack (the glyph
 // alone announces nothing), and a press lands on `onTap` once.
 import 'package:arul/app/widgets/arul_icon_tap.dart';
+import 'package:arul/app/widgets/arul_line_icons.dart';
+import 'package:arul/app/widgets/arul_screen_header.dart';
 import 'package:arul/theme/arul_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,5 +81,52 @@ void main() {
     await tester.pump();
     // No throw, no state change: the disabled control simply ignores the press.
     expect(find.byIcon(Icons.edit), findsOneWidget);
+  });
+
+  testWidgets('a header gear takes taps across its whole 48, the strip that '
+      'reaches into the gutter included, while its 34 box stays flush', (
+    tester,
+  ) async {
+    var taps = 0;
+    await tester.binding.setSurfaceSize(const Size(360, 640));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topCenter,
+            child: ArulScreenHeader(
+              title: 'Arul',
+              actions: [
+                ArulIconTap.glyph(
+                  glyph: ArulLineGlyph.settings,
+                  label: 'Settings',
+                  onTap: () => taps++,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getRect(find.byType(ArulIconTap));
+    expect(target.width, ArulTokens.minHitTarget);
+    const spill = (ArulTokens.minHitTarget - ArulTokens.headerControlSize) / 2;
+    expect(
+      target.right,
+      360 - ArulTokens.screenPadding + spill,
+      reason: 'the spare target width is LAID OUT into the gutter',
+    );
+    expect(
+      tester.getCenter(find.byType(ArulLineIcon)).dx,
+      360 - ArulTokens.screenPadding - ArulTokens.headerControlSize / 2,
+      reason: 'the drawn box stays flush with the gutter',
+    );
+
+    // The outermost pixel column of the target, inside the gutter.
+    await tester.tapAt(Offset(target.right - 1, target.center.dy));
+    await tester.pump();
+    expect(taps, 1);
   });
 }

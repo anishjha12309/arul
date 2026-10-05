@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../features/referral/providers/referral_providers.dart';
 import '../providers/locale_provider.dart';
 import 'deep_link_target.dart';
+import 'install_referrer_service.dart';
 
 /// Applies the language a link asked for (`lang=hi`) to the running app.
 /// The pending value is written from go_router's redirect and async services, never inside a build.

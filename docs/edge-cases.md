@@ -1,17 +1,9 @@
 # Edge cases — the regression-contract index
 
-One line per bug already paid for; each binds regardless of UI design. Walk them on device before a
-release; unticked is the resting state. The reasoning lives in the docs each heading names.
+One line per paid-for bug, binding whatever the UI; walk them on device before a release. Reasoning:
+each heading's docs.
 
-## Video feed — [video-feed.md](video-feed.md), [media-conventions.md](media-conventions.md)
-- [ ] Live MP4s exactly 1024×1824 — the 128/32 alignment rule inside the hw-decoder cap
-- [ ] Players REUSED (`setMediaItem`); ONE process-global EventChannel hub
-- [ ] Software fallback demotes the pool 3→2, floor 2; only a codec error goes to 1; never query capability
-- [ ] Leaving Wallpapers pauses at once, frees decoders after a grace; other releases are immediate
-- [ ] The feed opens FILES, never a stream by plan; a network error never re-opens a painted card
-- [ ] Poster under the texture, revealed on `onRenderedFirstFrame`; one shared `cropAlignment`
-- [ ] Audio decided at CREATE; only the paywall's ONE shared player is audible
-- [ ] Data Saver on a metered link stages nothing ahead
+**Video reels and the Status tab: [edge-cases-reel.md](edge-cases-reel.md)** — walk both files.
 
 ## Wallpaper apply — [wallpaper-apply.md](wallpaper-apply.md)
 - [ ] Static apply hands the OS a bitmap already centre-cropped to the display aspect
@@ -99,36 +91,37 @@ release; unticked is the resting state. The reasoning lives in the docs each hea
 - [ ] EXACTLY ONE link per share, owned by the caption, trailing; it carries `ilang=`, never `lang=`
 - [ ] WhatsApp-first by a DIFFERENT mechanism per path — the text scheme drops the file
 - [ ] The live watermark needs API 31; below it the share ships clean, never crashes
+- [ ] The status composer carries NO link; its chat/sheet fallback carries exactly one `/s/` link
 
 ## Deep links — [deep-links.md](deep-links.md), [deferred-links.md](deferred-links.md)
 - [ ] Intent-filters never merged across schemes; `flutter_deeplinking_enabled` stays true
 - [ ] ONE level of encoding on `referrer`; the Worker's language normalisation matches the app's
 - [ ] Native checks a deferred link's HOST only; Dart decides path and query
 - [ ] The link's `lang` beats a Settings pick, the region and the phone
-- [ ] The region is asked once per FRESH install and never picks the language; a stored older-build region language is kept
+- [ ] The region is asked once per FRESH install, never picks the language; an older build's stored region language stays
 - [ ] Typed takes: `consumeWallpaper()` never eats a pending ringtone, or the reverse
 
 ## Catalog / storage — [cron.md](cron.md), [caching.md](caching.md)
 - [ ] Pages `max-age=86400` + `?v=`; stale = rebuild with a version bump, never a purge
-- [ ] A zero-row scope still writes a valid empty `all_1.json`
-- [ ] Sweep failsafes: zero referenced keys aborts the prefix; the blast-radius cap refuses an oversized delete
-- [ ] Hyperdrive query caching OFF; bucket, KV and DB exclusively Arul's; R2 objects public by design
+- [ ] A zero-row scope or a missing `statuses` table writes a valid empty `all_1.json`
+- [ ] Sweep: zero referenced keys aborts a prefix (empty folder: skip); the blast-radius cap refuses an
+      oversized delete; status posters referenced pre-upload
+- [ ] Old builds' pages and chip keys unchanged; no status chip in the wallpaper key
+- [ ] Hyperdrive query caching OFF; bucket, KV and DB Arul's alone; R2 objects public by design
 
 ## Review prompt — [review-prompt.md](review-prompt.md)
-- [ ] Play's sheet only on a LATER cold open than the success that armed it, with nothing above the
-      feed; never before 2 successes with the first 3+ days old; a skip keeps the arm; ≤1 ask per
-      rolling 120 days; no pre-prompt
+- [ ] Play's sheet only on a LATER cold open than the arming success, nothing above the feed; ≥2
+      successes, the first 3+ days old; a skip keeps the arm; ≤1 ask per rolling 120 days; no pre-prompt
 
 ## In-app update — [app-update.md](app-update.md)
 - [ ] Never over the splash, the wall, a sign-in attempt, `/premium` or a loading apply/share/set;
-      a FLEXIBLE download is never resumed as IMMEDIATE; the update wins the launch over the review sheet
+      a FLEXIBLE download never resumes as IMMEDIATE; the update beats the review sheet to the launch
 
 ## App-wide
-- [ ] Policy pages open the IN-APP reader (`/policy/:doc`), never `launchUrl`: host-fenced, chrome hidden
-      before reveal; offline = the app's error + Retry, never cleared by `onPageFinished` (it fires for
-      Android's error page too)
-- [ ] Loading / empty / error on every async surface in 6 locales; failure copy per KIND, never the Worker's
-      `message`
+- [ ] Policy pages: the IN-APP reader (`/policy/:doc`), never `launchUrl`; host-fenced, chrome hidden
+      before reveal; offline = our error + Retry, never cleared by `onPageFinished` (fires on Android's
+      error page too)
+- [ ] Loading/empty/error on every async surface in 6 locales; failure copy per KIND, never the Worker's `message`
 - [ ] A system Back never escapes go_router's `popRoute` ([known-issues.md](known-issues.md))
 - [ ] No `purchase` event anywhere ([analytics-events.md](analytics-events.md))
 - [ ] `allowBackup=false`, data-extraction rules, HTTPS-only

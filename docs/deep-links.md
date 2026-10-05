@@ -12,14 +12,24 @@ turns an incoming link into a wallpaper, a ringtone or a language. Share payload
 | Google Ads · WhatsApp · any browser | `https://arul.hsrutility.com/w/<uuid>?lang=hi` | `…/r/<uuid>?lang=ta` | `…/w/?lang=hi` |
 | Meta deep-link field | `fb<META_APP_ID>://open?wallpaper_id=<uuid>&lang=hi` | `fb<META_APP_ID>://open?screen=ringtones&ringtone_id=<uuid>&lang=hi` | `fb<META_APP_ID>://open?lang=hi` |
 
-`lang` ∈ `en ta te kn ml hi` (region tags and case tolerated, anything else dropped); `?ref=<code>` rides
-the https form for referral credit; **`ilang=` is SHARE-only — an ad must never carry it**
+`lang` ∈ `en ta te kn ml hi` (region tags and case tolerated, anything else dropped). `?ref=<code>` is
+legacy: the Worker still packs it into the Play referrer for old builds' links and the app still tags
+such an install `install_channel=share`, but nothing credits it — never build one. **`ilang=` is
+SHARE-only — an ad must never carry it**
 ([share.md](share.md)). Keep the id-less form's TRAILING SLASH (`/w/`), matching the manifest's
 pathPrefix, or an installed phone opens a browser while an uninstalled one reaches Play. Build https
 links with `InstallReferrerService.buildWallpaperLink`/`buildRingtoneLink`, never by hand; the Meta
 scheme reuses the `META_APP_ID` the SDK meta-data is baked from, so it cannot drift. The scheme form
 needs App Dashboard → Settings → Android (package `com.hsrutility.arul`, class `…arul.MainActivity`).
 `screen=` alone opens the tab; an id implies its tab.
+
+**Status links** — `/s/<uuid>`, id-less `/s/` `/s`; query `status_id`/`s`, `screen=status|statuses`
+(the Meta form takes the same keys). An id outranks: wallpaper > ringtone > status > a bare `screen=`.
+Builds without the `/s/` filters open a browser there, so the Worker route never 404s: its bounce sends
+Play `s=<uuid>` (or `screen=status`), and Play offers Open or Update. **The tab is remote-flagged**: with
+`status_tab` off the shell CONSUMES the target, fires `deep_link_opened` (kind `status`) and lands on
+Wallpapers; while the config is still loading a cold link waits instead of being dropped. Never put a
+`/s/` link in an ad or push before the parsing build is at 100% and the flag is on.
 
 ## One URL, many deliveries, ONE parser, one slot
 
@@ -31,7 +41,7 @@ wallpaper **on All**, the Ringtones tab scrolls the row to the **top of All**, a
 | App state | Delivery | Enters at |
 | --- | --- | --- |
 | Installed | https App Link (verified host) or `fb<id>://open?…` | go_router top-level `redirect` (the FULL intent URI) |
-| Not installed, browser | Worker `/w/:id` · `/r/:id` → **200 bounce page, never a 302** → Play `referrer=` | `InstallReferrerService.captureOnce` |
+| Not installed, browser | Worker `/w/:id` · `/r/:id` · `/s/:id` → **200 bounce page, never a 302** → Play `referrer=` | `InstallReferrerService.captureOnce` |
 | Not installed, Google App campaign | GA4F deferred deep link | `MainActivity` → `DeferredLinkService` |
 | Not installed, Meta ad | `AppLinkData.fetchDeferredAppLinkData` | same bridge, `source=meta` |
 
@@ -78,8 +88,8 @@ The first four drop the link into a browser; the rest keep the app but lose the 
       nowhere.
 - [ ] **Intent-filters are never merged across schemes** — a filter matches the cross product of its
       schemes and hosts, so merging registers `fb…://arul.hsrutility.com` and puts a custom scheme under
-      `autoVerify`. Four filters: `arul://` (the PhonePe return), one autoVerify filter each for `/w/` and
-      `/r/`, and `fb${facebookAppId}://open`.
+      `autoVerify`. Separate filters: `arul://` (the PhonePe return), one autoVerify filter per https
+      path shape (`/w/` `/w` `/r/` `/r` `/s/` `/s` `/`), and `fb${facebookAppId}://open`.
 - [ ] The top-level `redirect` returns null for every scheme-less location (it runs on EVERY
       navigation) and `/` for every foreign-scheme URI, parseable or not — a typo'd ad link lands on the
       app, never on go_router's error page. It parks the target BEFORE the location becomes `/`, because
@@ -91,7 +101,7 @@ The first four drop the link into a browser; the rest keep the app but lose the 
 - [ ] The deferred target AND language are seeded from BOTH the capture and the persisted prefs — either
       can win the startup race against the first catalog drain. Whoever consumes clears the pref.
 - [ ] **Typed takes:** the feed builds BEFORE the shell switches tabs, so `consumeWallpaper()` never eats
-      a pending ringtone, nor the reverse. Both screens re-check on every build AND listen to
+      a pending ringtone or status, nor the reverse; the status reel jumps to its clip on All. Both screens re-check on every build AND listen to
       `ArulDeepLink.changes` — an offstage screen gets no build otherwise.
 - [ ] The ringtone scroll is arithmetic (`index × (RingtoneRow.extent + gap)`); a row that could grow
       taller than `extent` puts the wrong ringtone on top.

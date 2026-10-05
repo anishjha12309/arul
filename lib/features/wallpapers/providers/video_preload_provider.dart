@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/config/app_config.dart';
-import '../presentation/video_preload_controller.dart';
+import '../../../data/models/wallpaper.dart';
 import 'wallpaper_prefetch_provider.dart';
 
 /// App-scoped (keepAlive) [VideoPreloadController].
@@ -16,11 +17,12 @@ import 'wallpaper_prefetch_provider.dart';
 /// It demotes itself to 2 and then 1 on decoder errors or a software fallback.
 /// Decoders are released on background, and AWAITED before a native apply.
 /// So the OS wallpaper chooser finds the hardware codecs free.
-final videoPreloadControllerProvider = Provider<VideoPreloadController>((ref) {
-  final controller = VideoPreloadController(
-    cdnBaseUrl: AppConfig.cdnBaseUrl,
-    prefetch: ref.read(wallpaperPrefetchServiceProvider),
-  );
-  ref.onDispose(controller.dispose);
-  return controller;
-});
+final videoPreloadControllerProvider =
+    Provider<VideoPreloadController<Wallpaper>>((ref) {
+      final controller = VideoPreloadController<Wallpaper>(
+        cdnBaseUrl: AppConfig.cdnBaseUrl,
+        prefetch: ref.read(wallpaperPrefetchServiceProvider),
+      );
+      ref.onDispose(controller.dispose);
+      return controller;
+    });

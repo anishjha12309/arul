@@ -1,7 +1,7 @@
 {
   "locale": "ml",
   "template": "en",
-  "count": 51,
+  "count": 42,
   "rows": [
     {
       "key": "signInTerms",
@@ -196,17 +196,6 @@
       "translation": "നിങ്ങൾ അംഗമാണ്",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "settingsReferSub",
-      "english": "Earn 30 days free premium",
-      "translation": "30 ദിവസം സൗജന്യ പ്രീമിയം നേടുക",
-      "placeholders": [],
-      "screens": "settings.screen",
       "risk": true,
       "verdict": "",
       "note": "",
@@ -431,96 +420,6 @@
       "translation": "സൗജന്യമായി ബ്രൗസ് ചെയ്യൂ",
       "placeholders": [],
       "screens": "",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroTitle",
-      "english": "Gift a friend, earn a month",
-      "translation": "സുഹൃത്തിന് സമ്മാനം, നിങ്ങൾക്ക് ഒരു മാസം",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referHeroBody",
-      "english": "30 days of free premium for every friend who subscribes with your link",
-      "translation": "നിങ്ങളുടെ ലിങ്ക് വഴി സബ്‌സ്‌ക്രൈബ് ചെയ്യുന്ന ഓരോ സുഹൃത്തിനും 30 ദിവസം സൗജന്യ പ്രീമിയം",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardsLabel",
-      "english": "Rewards earned",
-      "translation": "നേടിയ റിവാർഡുകൾ",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referRewardDays",
-      "english": "{days} days",
-      "translation": "{days} ദിവസം",
-      "placeholders": [
-        "days"
-      ],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep1",
-      "english": "Share your link with friends and family",
-      "translation": "നിങ്ങളുടെ ലിങ്ക് സുഹൃത്തുക്കൾക്കും കുടുംബത്തിനും പങ്കിടുക",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep2",
-      "english": "They install Arul and subscribe to premium",
-      "translation": "അവർ Arul ഇൻസ്റ്റാൾ ചെയ്ത് പ്രീമിയം സബ്‌സ്‌ക്രൈബ് ചെയ്യുന്നു",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referStep3",
-      "english": "30 days of free premium lands in your account",
-      "translation": "30 ദിവസം സൗജന്യ പ്രീമിയം നിങ്ങളുടെ അക്കൗണ്ടിൽ എത്തും",
-      "placeholders": [],
-      "screens": "refer.screen",
-      "risk": true,
-      "verdict": "",
-      "note": "",
-      "proposal": ""
-    },
-    {
-      "key": "referEmpty",
-      "english": "No referrals yet — your first friend is one share away",
-      "translation": "ഇതുവരെ റഫറലുകളില്ല — ഒരു ഷെയറിൽ ആദ്യ സുഹൃത്ത്",
-      "placeholders": [],
-      "screens": "refer.screen",
       "risk": true,
       "verdict": "",
       "note": "",

@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum ArulTab { wallpapers, ringtones }
+enum ArulTab { wallpapers, ringtones, status }
 
 /// Where a link was delivered from — rides on the target for the GA4-only `deep_link_opened`.
 /// Answers which channel actually lands people on content; nothing else reads it.
@@ -31,9 +31,10 @@ enum DeepLinkSource {
       .firstWhere((s) => s.key == key, orElse: () => DeepLinkSource.appLink);
 }
 
-/// What a link asked the app to show. One of five shapes:
+/// What a link asked the app to show. One of six shapes:
 ///   · [WallpaperLinkTarget] — a wallpaper by id; the feed jumps to it on All.
 ///   · [RingtoneLinkTarget]  — a ringtone by id; the Ringtones tab scrolls it to the top of All.
+///   · [StatusLinkTarget]    — a status clip by id; the Status reel jumps to it on All.
 ///   · [TabLinkTarget]       — just a tab (`screen=ringtones` with no id).
 ///   · [CategoryLinkTarget]  — the browse feed filtered to one category.
 ///   · [PremiumLinkTarget]   — the premium screen.
@@ -107,6 +108,35 @@ final class RingtoneLinkTarget extends DeepLinkTarget {
 
   @override
   String toString() => 'RingtoneLinkTarget($id, ${source.key})';
+}
+
+/// A status clip by id. With the Status tab flagged off the shell takes it and lands on Wallpapers.
+final class StatusLinkTarget extends DeepLinkTarget {
+  const StatusLinkTarget(this.id, {super.source = DeepLinkSource.appLink});
+
+  final String id;
+
+  @override
+  ArulTab get tab => ArulTab.status;
+
+  @override
+  String get kind => 'status';
+
+  @override
+  Map<String, Object?> get analyticsProperties => {
+    ...super.analyticsProperties,
+    'status_id': id,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is StatusLinkTarget && other.id == id && other.source == source;
+
+  @override
+  int get hashCode => Object.hash(StatusLinkTarget, id, source);
+
+  @override
+  String toString() => 'StatusLinkTarget($id, ${source.key})';
 }
 
 final class TabLinkTarget extends DeepLinkTarget {
@@ -256,6 +286,13 @@ class ArulDeepLink {
   static RingtoneLinkTarget? consumeRingtone() {
     final t = _target;
     if (t is! RingtoneLinkTarget) return null;
+    _target = null;
+    return t;
+  }
+
+  static StatusLinkTarget? consumeStatus() {
+    final t = _target;
+    if (t is! StatusLinkTarget) return null;
     _target = null;
     return t;
   }

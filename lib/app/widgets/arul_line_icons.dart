@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// This API is single-[color] stroke -> a filled or two-tone glyph is artwork, kept with its control.
 /// Every glyph is authored in the handoff's 24×24 viewBox and scaled to [ArulLineIcon.size].
 /// Strokes scale with it -> the optical weight holds at any size.
-enum ArulLineGlyph { wallpapers, ringtones, settings, gift }
+enum ArulLineGlyph { wallpapers, ringtones, settings, status }
 
 class ArulLineIcon extends StatelessWidget {
   const ArulLineIcon({
@@ -58,8 +58,8 @@ class _LineIconPainter extends CustomPainter {
         _ringtones(canvas, paint..strokeWidth = 1.7);
       case ArulLineGlyph.settings:
         _settings(canvas, paint);
-      case ArulLineGlyph.gift:
-        _gift(canvas, paint..strokeWidth = 1.7);
+      case ArulLineGlyph.status:
+        _status(canvas, paint..strokeWidth = 1.5);
     }
 
     canvas.restore();
@@ -122,32 +122,30 @@ class _LineIconPainter extends CustomPainter {
     }
   }
 
-  void _gift(Canvas canvas, Paint paint) {
-    canvas
-      ..drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTRB(3.5, 8.5, 20.5, 12),
-          const Radius.circular(1.2),
-        ),
-        paint,
-      )
-      ..drawRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTRB(5, 12, 19, 20.5),
-          const Radius.circular(1.2),
-        ),
-        paint,
-      )
-      ..drawLine(const Offset(12, 8.5), const Offset(12, 20.5), paint)
-      ..drawPath(
-        Path()
-          ..moveTo(12, 8.5)
-          ..cubicTo(10.6, 5.4, 6.6, 4.6, 6.8, 6.8)
-          ..cubicTo(7, 8.4, 10.2, 8.5, 12, 8.5)
-          ..cubicTo(13.8, 8.5, 17, 8.4, 17.2, 6.8)
-          ..cubicTo(17.4, 4.6, 13.4, 5.4, 12, 8.5),
+  /// The segmented ring WhatsApp marks a status with, round a play mark — square like its dock
+  /// neighbours, where a portrait frame read narrow and cramped beside them.
+  void _status(Canvas canvas, Paint paint) {
+    const segments = 4;
+    const gap = 0.42;
+    const step = 2 * math.pi / segments;
+    final box = Rect.fromCircle(center: const Offset(12, 12), radius: 8.6);
+    for (var i = 0; i < segments; i++) {
+      canvas.drawArc(
+        box,
+        -math.pi / 2 + i * step + gap / 2,
+        step - gap,
+        false,
         paint,
       );
+    }
+    canvas.drawPath(
+      Path()
+        ..moveTo(10.4, 8.9)
+        ..lineTo(15.2, 12)
+        ..lineTo(10.4, 15.1)
+        ..close(),
+      paint,
+    );
   }
 
   static Path _polyline(List<Offset> points) {

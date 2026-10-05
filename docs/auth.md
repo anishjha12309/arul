@@ -96,6 +96,8 @@ through an old-shaped request. Never log, toast or track the value.
   (`http`'s IOClient passes it through raw). An attempt pending 8 s gets ONE sibling beside it, never
   instead: on 2G the first is nearly through. The Worker's 503 `google_keys_unavailable` is retried —
   the token was never judged. The upsert makes a hedged pair land on one user id.
+- **Login ignores `referralCode`** (owner: capture stopped; old builds still send one). Never re-add a
+  capture step: `referral_code` is still minted for old builds' Refer screen.
 - **The picker coming back `unknownError` "No credential available" is Play services missing
   Credential Manager's 3 s deadline** (cold GMS), never an empty phone — with no account the button
   flow opens add-account. The guard re-asks the PICKER once (`button_after_timeout`); the next query

@@ -7,6 +7,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   selectCanonicalKeysToDelete,
   blastRadiusRefusal,
+  thumbKeyFor,
   CANONICAL_GRACE_MS,
   MAX_DELETE_FRACTION,
   DELETE_FRACTION_FLOOR,
@@ -158,16 +159,21 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     };
   }
 
-  /** The sql mock answers the wallpapers query FIRST, then ringtones -> that order matches sweepCanonical's. */
-  function makeSql(wallpaperKeys: string[], ringtoneKeys: string[]) {
-    let call = 0;
-    const fn = vi.fn(() => {
-      call += 1;
-      return Promise.resolve(
-        call === 1
-          ? wallpaperKeys.map((full_key) => ({ full_key }))
-          : ringtoneKeys.map((audio_key) => ({ audio_key, cover_key: null })),
-      );
+  /** Routed by table -> `statuses` may answer rows, nothing, or a 42P01 for a table not yet migrated. */
+  function makeSql(wallpaperKeys: string[], ringtoneKeys: string[], statusKeys: string[] | Error = []) {
+    const fn = vi.fn((strings: string[]) => {
+      const text = strings.join("?");
+      if (/FROM wallpapers/.test(text))
+        return Promise.resolve(wallpaperKeys.map((full_key) => ({ full_key })));
+      if (/FROM ringtones/.test(text)) {
+        return Promise.resolve(ringtoneKeys.map((audio_key) => ({ audio_key, cover_key: null })));
+      }
+      if (/FROM statuses/.test(text)) {
+        return statusKeys instanceof Error
+          ? Promise.reject(statusKeys)
+          : Promise.resolve(statusKeys.map((full_key) => ({ full_key })));
+      }
+      return Promise.reject(new Error(`unrouted query: ${text}`));
     });
     return Object.assign(fn, { end: vi.fn().mockResolvedValue(undefined) });
   }
@@ -177,8 +183,9 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     ringtoneKeys: string[],
     objectsByPrefix: Record<string, string[]>,
     options?: { dryRun?: boolean },
+    statusKeys: string[] | Error = [],
   ) {
-    const sql = makeSql(wallpaperKeys, ringtoneKeys);
+    const sql = makeSql(wallpaperKeys, ringtoneKeys, statusKeys);
     vi.doMock("../src/lib/db.js", () => ({ getDb: () => sql }));
     vi.resetModules();
     const { sweepCanonical } = await import("../src/cron/sweep-canonical.js");
@@ -270,5 +277,83 @@ describe("sweepCanonical — per-prefix failsafes", () => {
     // The ringtones table does not protect it -> but it is not under a prefix it belongs to either
     // selectCanonicalKeysToDelete's prefix check keeps it out of scope -> a cross-table key is never judged
     expect(deleted).toEqual([]);
+  });
+
+  // ── statuses: a prefix whose table starts empty ────────────────────────────
+  const thirty = Array.from({ length: 30 }, (_, i) => `wallpapers/murugan/${i}.mp4`);
+
+  it("an empty statuses table over an empty folder is not an abort", async () => {
+    const { result, deleted } = await run(thirty, ["ringtones/murugan/a.mp3"], {
+      "wallpapers/": [...thirty, "wallpapers/murugan/orphan.mp4"],
+      "ringtones/": ["ringtones/murugan/a.mp3"],
+    });
+    expect(result.aborted).toBe(false);
+    expect(deleted).toEqual(["wallpapers/murugan/orphan.mp4"]);
+  });
+
+  it("an empty statuses table can NOT authorize deleting status objects", async () => {
+    const { result, deleted } = await run(thirty, ["ringtones/murugan/a.mp3"], {
+      "wallpapers/": thirty,
+      "ringtones/": ["ringtones/murugan/a.mp3"],
+      "statuses/": ["statuses/murugan/a.mp4"],
+    });
+    expect(deleted).toEqual([]);
+    expect(result.abortedPrefixes["statuses/"]).toContain("0 referenced keys");
+  });
+
+  it("a missing statuses table (42P01) leaves the other prefixes sweeping", async () => {
+    const missing = Object.assign(new Error('relation "statuses" does not exist'), { code: "42P01" });
+    const { result, deleted } = await run(
+      thirty,
+      ["ringtones/murugan/a.mp3"],
+      {
+        "wallpapers/": [...thirty, "wallpapers/murugan/orphan.mp4"],
+        "ringtones/": ["ringtones/murugan/a.mp3"],
+      },
+      undefined,
+      missing,
+    );
+    expect(result.aborted).toBe(false);
+    expect(deleted).toEqual(["wallpapers/murugan/orphan.mp4"]);
+  });
+
+  it("any other statuses error fails the whole sweep rather than judging posters without it", async () => {
+    await expect(
+      run(thirty, ["ringtones/murugan/a.mp3"], { "wallpapers/": thirty }, undefined, new Error("boom")),
+    ).rejects.toThrow("boom");
+  });
+
+  it("status posters under thumbs/statuses/ are protected by their status row", async () => {
+    const wpThumbs = thirty.map((k) => thumbKeyFor(k)!);
+    const { result, deleted } = await run(
+      thirty,
+      ["ringtones/murugan/a.mp3"],
+      {
+        "wallpapers/": thirty,
+        "ringtones/": ["ringtones/murugan/a.mp3"],
+        "statuses/": ["statuses/murugan/abc.mp4", "statuses/amman/gone.mp4"],
+        "thumbs/": [...wpThumbs, "thumbs/statuses/murugan/abc.jpg", "thumbs/statuses/amman/gone.jpg"],
+      },
+      undefined,
+      ["statuses/murugan/abc.mp4"],
+    );
+    expect(result.aborted).toBe(false);
+    expect(deleted.sort()).toEqual(["statuses/amman/gone.mp4", "thumbs/statuses/amman/gone.jpg"].sort());
+  });
+});
+
+describe("thumbKeyFor", () => {
+  it("maps a wallpaper key to its poster, unchanged", () => {
+    expect(thumbKeyFor("wallpapers/murugan/abc.mp4")).toBe("thumbs/murugan/abc.jpg");
+  });
+
+  it("maps a status key one level deeper, so a shared category slug never collides", () => {
+    expect(thumbKeyFor("statuses/murugan/abc.mp4")).toBe("thumbs/statuses/murugan/abc.jpg");
+  });
+
+  it("answers null for every other shape", () => {
+    expect(thumbKeyFor("ringtones/murugan/a.mp3")).toBeNull();
+    expect(thumbKeyFor("statuses/abc.mp4")).toBeNull();
+    expect(thumbKeyFor("statuses/a/b/c.mp4")).toBeNull();
   });
 });

@@ -6,9 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/arul_icon_tap.dart';
-import '../../../app/widgets/arul_screen_header.dart';
+import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/api/api_client.dart';
@@ -22,7 +21,7 @@ import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../legal/presentation/policy_screen.dart';
 import '../../premium/providers/entitlement_provider.dart';
-import '../../referral/data/tell_a_friend.dart';
+import '../../share/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
@@ -43,6 +42,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+    final textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText;
     final themeMode = ref.watch(themeModeProvider);
 
     // The broadcast stream does not REPLAY -> a startup-seed emission lands before this subscribes.
@@ -72,20 +72,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // The shared tab header band. Settings is a dock BRANCH, never a push -> no back arrow.
-            // A canPop() check is a trap: a departing sub-screen is still on the stack mid-pop.
-            // The arrow would flash in and vanish as the transition settles.
-            ArulScreenHeader(title: l10n.settingsTitle),
+            // Pushed from the header gear on every tab -> back pops to whichever tab opened it.
+            ArulPushedHeader(
+              title: l10n.settingsTitle,
+              color: textPrimary,
+              identifier: 'arul_settings_back',
+            ),
             Expanded(
               child: ListView(
-                // The dock floats OVER this branch -> the footer owes the capsule its clearance.
-                // Without it the policy links and version sit under the dock with nothing to scroll.
-                // AppShell.dockClearance folds in the gesture inset; the extra 24 is the footer's own.
+                // Edge-to-edge with no dock over it -> the footer clears the gesture bar itself.
                 padding: EdgeInsets.fromLTRB(
                   16,
                   8,
                   16,
-                  24 + AppShell.dockClearance(context),
+                  24 + MediaQuery.viewPaddingOf(context).bottom,
                 ),
                 children: [
                   _ProfileCard(
@@ -98,15 +98,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: ArulTokens.contentGap),
                   _RowsCard(
                     rows: [
-                      _RowData(
-                        icon: Icons.card_giftcard,
-                        title: l10n.referTitle,
-                        identifier: 'arul_settings_refer',
-                        sub: l10n.settingsReferSub,
-                        onTap: () => context.push('/refer'),
-                      ),
-                      // Deliberately NOT a second route to /refer — that screen is about rewards.
-                      // This is the ACT of sharing, one tap from Settings rather than three.
                       _RowData(
                         icon: Icons.ios_share_rounded,
                         title: l10n.settingsTellFriend,

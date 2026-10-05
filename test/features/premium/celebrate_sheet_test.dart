@@ -1,6 +1,6 @@
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/cta_button.dart';
-import 'package:arul/features/referral/presentation/share_moment_sheet.dart';
+import 'package:arul/features/share/share_moment_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';

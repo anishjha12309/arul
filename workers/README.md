@@ -21,13 +21,13 @@ catalog build: [docs/architecture.md](../docs/architecture.md) · crons:
 
 | Method | Path | Auth | Contract |
 |--------|------|------|----------|
-| POST | /auth/login | — | Google idToken + nonce → access + rotating refresh JWTs; captures the referral code |
+| POST | /auth/login | — | Google idToken + nonce → access + rotating refresh JWTs; a sent `referralCode` is ignored (capture stopped; pending referrals still reward) |
 | POST | /auth/refresh · /auth/logout | — / Bearer | Rotate (old jti denylisted) · denylist the refresh jti |
 | GET | /me | Bearer | Identity + subscription row + computed `premium` in ONE query |
 | GET | /me/subscription · /me/submissions · /me/referrals | Bearer | Scoped to the verified sub; `/me/subscription` only for old builds |
 | POST | /me/profile | Bearer | Display-name edit |
 | DELETE | /me | Bearer | Revoke mandate(s) → trial tombstone → cascade → denylist |
-| POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET; kind ∈ {wallpaper, ringtone}; bumps the popularity counter |
+| POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET; kind ∈ {wallpaper, ringtone, status}; bumps the popularity counter (status: `share_count` / `download_count` per action) |
 | POST | /media/upload-url | Bearer | Presigned PUT under `user/<sub>/submissions/…` only |
 | POST | /media/confirm-upload | Bearer | Record a submission — byte-QC'd against its KIND's role, ≤10 pending, upsert on `file_key` |
 | POST | /payments/initiate · status · cancel · abandon | Bearer | Mandate lifecycle; 409 `setup_in_progress` ≠ `already_subscribed` |
@@ -36,7 +36,7 @@ catalog build: [docs/architecture.md](../docs/architecture.md) · crons:
 | GET | /geo | — | `{country, region, lang: null}` from `request.cf` alone, `no-store`; `lang` stays in the body, always null, for builds ≤91 |
 | POST | /push/device | — | Signed-out FCM registration; 2 KB cap; never writes `user_id` |
 | POST | /me/device · /me/push-opened | Bearer | Signed-in registration (re-points the row) · campaign open |
-| GET | /w/:id · /r/:id (and id-less) · / · /.well-known/assetlinks.json | — | Landing bounce pages and App Link proof ([docs/deferred-links.md](../docs/deferred-links.md)) |
+| GET | /w/:id · /r/:id · /s/:id (and id-less) · / · /.well-known/assetlinks.json | — | Landing bounce pages and App Link proof ([docs/deferred-links.md](../docs/deferred-links.md)) |
 | POST | /internal/build-catalog · sweep-submissions · sweep-canonical | CATALOG_BUILD_SECRET | Catalog and storage ops |
 | POST | /internal/push/count · dispatch · test | PUSH_SECRET | Campaign push ([docs/push.md](../docs/push.md)) |
 | POST | /internal/run-redemptions · refund | **OPS_SECRET** | Moves real money; fails closed when unset |
@@ -96,6 +96,8 @@ npx wrangler deploy   # deploy IS part of "done" — the deploy-worker skill
   ([docs/known-issues.md](../docs/known-issues.md)). Read `npx wrangler deploy --dry-run`'s warnings.
 - **Two `wrangler dev` instances on port 8787** — the second bind does not fail loudly, and the stale
   process serves old config as a phantom `502` or missing cron output. `netstat -ano | grep :8787` first.
+- **A phone against this PC:** `node tools/local-stack.mjs up` runs the Worker (8787), a local CDN and
+  the CMS on the debug branch and local R2 only ([docs/local-stack.md](../docs/local-stack.md)).
 - `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]` — add
   `--remote`.
 

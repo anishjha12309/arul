@@ -3,13 +3,9 @@ import 'dart:io';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/providers/locale_provider.dart';
-import 'package:arul/data/models/referral_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
-import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
-import 'package:arul/features/referral/domain/referral_repository.dart';
-import 'package:arul/features/referral/domain/referral_summary.dart';
 import 'package:arul/features/wallpapers/data/direct_share_service.dart';
 import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
 import 'package:arul/features/wallpapers/data/wallpaper_apply_service.dart';
@@ -141,23 +137,6 @@ class _NoPrefetch extends WallpaperPrefetchService {
   Future<String?> cachedPathOrNull(String url) async => null;
 }
 
-class _FakeReferralRepository implements ReferralRepository {
-  _FakeReferralRepository({this.code});
-
-  /// Null means the account has no referral code yet, or the summary never loaded -> the share falls back to the listing.
-  final String? code;
-
-  @override
-  Future<List<ReferralModel>> getReferrals(String referrerId) async => const [];
-
-  @override
-  Future<ReferralSummary> getReferralSummary() async => ReferralSummary(
-    referralCode: code,
-    referrals: const [],
-    totalRewardDays: 0,
-  );
-}
-
 class _RecordingAnalytics implements AnalyticsService {
   final events = <String>[];
   final props = <String, Map<String, Object?>>{};
@@ -207,6 +186,9 @@ class _FakeDirectShare implements DirectShareService {
   Future<bool> shareTextToWhatsApp(String text) async => installed;
 
   @override
+  Future<bool> shareToStatus({required String filePath}) async => false;
+
+  @override
   Future<bool> shareToWhatsApp({
     required String filePath,
     required String mimeType,
@@ -238,7 +220,6 @@ ProviderContainer _container({
   _RecordingAnalytics? analytics,
   List<ShareParams>? sheetCalls,
   DirectShareService? directShare,
-  ReferralRepository? referrals,
   Locale locale = const Locale('en'),
 }) {
   return ProviderContainer(
@@ -247,9 +228,6 @@ ProviderContainer _container({
       wallpaperApplyServiceProvider.overrideWithValue(service),
       wallpaperPrefetchServiceProvider.overrideWithValue(_NoPrefetch()),
       shareWatermarkServiceProvider.overrideWithValue(watermark),
-      referralRepositoryProvider.overrideWithValue(
-        referrals ?? _FakeReferralRepository(),
-      ),
       directShareServiceProvider.overrideWithValue(
         directShare ?? _FakeDirectShare(),
       ),
@@ -333,7 +311,6 @@ void main() {
         'category': 'murugan',
         'result': 'success',
         'watermarked': true,
-        'link_attributed': false,
         'channel': 'sheet',
       });
     });
@@ -445,11 +422,7 @@ void main() {
       expect(service.downloadActions, everyElement(MediaUseAction.share));
     });
 
-    test('an unattributed link is REPORTED as unattributed', () async {
-      // `flutter test` has no dart-defines -> `AppConfig.hasBackend` is false and the referral lookup is skipped.
-      // The share then ships the plain Play listing -> correct behaviour, and what matters is that it is DECLARED.
-      // `link_attributed` exists so a share that can never be credited to its sender is visible in the funnel.
-      // A code IS present on the fake repository here, and the flag must still say false -> the link carries no referrer.
+    test('the link carries no referral code and no attribution flag', () async {
       final analytics = _RecordingAnalytics();
       final sheetCalls = <ShareParams>[];
       final c = _container(
@@ -457,7 +430,6 @@ void main() {
         watermark: _FakeWatermarkService(),
         analytics: analytics,
         sheetCalls: sheetCalls,
-        referrals: _FakeReferralRepository(code: 'ARUL123'),
       );
       addTearDown(c.dispose);
 
@@ -466,8 +438,12 @@ void main() {
           .share(_wallpaper(), buildCaption: _caption);
 
       final text = sheetCalls.single.text!;
+      expect(text, isNot(contains('ref=')));
       expect(text, isNot(contains('referrer=')));
-      expect(analytics.props['wallpaper_shared']?['link_attributed'], false);
+      expect(
+        analytics.props['wallpaper_shared'],
+        isNot(contains('link_attributed')),
+      );
     });
 
     test('live wallpaper goes through the video path with video/mp4', () async {
@@ -514,7 +490,7 @@ void main() {
       expect(file.path, isNot(contains('-wm-')));
       expect(file.path, endsWith('w1.mp4'));
       expect(file.mimeType, 'video/mp4');
-      // The recipient still gets a branded filename and the referral caption.
+      // The recipient still gets a branded filename and the caption.
       expect(sheetCalls.single.fileNameOverrides, ['arul-murugan-vel.mp4']);
 
       // A skip is NOT a failure -> never report it as one.

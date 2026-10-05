@@ -8,31 +8,36 @@ import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
 import { verifyMediaObject } from "../lib/media-verify.js";
 
-const KIND_TABLE: Record<string, { table: string; keyCol: string; countCol: string }> = {
-  wallpaper: {
-    table: "wallpapers",
-    keyCol: "full_key",
-    countCol: "apply_count",
-  },
-  ringtone: {
-    table: "ringtones",
-    keyCol: "audio_key",
-    countCol: "set_count",
-  },
-};
-
 /**
- * Whether this grant counts toward the row's popularity counter.
+ * `counterFor` names the popularity column this grant bumps, or null for none.
  *
  * A wallpaper reaches this route for BOTH apply and share -> only an explicit `action: 'apply'` counts
  * Otherwise every share would inflate a column named apply_count -> the number would stop meaning "applied"
  * A ringtone has no share path -> set is its only gated action -> every ringtone grant is a set
- * A request with NO `action` counts for neither -> older builds send none and cannot pollute the number
+ * A status keeps share and save apart -> each action bumps its own column; the feed orders on their sum
+ * A request with NO `action` counts for none of them -> older builds send none and cannot pollute the number
  */
-function countsAsUse(kind: string, action: unknown): boolean {
-  if (kind === "ringtone") return true;
-  return action === "apply";
-}
+const KIND_TABLE: Record<
+  string,
+  { table: string; keyCol: string; counterFor: (action: unknown) => string | null }
+> = {
+  wallpaper: {
+    table: "wallpapers",
+    keyCol: "full_key",
+    counterFor: (action) => (action === "apply" ? "apply_count" : null),
+  },
+  ringtone: {
+    table: "ringtones",
+    keyCol: "audio_key",
+    counterFor: () => "set_count",
+  },
+  status: {
+    table: "statuses",
+    keyCol: "full_key",
+    counterFor: (action) =>
+      action === "share" ? "share_count" : action === "download" ? "download_count" : null,
+  },
+};
 
 export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -58,10 +63,11 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     return errorResponse(400, "missing_field", "id is required");
   }
   if (!kind || !KIND_TABLE[kind]) {
-    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone");
+    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone, status");
   }
 
-  const { table, keyCol, countCol } = KIND_TABLE[kind];
+  const { table, keyCol, counterFor } = KIND_TABLE[kind];
+  const countCol = counterFor(action);
   const sql = getDb(env);
 
   // This is the app's most latency-sensitive route -> the popularity increment rides here, not on the response path
@@ -95,7 +101,7 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     // Fired without await -> it runs alongside presignGet and is drained by the `finally` below
     // A failed write is logged and swallowed -> a sort key must never cost someone their wallpaper
     // ONE counter, ONE increment -> the lifetime total the CMS shows and the feed's ORDER BY reads
-    if (countsAsUse(kind, action)) {
+    if (countCol !== null) {
       tail = sql`
         UPDATE ${sql(table)}
         SET ${sql(countCol)} = ${sql(countCol)} + 1

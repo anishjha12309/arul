@@ -6,12 +6,12 @@ import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../app/widgets/gopuram_mark.dart';
+import '../../../app/widgets/reel/feed_card_geometry.dart';
 import '../../../app/widgets/sliding_skeleton.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
-import 'feed_card_geometry.dart';
 
 /// The horizontal category-chip row on the feed's solid top bar.
 /// Sits on the themed frame, not over media -> the chips follow light/dark.

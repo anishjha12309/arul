@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'referral_providers.dart';
+part of 'install_referrer_service.dart';
 
 // **************************************************************************
 // RiverpodGenerator
@@ -56,42 +56,3 @@ final class InstallReferrerServiceProvider
 
 String _$installReferrerServiceHash() =>
     r'5a728569571a728f157aa4bf09faad970f6e03dc';
-
-@ProviderFor(referralSummary)
-final referralSummaryProvider = ReferralSummaryProvider._();
-
-final class ReferralSummaryProvider
-    extends
-        $FunctionalProvider<
-          AsyncValue<ReferralSummary>,
-          ReferralSummary,
-          FutureOr<ReferralSummary>
-        >
-    with $FutureModifier<ReferralSummary>, $FutureProvider<ReferralSummary> {
-  ReferralSummaryProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'referralSummaryProvider',
-        isAutoDispose: true,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$referralSummaryHash();
-
-  @$internal
-  @override
-  $FutureProviderElement<ReferralSummary> $createElement(
-    $ProviderPointer pointer,
-  ) => $FutureProviderElement(pointer);
-
-  @override
-  FutureOr<ReferralSummary> create(Ref ref) {
-    return referralSummary(ref);
-  }
-}
-
-String _$referralSummaryHash() => r'c93d4bcaa64ca1829fd495efb5a3d9afb002ba0d';

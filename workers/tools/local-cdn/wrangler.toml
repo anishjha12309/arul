@@ -1,0 +1,16 @@
+# LOCAL-ONLY read-through CDN for the local stack (docs/local-stack.md). NEVER DEPLOY THIS WORKER.
+# Started only by `node tools/local-stack.mjs up` as `wrangler dev --local --persist-to <dir> --port 8788`.
+# The R2 binding names the production bucket ON PURPOSE: miniflare keys local R2 state by bucket name, so the
+# Arul Worker (same name, same --persist-to) and this one read and write the SAME local bucket.
+# With --local it is a simulation on disk; the code also refuses any non-loopback host and every write method.
+# No account_id, no routes, no workers.dev -> a stray `wrangler deploy` here has nowhere to go.
+name = "arul-local-cdn"
+main = "index.mjs"
+compatibility_date = "2026-06-25"
+workers_dev = false
+preview_urls = false
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "south-indian-wallpapers"
+preview_bucket_name = "south-indian-wallpapers"

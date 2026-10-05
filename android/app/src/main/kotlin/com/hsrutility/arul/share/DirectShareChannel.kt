@@ -14,12 +14,18 @@ class DirectShareChannel(private val activity: Activity) :
 
     companion object {
         const val CHANNEL = "com.hsrutility.arul/direct_share"
+
+        // WhatsApp's status composer is documented as started for a result; Arul ignores the
+        // result, so MainActivity drops this code before the plugin chain sees it.
+        const val STATUS_REQUEST_CODE = 5101
+        private const val WHATSAPP = "com.whatsapp"
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "shareToPackage" -> shareToPackage(call, result)
             "shareTextToPackage" -> shareTextToPackage(call, result)
+            "shareToStatus" -> shareToStatus(call, result)
             else -> result.notImplemented()
         }
     }
@@ -102,6 +108,52 @@ class DirectShareChannel(private val activity: Activity) :
         }
         try {
             activity.startActivity(intent)
+            result.success(true)
+        } catch (e: ActivityNotFoundException) {
+            result.success(false)
+        } catch (e: SecurityException) {
+            result.success(false)
+        }
+    }
+
+    // WhatsApp's Share to Status API (faq.whatsapp.com/669870872481343): consumer WhatsApp only.
+    // EXTRA_STREAM on an ACTION_VIEW is not migrated to ClipData, so the read grant is explicit.
+    // false is ROUTINE (no WhatsApp, an old one, Business only) -> Dart falls back to a chat share.
+    private fun shareToStatus(call: MethodCall, result: MethodChannel.Result) {
+        val filePath = call.argument<String>("filePath")
+        if (filePath.isNullOrEmpty()) {
+            result.error("bad_input", "filePath is required", null)
+            return
+        }
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) {
+            result.error("bad_input", "file not found: $filePath", null)
+            return
+        }
+        val uri: Uri =
+            try {
+                FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
+            } catch (e: IllegalArgumentException) {
+                result.success(false)
+                return
+            }
+
+        val intent =
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/status")).apply {
+                setPackage(WHATSAPP)
+                putExtra("source_app_package_name", activity.packageName)
+                putExtra("share_type", "SHARE_TO_STATUS")
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        if (intent.resolveActivity(activity.packageManager) == null) {
+            result.success(false)
+            return
+        }
+        try {
+            activity.grantUriPermission(WHATSAPP, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            @Suppress("DEPRECATION")
+            activity.startActivityForResult(intent, STATUS_REQUEST_CODE)
             result.success(true)
         } catch (e: ActivityNotFoundException) {
             result.success(false)

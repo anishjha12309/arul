@@ -12,6 +12,7 @@ import {
   handleAssetLinks,
   handleWallpaperLink,
   handleRingtoneLink,
+  handleStatusLink,
   handleRootLink,
 } from "../src/routes/deeplink.js";
 import worker from "../src/index.js";
@@ -23,11 +24,12 @@ const UPLOAD_SHA =
 
 const WALLPAPER_ID = "95b5276e-1c2d-4f3a-9b8e-7d6c5a4b3e2f";
 const RINGTONE_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e8f7a6b5c4d";
+const STATUS_ID = "5c4d3e2f-1a0b-4c9d-8e7f-6a5b4c3d2e1f";
 
 /// `params` is what Hono would have matched off `/w/:id`; `query` derives from the URL
 /// So pass the REAL link exactly as a browser would send it -> a synthesised query tests the wrong thing
 function ctxFor(url: string, env = makeEnv()) {
-  const match = new URL(url).pathname.match(/^\/[wr]\/(.+)$/);
+  const match = new URL(url).pathname.match(/^\/[wrs]\/(.+)$/);
   const id = match?.[1];
   return makeCtx({ env, url, ...(id !== undefined ? { params: { id } } : {}) });
 }
@@ -103,6 +105,8 @@ describe("no HTTP redirect on any deep-link route", () => {
     ["wallpaper", () => handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}?lang=ta`))],
     ["ringtone", () => handleRingtoneLink(ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}?lang=ta`))],
     ["ringtone tab", () => handleRingtoneLink(ctxFor("https://arul.hsrutility.com/r/?lang=ta"))],
+    ["status", () => handleStatusLink(ctxFor(`https://arul.hsrutility.com/s/${STATUS_ID}?lang=ta`))],
+    ["status tab", () => handleStatusLink(ctxFor("https://arul.hsrutility.com/s/?lang=ta"))],
     ["language-only", () => handleWallpaperLink(ctxFor("https://arul.hsrutility.com/w/?lang=hi"))],
     ["root", () => handleRootLink(makeCtx({ env: makeEnv(), url: "https://arul.hsrutility.com/?lang=hi" }))],
   ])("%s links answer 200 with no Location header", async (_name, call) => {
@@ -245,6 +249,47 @@ describe("GET /r/:id", () => {
   });
 });
 
+// Builds without the /s/ filter open a browser on a status share -> this page must send them to Play, never 404
+describe("GET /s/:id", () => {
+  it("carries the status id under the s= key, with ref and the share language", async () => {
+    const res = handleStatusLink(ctxFor(`https://arul.hsrutility.com/s/${STATUS_ID}?ref=ABCD1234&ilang=ta`));
+
+    const location = await dest(res);
+    expect(location.origin + location.pathname).toBe("https://play.google.com/store/apps/details");
+    expect(location.searchParams.get("id")).toBe("com.hsrutility.arul");
+    expect(location.searchParams.get("referrer")).toBe(`ref=ABCD1234&s=${STATUS_ID}&lang=ta`);
+  });
+
+  it("an id-less or typo'd status link still names the Status tab", async () => {
+    for (const url of [
+      "https://arul.hsrutility.com/s/?lang=ta",
+      "https://arul.hsrutility.com/s?lang=ta",
+      "https://arul.hsrutility.com/s/not-a-uuid?lang=ta",
+    ]) {
+      const location = await dest(handleStatusLink(ctxFor(url)));
+      expect(location.searchParams.get("referrer"), url).toBe("screen=status&lang=ta");
+    }
+  });
+
+  it("the status page has its own title and blurb; wallpaper and ringtone pages keep theirs", async () => {
+    const status = await handleStatusLink(ctxFor(`https://arul.hsrutility.com/s/${STATUS_ID}`)).text();
+    expect(status).toContain("<title>Arul — Devotional Status Videos</title>");
+    expect(status).toContain("South Indian devotional status videos with music. Opening the Arul app…");
+    for (const res of [
+      handleWallpaperLink(ctxFor(`https://arul.hsrutility.com/w/${WALLPAPER_ID}`)),
+      handleRingtoneLink(ctxFor(`https://arul.hsrutility.com/r/${RINGTONE_ID}`)),
+      handleRootLink(makeCtx({ env: makeEnv(), url: "https://arul.hsrutility.com/" })),
+    ]) {
+      const html = await res.text();
+      expect(html).toContain("<title>Arul — Devotional Wallpapers &amp; Ringtones</title>");
+      expect(html).toContain(
+        "<p>South Indian devotional wallpapers and ringtones. Opening the Arul app…</p>",
+      );
+      expect(html).not.toContain("status");
+    }
+  });
+});
+
 // A language-only campaign link. The app's manifest filter is a pathPrefix -> `/w/?lang=hi` already opens an install
 // This half exists only so the SAME URL does not 404 at everyone who lacks the app
 describe("GET /w/ and /r/ without an id (language-only links)", () => {
@@ -349,6 +394,10 @@ describe("real router: every pasted link shape reaches Play with its language", 
     ["/w?lang=ta", "lang=ta"],
     ["/r/?lang=ta", "screen=ringtones&lang=ta"],
     ["/r?lang=ta", "screen=ringtones&lang=ta"],
+    [`/s/${STATUS_ID}?lang=ta`, `s=${STATUS_ID}&lang=ta`],
+    [`/s/${STATUS_ID}/?lang=ta`, `s=${STATUS_ID}&lang=ta`],
+    ["/s/?lang=ta", "screen=status&lang=ta"],
+    ["/s?lang=ta", "screen=status&lang=ta"],
     ["/?lang=ta", "lang=ta"],
   ])("%s", async (path, referrer) => {
     const res = await worker.fetch(
@@ -361,7 +410,18 @@ describe("real router: every pasted link shape reaches Play with its language", 
 
   // The shape decides whether a link survives, never the language -> all six shipped codes on every shape
   it.each(["en", "ta", "te", "kn", "ml", "hi"])("keeps lang=%s on every shape", async (lang) => {
-    for (const path of ["/w/", "/w", "/r/", "/r", "/", `/w/${WALLPAPER_ID}/`, `/r/${RINGTONE_ID}`]) {
+    for (const path of [
+      "/w/",
+      "/w",
+      "/r/",
+      "/r",
+      "/s/",
+      "/s",
+      "/",
+      `/w/${WALLPAPER_ID}/`,
+      `/r/${RINGTONE_ID}`,
+      `/s/${STATUS_ID}`,
+    ]) {
       const res = await worker.fetch(
         new Request(`https://arul.hsrutility.com${path}?lang=${lang}`),
         makeEnv() as never,

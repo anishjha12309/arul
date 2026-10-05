@@ -11,10 +11,11 @@ applied in filename order. Do not consolidate them; `pgserver.mjs` (verify-payme
 install glob the directory.
 
 **Fresh install:** every `db/schema/*.sql` in filename order, then `db/seed.sql`. The ringtones file
-is **not optional**: build-catalog builds both scopes every hour (`allScopes`, build-catalog.ts:151).
-A missing table does not crash the cron — the scope is caught and recorded as `{ error }` (`:254-256`),
-and that one error then **withholds `catalog/version.json` for EVERY scope** (`:272`) and **skips the
-canonical sweep** (`index.ts:201`). Wallpapers keep serving the previous `?v=`, so the whole catalog
+is **not optional**: build-catalog builds all three scopes every hour (`allScopes` in build-catalog.ts).
+A missing table does not crash the cron — the scope is caught and recorded as `{ error }`, and that one
+error then **withholds `catalog/version.json` for EVERY scope** and **skips the canonical sweep**
+(`index.ts`, the failed-scope guard). Only `statuses` is exempt: `selectStatuses` reads 42P01 as an
+empty page, so its Worker may deploy before `30_statuses.sql` — copy that guard for any new scope. Wallpapers keep serving the previous `?v=`, so the whole catalog
 freezes at the last good version with nothing but a `console.error` to show for it. The symptom to
 look for is a version pointer that stops moving, never a loud failure.
 

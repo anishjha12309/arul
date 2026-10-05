@@ -43,6 +43,7 @@ import com.hsrutility.arul.referral.MetaInstallReferrer
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
+import com.hsrutility.arul.status.StatusSaveChannel
 import com.hsrutility.arul.update.AppUpdateChannel
 import com.hsrutility.arul.upload.MediaPickChannel
 import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
@@ -107,6 +108,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var feedVideoPlugin: FeedVideoPlugin? = null
     private var videoThumbnailChannel: VideoThumbnailChannel? = null
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
+    private var statusSaveChannel: StatusSaveChannel? = null
     private var mediaPickChannel: MediaPickChannel? = null
     private var appUpdateChannel: AppUpdateChannel? = null
 
@@ -325,6 +327,13 @@ class MainActivity : FlutterFragmentActivity() {
             DirectShareChannel.CHANNEL,
         ).setMethodCallHandler(DirectShareChannel(this))
 
+        val statusSave = StatusSaveChannel(this)
+        statusSaveChannel = statusSave
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            StatusSaveChannel.CHANNEL,
+        ).setMethodCallHandler(statusSave)
+
         // Stateless and activity-scoped -> it needs no disposal.
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -446,6 +455,8 @@ class MainActivity : FlutterFragmentActivity() {
         videoThumbnailChannel = null
         shareWatermarkChannel?.dispose()
         shareWatermarkChannel = null
+        statusSaveChannel?.dispose()
+        statusSaveChannel = null
         mediaPickChannel?.dispose()
         mediaPickChannel = null
         deferredLinkChannel?.setMethodCallHandler(null)
@@ -731,6 +742,8 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         // The upload pick is ours, not a plugin's -> it never reaches the plugin chain below.
         if (mediaPickChannel?.onActivityResult(requestCode, resultCode, data) == true) return
+        // WhatsApp's status composer answers here and nobody reads it -> keep it off the plugin chain.
+        if (requestCode == DirectShareChannel.STATUS_REQUEST_CODE) return
         try {
             @Suppress("DEPRECATION")
             super.onActivityResult(requestCode, resultCode, data)
@@ -751,6 +764,13 @@ class MainActivity : FlutterFragmentActivity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == StatusSaveChannel.STORAGE_PERMISSION_REQUEST) {
+            statusSaveChannel?.onPermissionResult(
+                grantResults.isNotEmpty() &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED,
+            )
+            return
+        }
         if (requestCode != STORAGE_PERMISSION_REQUEST) return
 
         val result = pendingRingtoneResult

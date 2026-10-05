@@ -77,6 +77,7 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
         target = switch (segments[0]) {
           'w' => WallpaperLinkTarget(id, source: source),
           'r' => RingtoneLinkTarget(id, source: source),
+          's' => StatusLinkTarget(id, source: source),
           _ => null,
         };
       }
@@ -86,6 +87,10 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
     // The feed is where the app opens anyway -> claiming the tab would yank a warm user off Ringtones.
     if (target == null && segments.isNotEmpty && segments[0] == 'r') {
       target = TabLinkTarget(ArulTab.ringtones, source: source);
+    }
+    // `/s/` names the Status tab the same way; the shell decides what that means with the tab off.
+    if (target == null && segments.isNotEmpty && segments[0] == 's') {
+      target = TabLinkTarget(ArulTab.status, source: source);
     }
   }
 
@@ -130,7 +135,8 @@ DeepLinkRequest? parseReferrerPayload(
   return DeepLinkRequest(target: target, lang: lang);
 }
 
-/// An id implies its tab -> `wallpaper_id`/`w` beats `ringtone_id`/`r` beats a bare `screen=`.
+/// An id implies its tab -> `wallpaper_id`/`w` beats `ringtone_id`/`r` beats `status_id`/`s` beats a
+/// bare `screen=`.
 /// So `screen=ringtones&ringtone_id=…` resolves to the ringtone, and the tab comes with it.
 DeepLinkTarget? _targetFromQuery(
   Map<String, String> query,
@@ -140,11 +146,14 @@ DeepLinkTarget? _targetFromQuery(
   if (wallpaper != null) return WallpaperLinkTarget(wallpaper, source: source);
   final ringtone = normalizeUuid(query['ringtone_id'] ?? query['r']);
   if (ringtone != null) return RingtoneLinkTarget(ringtone, source: source);
+  final status = normalizeUuid(query['status_id'] ?? query['s']);
+  if (status != null) return StatusLinkTarget(status, source: source);
   return switch (query['screen']?.trim().toLowerCase()) {
     'wallpaper' ||
     'wallpapers' => TabLinkTarget(ArulTab.wallpapers, source: source),
     'ringtone' ||
     'ringtones' => TabLinkTarget(ArulTab.ringtones, source: source),
+    'status' || 'statuses' => TabLinkTarget(ArulTab.status, source: source),
     _ => null,
   };
 }

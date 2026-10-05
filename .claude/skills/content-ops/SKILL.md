@@ -11,7 +11,8 @@ background and self-heals via the cron. There is no purge anywhere; `?v=` does t
 CMS; go direct only for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo**
 (`c:\Anish\Unified CMS`); **this repo's worker has no `/admin`**.
 
-Two scopes: **wallpapers** and **ringtones**. Ringtone audio lives at
+Three scopes: **wallpapers**, **ringtones** and **statuses** (clip spec and required poster:
+`docs/status-clips.md`; a status library goes up as ONE batch so `content_version` bumps once). Ringtone audio lives at
 `ringtones/<category>/<uuid>.mp3`. Ringtones have **no cover art in R2**: `cover_key` is null on every row,
 the CMS deliberately mints no cover target, and the row art is a PNG BUNDLED IN THE APP, picked by
 the row's `deity`. **Never upload anything under `ringtones/covers/…`** — it lands inside the swept
@@ -40,11 +41,11 @@ CDN=https://arul-cdn.hsrutility.com
 curl -X POST $API/internal/build-catalog -H "Authorization: Bearer $CATALOG_BUILD_SECRET"
 curl -s $CDN/catalog/version.json                            # content_version + built_at
 curl -s "$CDN/catalog/wallpapers/all_1.json?v=<version>"
-curl -s "$CDN/catalog/ringtones/all_1.json?v=<version>"      # read BOTH — a rebuild can succeed
-                                                             # for one scope and fail for the other
+curl -s "$CDN/catalog/ringtones/all_1.json?v=<version>"      # read EVERY scope — a rebuild can
+curl -s "$CDN/catalog/statuses/all_1.json?v=<version>"       # succeed for one and fail for another
 ```
 A zero-row scope still writes an explicit empty `all_1.json` (`total: 0`), so a 404 here means that
-scope FAILED to build — never "no content". Both scopes are populated: an unexpectedly empty
+scope FAILED to build — never "no content". Wallpapers and ringtones are populated: an unexpectedly empty
 `total: 0` is itself a finding, check the DB count before shrugging.
 
 Read the CDN with **GET, never `curl -I`** — on this zone a HEAD returns `cf-cache-status: DYNAMIC`

@@ -9,9 +9,12 @@ import 'package:go_router/go_router.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_browse_header.dart';
-import '../../../app/widgets/arul_earn_button.dart';
+import '../../../app/widgets/arul_icon_tap.dart';
+import '../../../app/widgets/arul_line_icons.dart';
 import '../../../app/widgets/arul_toast.dart';
-import '../../../app/widgets/gopuram_mark.dart';
+import '../../../app/widgets/reel/feed_card_geometry.dart';
+import '../../../app/widgets/reel/reel_card.dart';
+import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/journey_stamps.dart';
@@ -34,11 +37,9 @@ import '../providers/wallpaper_apply_provider.dart';
 import '../providers/wallpaper_share_provider.dart';
 import 'apply_restore.dart';
 import 'apply_sheet.dart';
-import 'feed_card_geometry.dart';
 import 'feed_states.dart';
 import 'live_mark.dart';
 import 'premium_gate_action.dart';
-import 'video_preload_controller.dart';
 import 'viewer_media.dart';
 
 /// The home surface: a Shorts-style vertical reel of wallpapers, one page each (Spec > Reel feed).
@@ -78,7 +79,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
   /// `ref` is unusable from `dispose()` in Riverpod 3 -> a `ref.read` there silently fails and
   /// `detach()` never runs, leaving the pool populated -> capture the controller in initState.
-  late final VideoPreloadController _video;
+  late final VideoPreloadController<Wallpaper> _video;
 
   /// Held from initState for the same reason as [_video] — the feed-session summary is flushed from
   /// `dispose()`, where `ref` is unusable.
@@ -259,7 +260,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       _servedList = items;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _video.setWallpapers(items, initialIndex: _index);
+        _video.setItems(items, initialIndex: _index);
       });
       return;
     }
@@ -283,7 +284,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       // in WITH the list so the pool opens the right clip first.
       _video
         ..reclaimDecoders()
-        ..setWallpapers(items, initialIndex: target)
+        ..setItems(items, initialIndex: target)
         ..onPageChanged(target);
       // onPageChanged only fires on a swipe -> the first card of a session, the one guaranteed to
       // be seen, would never count as engaged -> start its dwell clock here.
@@ -539,13 +540,20 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             children: [
               ArulBrowseHeader(
                 title: 'Arul',
-                // The WORDMARK, not a page title — bigger than Ringtones' and
-                // Settings' labels and sat a touch lower in the band, because
-                // it is the brand rather than a name for this screen. The other
-                // two tabs deliberately do NOT take these.
+                // The WORDMARK, not a page title — bigger than Ringtones'
+                // label and sat a touch lower in the band, because it is the
+                // brand rather than a name for this screen. The other tabs
+                // deliberately do NOT take these.
                 titleStyle: ArulTokens.wordmarkHeader,
                 titleDrop: 1.5,
-                actions: [ArulEarnButton(onTap: () => context.push('/refer'))],
+                actions: [
+                  ArulIconTap.glyph(
+                    glyph: ArulLineGlyph.settings,
+                    label: AppLocalizations.of(context).settingsTitle,
+                    identifier: 'arul_header_settings',
+                    onTap: () => context.push('/settings'),
+                  ),
+                ],
                 // The nudge sits ABOVE the strip and inside the same slot, so it scrolls and
                 // cross-fades with the header rather than floating over the reel. It renders
                 // nothing at all unless there is an unfinished trial -> for everyone else this
@@ -642,6 +650,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Stack(
       fit: StackFit.expand,
@@ -663,7 +672,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
               // Same end state, reached in one frame -> the mark is present or absent, never fading.
               duration: context.reduceMotion ? Duration.zero : Motion.breathe,
               curve: Motion.settleCurve,
-              child: Center(child: _EndOfFeedMark(isDark: isDark)),
+              child: Center(child: ReelEndMark(isDark: isDark)),
             ),
           ),
         ),
@@ -704,14 +713,33 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      _ReelMedia(wallpaper: items[i], index: i),
-                      _CardChrome(
-                        wallpaper: items[i],
-                        busy: busy,
-                        onApply: () =>
-                            _onAction(PremiumGateAction.apply, items[i]),
-                        onShare: () =>
-                            _onAction(PremiumGateAction.share, items[i]),
+                      ReelMedia(
+                        controller: _video,
+                        index: i,
+                        builder: (context, slot) =>
+                            ViewerMedia(wallpaper: items[i], slot: slot),
+                      ),
+                      ReelCardChrome(
+                        actions: ReelActionBar(
+                          busy: busy,
+                          primary: ReelAction(
+                            icon: Icons.wallpaper_rounded,
+                            label: l10n.apply,
+                            semanticsId: 'arul_feed_apply',
+                            onTap: () =>
+                                _onAction(PremiumGateAction.apply, items[i]),
+                          ),
+                          secondary: ReelAction(
+                            icon: Icons.share_rounded,
+                            label: l10n.share,
+                            semanticsId: 'arul_feed_share',
+                            onTap: () =>
+                                _onAction(PremiumGateAction.share, items[i]),
+                          ),
+                        ),
+                        mark: items[i].kind == WallpaperKind.live
+                            ? const LiveMark()
+                            : null,
                       ),
                     ],
                   ),
@@ -729,321 +757,6 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
             child: const _TransferProgress(),
           ),
       ],
-    );
-  }
-}
-
-/// Marks the end of a category's reel: the brand gopuram between two hairlines
-/// that fade outward, centred in the slot where the next card would otherwise
-/// peek. Deliberately quiet — a closing flourish, not a message — so the feed
-/// ends the way a book does, and no localized copy is needed.
-class _EndOfFeedMark extends StatelessWidget {
-  const _EndOfFeedMark({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    // Same accent split as the header's mark: gold on the dark frame, maroon on
-    // ivory — muted further because this sits at the feed's quietest edge.
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
-
-    Widget hairline(bool leading) => Container(
-      width: 30,
-      height: 1,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: leading ? Alignment.centerLeft : Alignment.centerRight,
-          end: leading ? Alignment.centerRight : Alignment.centerLeft,
-          colors: [accent.withValues(alpha: 0), accent.withValues(alpha: 0.4)],
-        ),
-      ),
-    );
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        hairline(true),
-        const SizedBox(width: 12),
-        GopuramMark(size: 16, color: accent.withValues(alpha: 0.65)),
-        const SizedBox(width: 12),
-        hairline(false),
-      ],
-    );
-  }
-}
-
-/// The media of one reel page. Watches the video pool so the page rebinds when
-/// the pool reassigns a player to this index. Poster + texture come from the
-/// reused [ViewerMedia].
-class _ReelMedia extends ConsumerWidget {
-  const _ReelMedia({required this.wallpaper, required this.index});
-
-  final Wallpaper wallpaper;
-  final int index;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final controller = ref.watch(videoPreloadControllerProvider);
-    return ListenableBuilder(
-      listenable: controller,
-      builder: (context, _) {
-        final slot = controller.slotForIndex(index);
-        return ViewerMedia(wallpaper: wallpaper, slot: slot);
-      },
-    );
-  }
-}
-
-/// Everything that belongs to ONE wallpaper, painted inside that wallpaper's
-/// own card: the bottom scrim, the deity's name, and the Apply/Share buttons.
-///
-/// This lives in the page, not in a fixed layer above the pager. A screen-
-/// anchored overlay reads like a windshield — the artwork slides past behind
-/// controls that never move, and the name of the deity you are looking at has
-/// to be swapped in at the right moment by hand (which is what made it lag
-/// behind the swipe). Parented to the card, the controls simply ARE part of the
-/// wallpaper: they arrive with it, leave with it, and can never describe the
-/// wrong one. It also means no fade, no recede, no scroll-notification
-/// bookkeeping — the PageView moves them for free.
-class _CardChrome extends StatelessWidget {
-  const _CardChrome({
-    required this.wallpaper,
-    required this.busy,
-    required this.onApply,
-    required this.onShare,
-  });
-
-  static const double stackHeight = FeedCardGeometry.scrimHeight;
-
-  static const double _barInset = FeedCardGeometry.actionInset;
-  static const double _barInsetH = FeedCardGeometry.actionInset;
-
-  static const double _liveMarkInset = 22;
-
-  final Wallpaper wallpaper;
-  final bool busy;
-  final VoidCallback onApply;
-  final VoidCallback onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // IgnorePointer is LOAD-BEARING, not decoration: RenderDecoratedBox
-        // overrides hitTestSelf and a BoxDecoration hit-tests true anywhere
-        // inside its box. Painted above the media, the scrim would otherwise
-        // swallow every touch in the bottom 190 — a swipe started down there
-        // would never reach the PageView and the reel would not advance.
-        const Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: stackHeight,
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(gradient: ArulTokens.feedBottomScrim),
-            ),
-          ),
-        ),
-
-        Positioned(
-          left: _barInsetH,
-          right: _barInsetH,
-          bottom: _barInset,
-          child: _ActionBar(busy: busy, onApply: onApply, onShare: onShare),
-        ),
-
-        // The live marker, and the ONLY thing in the card's upper field.
-        // Pointer-transparent for the same reason the pill was: a DecoratedBox
-        // hit-tests true anywhere in its box, so without this the mark would be
-        // a dead zone over the pager.
-        if (wallpaper.kind == WallpaperKind.live)
-          const Positioned(
-            top: _liveMarkInset,
-            right: _liveMarkInset,
-            child: IgnorePointer(child: LiveMark()),
-          ),
-      ],
-    );
-  }
-}
-
-/// The feed's action bar: a wide Apply pill with a circular Share beside it,
-/// centred on the card's lower edge.
-/// Colour is deliberately NOT the design system's [ArulTokens.ctaGreen]: that
-/// token is for CTAs on THEMED surfaces (sheets, premium, sign-in), where the
-/// background is ours. Here the button sits directly on someone's artwork, and
-/// the app's established over-media language is ivory + shadow (rail glyphs,
-/// meta text, LIVE badge). So Apply is that language in pill form — solid ivory,
-/// maroon label — and Share is its secondary weight: the same ivory, held as
-/// glass. Hierarchy comes from fill and width, never from a hue that has to win
-/// a fight with several hundred devotional wallpapers.
-class _ActionBar extends StatelessWidget {
-  const _ActionBar({
-    required this.busy,
-    required this.onApply,
-    required this.onShare,
-  });
-
-  static const double height = FeedCardGeometry.actionBarHeight;
-
-  final bool busy;
-  final VoidCallback onApply;
-  final VoidCallback onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Flexible(
-          child: _ApplyPill(label: l10n.apply, onTap: busy ? null : onApply),
-        ),
-        const SizedBox(width: FeedCardGeometry.actionGap),
-        _ShareCircle(label: l10n.share, onTap: busy ? null : onShare),
-      ],
-    );
-  }
-}
-
-/// Primary: solid ivory, maroon label. Given a floor width so it reads as the
-/// dominant action even where the localized verb is a single short word.
-class _ApplyPill extends StatelessWidget {
-  const _ApplyPill({required this.label, required this.onTap});
-
-  final String label;
-
-  /// Null while an apply/share is in flight — a second tap would start a second
-  /// download racing the first.
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return Semantics(
-      button: true,
-      enabled: !disabled,
-      label: label,
-      identifier: 'arul_feed_apply',
-      child: Opacity(
-        opacity: disabled ? 0.55 : 1,
-        child: Material(
-          color: ArulTokens.ivory,
-          borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          elevation: 0,
-          child: InkWell(
-            // Apply is one of the feed's two commit verbs, so it presses firmer
-            // than ordinary chrome. The outcome beat comes separately, from the
-            // toast that reports what happened.
-            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
-            onTap: disabled ? null : onTap,
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-            splashColor: ArulTokens.maroonTintFill08,
-            highlightColor: ArulTokens.maroonTintFill07,
-            // No `alignment:` here — a Container with an alignment expands to
-            // its max constraint, which is what stretched the pill across the
-            // whole card. Without it the box hugs the label and the minWidth
-            // does the rest, so the pill keeps a constant, reference-like width
-            // whatever the locale's verb is.
-            child: Container(
-              height: _ActionBar.height,
-              constraints: const BoxConstraints(
-                minWidth: FeedCardGeometry.applyPillMinWidth,
-                maxWidth: FeedCardGeometry.applyPillMaxWidth,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 26),
-              // Glyph + word (owner's call): a primary action for a low-literacy
-              // audience is never a word alone, and the glyph is the one the
-              // apply sheet's CTA already wears. The pill is still the only
-              // thing that can be tapped down here.
-              // The ceiling is a hard 240 and the verb may not be cut: at 320dp
-              // with the OS at 1.3, Tamil's whole-word "Apply" was ellipsised
-              // inside it. So glyph and label shrink TOGETHER to fit the pill
-              // they are given, exactly as the sign-in title does — the pill's
-              // width is the reference and the type gives way, never the other
-              // way round.
-              child: Center(
-                widthFactor: 1,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.wallpaper_rounded,
-                        size: 20,
-                        color: ArulTokens.maroon,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        label,
-                        maxLines: 1,
-                        textAlign: TextAlign.center,
-                        style: ArulTokens.button.copyWith(
-                          fontSize: 16,
-                          color: ArulTokens.maroon,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Secondary: the same ivory held as glass — a translucent fill with a hairline
-/// border, so it stays readable on white temples and night skies alike without
-/// competing with the pill.
-class _ShareCircle extends StatelessWidget {
-  const _ShareCircle({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final disabled = onTap == null;
-    return Semantics(
-      button: true,
-      enabled: !disabled,
-      label: label,
-      identifier: 'arul_feed_share',
-      child: Opacity(
-        opacity: disabled ? 0.55 : 1,
-        child: Material(
-          // The over-media glass recipe, shared with [LiveMark] so the card's
-          // two glass objects cannot drift apart. This one needs no shadow: it
-          // sits inside the bottom scrim, which supplies its contrast.
-          color: ArulTokens.overMediaGlassFill,
-          shape: const CircleBorder(
-            side: BorderSide(color: ArulTokens.overMediaGlassBorder),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            // Share is the other commit verb — same weight as Apply.
-            onTapDown: disabled ? null : (_) => ArulHaptics.firm(),
-            onTap: disabled ? null : onTap,
-            child: const SizedBox(
-              width: _ActionBar.height,
-              height: _ActionBar.height,
-              child: Icon(
-                Icons.share_rounded,
-                size: 21,
-                color: ArulTokens.ivory,
-                shadows: ArulTokens.railIconShadow,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1078,18 +791,6 @@ class _TransferProgress extends ConsumerWidget {
         },
       ),
     );
-    final progress = applyProgress ?? shareProgress;
-    return DecoratedBox(
-      decoration: const BoxDecoration(gradient: ArulTokens.feedTopScrim),
-      child: SizedBox(
-        height: 3,
-        child: LinearProgressIndicator(
-          value: progress,
-          minHeight: 3,
-          backgroundColor: Colors.transparent,
-          color: ArulTokens.gold,
-        ),
-      ),
-    );
+    return ReelTransferBar(progress: applyProgress ?? shareProgress);
   }
 }

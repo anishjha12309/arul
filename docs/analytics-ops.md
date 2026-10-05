@@ -94,8 +94,8 @@ suffix is telemetry. The privacy policy must disclose Meta, Google/Firebase and 
   `apply_blocked_premium`. `code` is the native `PlatformException.code`, else `network`/`unknown`.
 - `*_blocked_premium` fires from the client gate AND the server-refusal handler, so one session can emit
   it twice: read "block encountered", never "distinct blocks".
-- `link_attributed=false` means the outgoing link carried no referral code — that install can never be
-  credited to the sender. `result` is always `unavailable` on the `whatsapp` channel: the target app
+- `link_attributed` exists only on old builds' `wallpaper_shared` / `referral_shared` — no new share
+  carries a referral code, so never chart it. `result` is always `unavailable` on the `whatsapp` channel: the target app
   never reports back.
 - Sign-in outcome buckets: [auth.md](auth.md) §Reading the failure buckets.
 - Server-event delivery proof without console access: the Worker writes `ph:<event>:<txn>` to KV

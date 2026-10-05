@@ -30,7 +30,10 @@ affordance — keep it.
 - **Every tap answers on press-DOWN**: a pressed visual and an `ArulHaptics` beat weighted to the action
   (`selection` picks, `tap` buttons, `firm` commits, `heavy` takes something away). Durations and curves
   come from `Motion` or `ArulTokens`; a widget never spells a `Duration` literal.
-- **Settings lives in the dock, never the header.**
+- **Settings is the header gear, never a dock tab** (owner): `ArulIconTap.glyph(settings)` top-right on
+  every tab pushes `/settings` over the shell, so the dock slot belongs to content and back returns to
+  the tab that opened it. The gear draws at `dockIconSize` inside the 34 box, so the band never grows;
+  `ArulScreenHeader` lays its 7 px spare target OUT into the gutter (`headerSpill`), so all 48 take taps.
 - The wordmark is the literal `Arul` in Marcellus. அருள் = grace / divine blessing — it does NOT mean
   "the South" (the working title); never gloss it so. Copy tone: warm, festive, plain — no religious
   salutations.
@@ -68,14 +71,19 @@ and the wall show the region's deity, Murugan by default.
   gold halo fogged the cell's edge on a real panel; fill plus rim is enough.
 - A scrollable under the dock owes `AppShell.dockClearance(context)` of bottom clearance. It returns **0
   when no `AppShell` sits above the caller**, which is what makes it safe to call unconditionally — a
-  flat constant left dead space under Settings pushed as a route.
+  flat constant leaves dead space under any pushed route. A pushed screen clears the gesture bar itself.
 - **The scrim behind the capsule fades to the surface's own alpha-0, never `Colors.transparent`** — that
   is transparent BLACK, and lerping through it smears grey on the ivory theme.
 - Labels shrink, never clip: a 1.1 text-scale clamp (`PaywallGround`'s 1.3 is the only other) plus
   `FittedBox(scaleDown)`, because a long Malayalam label at 2× bursts the fixed cells. Keep the theme's
   own tracking — at 0 the labels read as a different typeface.
-- Leaving Wallpapers releases the decoders, leaving Ringtones stops the preview. All branches stay
-  mounted (scroll positions survive), and `ArulBranchCrossfade` keeps `TickerMode` off for hidden ones.
+- **Status is the third, LAST branch, shown in the dock only while `feature_flags.status_tab` is
+  `true`** (owner); off, absent or loading is the two-tab app. go_router's branch list is fixed, so the
+  branch is always declared and only the dock item hides — last, so hiding it shifts no index. Never
+  `routingConfig`. Losing the flag while on Status bounces to Wallpapers after the frame.
+- Leaving a reel releases its decoders ([video-feed.md](video-feed.md)); leaving Ringtones or entering
+  Status stops the preview. All branches stay mounted (scroll positions survive), and
+  `ArulBranchCrossfade` keeps `TickerMode` off for hidden ones.
 
 ## Perf rules that SHAPE the design
 

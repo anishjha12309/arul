@@ -85,7 +85,7 @@
   "offlineFeedBody": "Turn on the internet to see wallpapers.",
   "wallpaperShareCaption": "More devotional wallpapers like this one — still and live — on Arul:\n{link}",
   "@wallpaperShareCaption": {
-    "description": "Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder is referral-attributed and a competing marketing-site link (which this string used to carry) sends the tap somewhere that earns the sender nothing.",
+    "description": "Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder opens this wallpaper and a competing marketing-site link sends the tap somewhere else.",
     "placeholders": {
       "link": {
         "type": "String"
@@ -94,7 +94,7 @@
   },
   "referShareMessage": "I've been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you'd like it.\n\n{link}",
   "@referShareMessage": {
-    "description": "Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and it must NOT mention the sender's referral reward — 'install this so I get free premium' reads as self-serving and suppresses the tap. Link alone on the last line.",
+    "description": "Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and never self-serving — 'install this so I get something' suppresses the tap. Link alone on the last line.",
     "placeholders": {
       "link": {
         "type": "String"
@@ -104,11 +104,39 @@
   "tabWallpapers": "Wallpapers",
   "tabRingtones": "Ringtones",
   "@tabRingtones": {
-    "description": "Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the Earn chip — use the short everyday (often singular, transliterated) word, never a long plural."
+    "description": "Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the settings gear — use the short everyday (often singular, transliterated) word, never a long plural."
   },
-  "earn": "Earn",
-  "@earn": {
-    "description": "Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase."
+  "statusTitle": "Status",
+  "@statusTitle": {
+    "description": "Dock tab label AND the Status screen title — WhatsApp's \"Status\". The dock cell is 58 dp wide and the title shares its band with the settings gear: use the word WhatsApp users say (transliterated is right), never a long phrase."
+  },
+  "statusSave": "Save",
+  "@statusSave": {
+    "description": "The round Save button on a status clip; its label is spoken by TalkBack, not shown. ONE short verb."
+  },
+  "statusWhatsapp": "WhatsApp",
+  "@statusWhatsapp": {
+    "description": "The wide pill that posts the clip to the user's WhatsApp Status. The brand stays verbatim in Latin."
+  },
+  "statusSaved": "Saved to your gallery",
+  "@statusSaved": {
+    "description": "Toast after a status clip was saved to the phone's gallery (Movies/Arul)."
+  },
+  "statusSaveFailed": "Couldn't save. Try again.",
+  "@statusSaveFailed": {
+    "description": "Toast when saving a status clip failed."
+  },
+  "statusPermissionDenied": "Allow storage access to save videos.",
+  "@statusPermissionDenied": {
+    "description": "Toast on Android 9 and older when the user refused the storage permission that saving needs."
+  },
+  "statusEmpty": "No status videos yet",
+  "@statusEmpty": {
+    "description": "Empty state of the Status tab when no clips are published in the chosen category."
+  },
+  "statusError": "Couldn't load status videos",
+  "@statusError": {
+    "description": "Error-card title when the Status clips could not be loaded; the body and Retry pill are shared."
   },
   "ringtoneSet": "Set",
   "@ringtoneSet": {
@@ -140,7 +168,6 @@
   "settingsPremiumSubTrial": "You're on the free trial",
   "settingsPremiumSubCancelled": "Auto-renew off · access continues",
   "settingsPremiumSubActive": "You're a member",
-  "settingsReferSub": "Earn 30 days free premium",
   "settingsTellFriend": "Tell a friend",
   "settingsTellFriendSub": "Send Arul to someone who would love it",
   "settingsLanguage": "Language",
@@ -212,25 +239,6 @@
   "premiumCelebrateBody": "Arul Premium is active. Know someone who would love these wallpapers? Send them one.",
   "premiumSheetPitch": "Every wallpaper, live and still. Apply and share freely across all six categories.",
   "premiumKeepBrowsing": "Keep browsing free",
-  "referTitle": "Refer & Earn",
-  "referHeroTitle": "Gift a friend, earn a month",
-  "referHeroBody": "30 days of free premium for every friend who subscribes with your link",
-  "referShareWhatsapp": "Share via WhatsApp",
-  "referRewardsLabel": "Rewards earned",
-  "referRewardDays": "{days} days",
-  "@referRewardDays": {
-    "description": "Reward total on Refer & Earn, rendered under the \"Rewards earned\" label. Days of free premium granted, never a currency amount.",
-    "placeholders": {
-      "days": {
-        "type": "int"
-      }
-    }
-  },
-  "referHowItWorks": "How it works",
-  "referStep1": "Share your link with friends and family",
-  "referStep2": "They install Arul and subscribe to premium",
-  "referStep3": "30 days of free premium lands in your account",
-  "referEmpty": "No referrals yet — your first friend is one share away",
   "referShareCta": "Share Arul",
   "referNotNow": "Not now",
   "uploadScreenTitle": "Upload wallpaper",

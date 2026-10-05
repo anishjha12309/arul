@@ -442,13 +442,13 @@ abstract class AppLocalizations {
   /// **'Turn on the internet to see wallpapers.'**
   String get offlineFeedBody;
 
-  /// Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder is referral-attributed and a competing marketing-site link (which this string used to carry) sends the tap somewhere that earns the sender nothing.
+  /// Caption attached to a shared wallpaper FILE. The recipient is already looking at the image, so this does not describe it — it says where more came from. ONE short line, then the install link alone on the last line: messengers preview a trailing link and bury an inline one. NEVER put a second URL anywhere in this string; the link placeholder opens this wallpaper and a competing marketing-site link sends the tap somewhere else.
   ///
   /// In en, this message translates to:
   /// **'More devotional wallpapers like this one — still and live — on Arul:\n{link}'**
   String wallpaperShareCaption(String link);
 
-  /// Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and it must NOT mention the sender's referral reward — 'install this so I get free premium' reads as self-serving and suppresses the tap. Link alone on the last line.
+  /// Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and never self-serving — 'install this so I get something' suppresses the tap. Link alone on the last line.
   ///
   /// In en, this message translates to:
   /// **'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n{link}'**
@@ -460,17 +460,59 @@ abstract class AppLocalizations {
   /// **'Wallpapers'**
   String get tabWallpapers;
 
-  /// Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the Earn chip — use the short everyday (often singular, transliterated) word, never a long plural.
+  /// Dock tab label AND the Ringtones screen title. The dock cell is 58 dp wide and the title shares its band with the settings gear — use the short everyday (often singular, transliterated) word, never a long plural.
   ///
   /// In en, this message translates to:
   /// **'Ringtones'**
   String get tabRingtones;
 
-  /// Label on the pill in the Ringtones header that opens Refer & Earn. Very tight space (a 38px chip beside the screen title) — keep it to ONE short word; it is a call to action, not a noun phrase.
+  /// Dock tab label AND the Status screen title — WhatsApp's "Status". The dock cell is 58 dp wide and the title shares its band with the settings gear: use the word WhatsApp users say (transliterated is right), never a long phrase.
   ///
   /// In en, this message translates to:
-  /// **'Earn'**
-  String get earn;
+  /// **'Status'**
+  String get statusTitle;
+
+  /// The round Save button on a status clip; its label is spoken by TalkBack, not shown. ONE short verb.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get statusSave;
+
+  /// The wide pill that posts the clip to the user's WhatsApp Status. The brand stays verbatim in Latin.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get statusWhatsapp;
+
+  /// Toast after a status clip was saved to the phone's gallery (Movies/Arul).
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to your gallery'**
+  String get statusSaved;
+
+  /// Toast when saving a status clip failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save. Try again.'**
+  String get statusSaveFailed;
+
+  /// Toast on Android 9 and older when the user refused the storage permission that saving needs.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow storage access to save videos.'**
+  String get statusPermissionDenied;
+
+  /// Empty state of the Status tab when no clips are published in the chosen category.
+  ///
+  /// In en, this message translates to:
+  /// **'No status videos yet'**
+  String get statusEmpty;
+
+  /// Error-card title when the Status clips could not be loaded; the body and Retry pill are shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load status videos'**
+  String get statusError;
 
   /// The Set pill on every ringtone row, max 120 dp wide. ONE short verb; the transliterated "set" is fine where that is what people say.
   ///
@@ -597,12 +639,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You\'re a member'**
   String get settingsPremiumSubActive;
-
-  /// No description provided for @settingsReferSub.
-  ///
-  /// In en, this message translates to:
-  /// **'Earn 30 days free premium'**
-  String get settingsReferSub;
 
   /// No description provided for @settingsTellFriend.
   ///
@@ -885,72 +921,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keep browsing free'**
   String get premiumKeepBrowsing;
-
-  /// No description provided for @referTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Refer & Earn'**
-  String get referTitle;
-
-  /// No description provided for @referHeroTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Gift a friend, earn a month'**
-  String get referHeroTitle;
-
-  /// No description provided for @referHeroBody.
-  ///
-  /// In en, this message translates to:
-  /// **'30 days of free premium for every friend who subscribes with your link'**
-  String get referHeroBody;
-
-  /// No description provided for @referShareWhatsapp.
-  ///
-  /// In en, this message translates to:
-  /// **'Share via WhatsApp'**
-  String get referShareWhatsapp;
-
-  /// No description provided for @referRewardsLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Rewards earned'**
-  String get referRewardsLabel;
-
-  /// Reward total on Refer & Earn, rendered under the "Rewards earned" label. Days of free premium granted, never a currency amount.
-  ///
-  /// In en, this message translates to:
-  /// **'{days} days'**
-  String referRewardDays(int days);
-
-  /// No description provided for @referHowItWorks.
-  ///
-  /// In en, this message translates to:
-  /// **'How it works'**
-  String get referHowItWorks;
-
-  /// No description provided for @referStep1.
-  ///
-  /// In en, this message translates to:
-  /// **'Share your link with friends and family'**
-  String get referStep1;
-
-  /// No description provided for @referStep2.
-  ///
-  /// In en, this message translates to:
-  /// **'They install Arul and subscribe to premium'**
-  String get referStep2;
-
-  /// No description provided for @referStep3.
-  ///
-  /// In en, this message translates to:
-  /// **'30 days of free premium lands in your account'**
-  String get referStep3;
-
-  /// No description provided for @referEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No referrals yet — your first friend is one share away'**
-  String get referEmpty;
 
   /// No description provided for @referShareCta.
   ///

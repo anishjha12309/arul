@@ -29,6 +29,7 @@ import 'core/connectivity/data_saver.dart';
 import 'core/crash/non_crash_errors.dart';
 import 'core/deeplink/deep_link_target.dart';
 import 'core/deeplink/deferred_link_service.dart';
+import 'core/deeplink/install_referrer_service.dart';
 import 'core/experiments/experiments.dart';
 import 'core/perf/boot_trace.dart';
 import 'core/providers/geo_region_service.dart';
@@ -36,7 +37,6 @@ import 'core/providers/locale_provider.dart';
 import 'core/providers/shared_preferences_provider.dart';
 import 'features/notifications/data/notification_service.dart';
 import 'features/notifications/providers/notification_providers.dart';
-import 'features/referral/data/install_referrer_service.dart';
 
 /// App entry point.
 ///
@@ -324,7 +324,7 @@ Future<void> _startApp() async {
     unawaited(_startPostHog(config, prefs));
   }
 
-  // The Play Install Referrer is read once per install: the referral code for the first sign-in, and,
+  // The Play Install Referrer is read once per install: the install's attribution and,
   // for an ad/share tap that predates the install, the wallpaper or ringtone to open plus the
   // language the ad was in. Fire-and-forget -> off the critical path, a no-op without Play Services.
   // `captureOnce` needs an async Play Services round-trip -> on a first launch it can land either

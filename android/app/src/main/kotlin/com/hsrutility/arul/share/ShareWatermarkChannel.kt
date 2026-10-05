@@ -30,6 +30,9 @@ class ShareWatermarkChannel(private val context: Context) :
     companion object {
         const val CHANNEL = "com.hsrutility.arul/share_watermark"
         private const val TAG = "ShareWatermark"
+
+        // Once per process: whether the clip's audio was copied through (TRANSMUXED) or re-encoded.
+        private var loggedAudioProcess = false
     }
 
     // The in-flight export doubles as the busy flag AND the GC anchor.
@@ -135,6 +138,17 @@ class ShareWatermarkChannel(private val context: Context) :
 
     private fun exportListener(): Transformer.Listener = object : Transformer.Listener {
         override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+            if (!loggedAudioProcess) {
+                loggedAudioProcess = true
+                val audio = when (exportResult.audioConversionProcess) {
+                    ExportResult.CONVERSION_PROCESS_TRANSMUXED -> "TRANSMUXED"
+                    ExportResult.CONVERSION_PROCESS_TRANSCODED -> "TRANSCODED"
+                    ExportResult.CONVERSION_PROCESS_TRANSMUXED_AND_TRANSCODED ->
+                        "TRANSMUXED_AND_TRANSCODED"
+                    else -> "NA"
+                }
+                Log.i(TAG, "export audio conversion: $audio")
+            }
             finish { it.result.success(it.outputPath) }
         }
 

@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../../core/config/build_info.dart';
-import '../../../data/models/wallpaper.dart';
-import '../data/feed_video_player.dart';
-import '../data/wallpaper_prefetch_service.dart';
+import '../../../features/wallpapers/data/feed_video_player.dart';
+import 'reel_item.dart';
+import 'reel_prefetch_service.dart';
 
 /// How long the feed must rest on a page before its player is reassigned and its media opened.
 /// A fast fling snaps PageView through intermediate pages, firing onPageChanged for each.
@@ -98,14 +98,18 @@ class _PooledPlayer {
   }
 }
 
-/// Drives the reel's live previews over a small FIXED REUSE POOL of native Media3 players.
+/// Drives a reel's live previews over a small FIXED REUSE POOL of native Media3 players.
 /// Backed by a separate disk byte-prefetcher.
-class VideoPreloadController extends ChangeNotifier
+class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
     with WidgetsBindingObserver {
   VideoPreloadController({
     required this.cdnBaseUrl,
-    required WallpaperPrefetchService prefetch,
+    required ReelPrefetchService<T> prefetch,
     FeedVideoPlayerPool? pool,
+    this._keepBehind = 1,
+    this._preloadAhead = 1,
+    this._audio = false,
+    this._visible = true,
   }) : _prefetch = prefetch, // ignore: prefer_initializing_formals
        _pool = pool ?? FeedVideoPlayerPool() {
     WidgetsBinding.instance.addObserver(this);
@@ -120,7 +124,7 @@ class VideoPreloadController extends ChangeNotifier
   /// (started during splash) and this controller's per-page prefetch share one
   /// in-flight queue. Therefore [dispose] must NOT dispose it (the provider
   /// does); doing so would kill prefetching for the next controller instance.
-  final WallpaperPrefetchService _prefetch;
+  final ReelPrefetchService<T> _prefetch;
 
   /// The native player pool (channel wrapper). Owned by this controller: it is
   /// created per controller instance and torn down in [dispose].
@@ -131,12 +135,18 @@ class VideoPreloadController extends ChangeNotifier
   // Cost: at most previous + current + next = 3 concurrent decoders, one over the budget-SoC 2.
   // Affordable only because players open from the DISK prefetch, not a cold stream.
   // 3 is the CEILING on the lowest-end target SoC — the wallpaper service claims one permanently.
-  static const _keepBehind = 1;
-  static const _preloadAhead = 1;
+  final int _keepBehind;
+  final int _preloadAhead;
+
+  /// Whether this pool's players take audio focus and play sound — decided at create, never per open.
+  final bool _audio;
 
   /// Fixed maximum pooled players — the full window width, previous + current + next.
   /// The pool NEVER grows past this; a page change reassigns rather than allocates.
-  static const _poolSize = _keepBehind + 1 + _preloadAhead;
+  int get _poolSize => _keepBehind + 1 + _preloadAhead;
+
+  /// The widest pool any reel runs — what the shared budget seed is measured against.
+  static const _maxPoolSize = 3;
 
   /// **Adaptive decoder budget** — how many concurrent decoders the feed may hold.
   /// **Seeded from [DeviceQuality]**, not from [_poolSize]: a `low` phone starts at 2 rather than
@@ -144,12 +154,13 @@ class VideoPreloadController extends ChangeNotifier
   /// that — the tier only picks where the ladder starts, never where it ends.
   /// Read through the getter so the seed is taken on FIRST use, after `main()`'s probe lands,
   /// not at class-load time when the answer is still `mid`.
+  /// Static across every reel on purpose: one device, one set of hardware decoder sessions.
   static int? _decoderBudgetSeed;
 
   static int get _decoderBudget =>
       _decoderBudgetSeed ??= switch (DeviceQuality.resolved) {
-        DeviceTier.low => _poolSize - 1,
-        DeviceTier.mid || DeviceTier.high => _poolSize,
+        DeviceTier.low => _maxPoolSize - 1,
+        DeviceTier.mid || DeviceTier.high => _maxPoolSize,
       };
 
   static set _decoderBudget(int value) => _decoderBudgetSeed = value;
@@ -172,9 +183,52 @@ class VideoPreloadController extends ChangeNotifier
   static const _revealTimeout = Duration(milliseconds: 300);
 
   int _currentIndex = 0;
-  List<Wallpaper> _wallpapers = const [];
+  List<T> _items = const [];
   bool _disposed = false;
   bool _appPaused = false;
+
+  /// Whether the reel is the surface the user is looking at — off under another tab or a pushed route.
+  /// An audible pool that plays while hidden is sound from nowhere, so nothing plays unless it is set.
+  bool _visible;
+
+  /// Set when another app took audio focus for good, or the headphones came out; cleared only by a
+  /// tap on the card -> the clip never resumes on its own over whatever took the speaker.
+  bool _focusLost = false;
+
+  /// The user tapped the card to pause it; the next swipe or tap lets it play again.
+  bool _userPaused = false;
+
+  bool get _canPlay => _visible && !_appPaused && !_focusLost && !_userPaused;
+
+  /// The current card is held still by the user or by a focus loss -> the card shows a play mark.
+  bool get isHeld => _focusLost || _userPaused;
+
+  bool get visible => _visible;
+
+  /// Shown or hidden by the shell. Hiding pauses at once; showing lets the current card play again.
+  set visible(bool value) {
+    if (_disposed || value == _visible) return;
+    _visible = value;
+    if (value) {
+      _reconcile();
+    } else {
+      _pauseAll();
+    }
+  }
+
+  /// A tap on the card: pauses a playing clip, or plays a held one — the only way out of a focus loss.
+  void toggleHeldByUser() {
+    if (_disposed) return;
+    if (isHeld) {
+      _focusLost = false;
+      _userPaused = false;
+      _reconcile();
+    } else {
+      _userPaused = true;
+      _pauseAll();
+      notifyListeners();
+    }
+  }
 
   /// True between a page change and [_settleDebounce] firing — no player is reassigned while set.
   /// So a fast fling triggers no `open()` churn; reconcile runs once the feed rests.
@@ -199,8 +253,8 @@ class VideoPreloadController extends ChangeNotifier
   /// Keeping an in-window served slot mounted -> a swipe onto a neighbour shows its frame continuously.
   /// Indices with no serving player still return null, so a fast fling is unaffected.
   LiveVideoSlot? slotForIndex(int index) {
-    if (index < 0 || index >= _wallpapers.length) return null;
-    if (_wallpapers[index].kind != WallpaperKind.live) return null;
+    if (index < 0 || index >= _items.length) return null;
+    if (!_isVideo(index)) return null;
     if (!_inWindow(index)) return null;
     final pooled = _playerServing(index);
     if (pooled == null) return null; // not assigned yet (reconcile is async)
@@ -218,15 +272,17 @@ class VideoPreloadController extends ChangeNotifier
   /// [initialIndex] MUST be the page the viewer is actually opening on.
   /// Without it the reconcile runs against the PREVIOUS `_currentIndex`.
   /// The pool then opens and prefetches the wrong clips before the debounce re-targets ~160ms later.
-  void setWallpapers(List<Wallpaper> wallpapers, {int? initialIndex}) {
-    _wallpapers = wallpapers;
+  void setItems(List<T> items, {int? initialIndex}) {
+    _items = items;
     if (initialIndex != null &&
         initialIndex >= 0 &&
-        initialIndex < wallpapers.length) {
+        initialIndex < items.length) {
       _currentIndex = initialIndex;
     }
     _reconcile();
   }
+
+  bool _isVideo(int index) => _prefetch.urlFor(_items[index]) != null;
 
   /// Detach from the surface that was showing video — called ONLY on the way out.
   ///
@@ -236,7 +292,7 @@ class VideoPreloadController extends ChangeNotifier
   /// Backgrounding off-feed and returning would play a clip nobody can see, on real decoders.
   /// CLEARING the list is what makes `resumed` a no-op — `_reconcile` early-returns on empty.
   void detach() {
-    _wallpapers = const [];
+    _items = const [];
     _currentIndex = 0;
     unawaited(releaseDecoders());
   }
@@ -248,18 +304,18 @@ class VideoPreloadController extends ChangeNotifier
   /// The normal current±1 window takes over once the feed calls [setWallpapers].
   /// Returns the first item's first-frame listenable when a LIVE item is being warmed.
   /// Null when there is nothing to decode — empty feed, backgrounded, or a static first item.
-  ValueListenable<bool>? prewarmFirst(List<Wallpaper> wallpapers) {
-    if (_disposed || wallpapers.isEmpty || _appPaused) return null;
-    _wallpapers = wallpapers;
+  ValueListenable<bool>? prewarmFirst(List<T> items) {
+    if (_disposed || items.isEmpty || _appPaused) return null;
+    _items = items;
     _currentIndex = 0;
-    if (wallpapers.first.kind != WallpaperKind.live) return null;
+    if (!_isVideo(0)) return null;
     // Pull the look-ahead bytes to disk -> this player, and the next, open from a local file.
-    _prefetch.prefetchAround(wallpapers, 0);
+    _prefetch.prefetchAround(items, 0);
     final existing = _playerServing(0);
     if (existing != null) return existing.ready;
     // Native create() is async -> return a PROXY notifier the caller can subscribe to at once.
     // It resolves the moment the player is created and opened.
-    return _assignPlayerReady(0, playWhenReady: true);
+    return _assignPlayerReady(0, playWhenReady: _canPlay);
   }
 
   /// Leaving the Wallpapers tab: stop NOW, free the decoders only if the user stays away.
@@ -320,6 +376,8 @@ class VideoPreloadController extends ChangeNotifier
   Future<void> onPageChanged(int index) async {
     if (_disposed) return;
     _currentIndex = index;
+    // A swipe is a fresh card -> a tap-pause does not follow it; a focus loss does, until a tap.
+    _userPaused = false;
 
     // Enter settling: pause every player so nothing plays during the scroll, then rebuild.
     // Already-serving in-window cards KEEP their slot — their Texture stays mounted, paused.
@@ -339,7 +397,7 @@ class VideoPreloadController extends ChangeNotifier
 
   bool _inWindow(int index) {
     final start = max(0, _currentIndex - _effKeepBehind);
-    final end = min(_wallpapers.length - 1, _currentIndex + _effPreloadAhead);
+    final end = min(_items.length - 1, _currentIndex + _effPreloadAhead);
     return index >= start && index <= end;
   }
 
@@ -358,15 +416,15 @@ class VideoPreloadController extends ChangeNotifier
   /// New players are created only until the pool reaches [_poolSize].
   /// Notifies listeners -> the feed's itemBuilder re-reads [slotForIndex].
   void _reconcile() {
-    if (_disposed || _wallpapers.isEmpty) return;
+    if (_disposed || _items.isEmpty) return;
 
     // Target set: the LIVE indices inside the current window that deserve a player.
     // Previous + current + next at the full budget, shrunk on codec-starved SoCs.
     final start = max(0, _currentIndex - _effKeepBehind);
-    final end = min(_wallpapers.length - 1, _currentIndex + _effPreloadAhead);
+    final end = min(_items.length - 1, _currentIndex + _effPreloadAhead);
     final wanted = <int>[
       for (var i = start; i <= end; i++)
-        if (_wallpapers[i].kind == WallpaperKind.live) i,
+        if (_isVideo(i)) i,
     ];
 
     // 1. Free any player whose index left the window, is no longer live, or whose MEDIA moved.
@@ -377,24 +435,25 @@ class VideoPreloadController extends ChangeNotifier
       final idx = p.servingIndex;
       final stillWanted =
           idx >= 0 &&
-          idx < _wallpapers.length &&
-          _wallpapers[idx].kind == WallpaperKind.live &&
+          idx < _items.length &&
           wanted.contains(idx) &&
-          p.openedUrl == _prefetch.urlFor(_wallpapers[idx]);
+          p.openedUrl == _prefetch.urlFor(_items[idx]);
       if (!stillWanted && idx != -1) {
         p.servingIndex = -1;
         unawaited(p.handle.pause());
       }
     }
 
-    if (_appPaused) {
+    // Hidden: free stale players but claim no new decoder -> the reel the user is looking at may
+    // need every session this SoC has, and two pools never decode at once.
+    if (_appPaused || !_visible) {
       notifyListeners();
       return;
     }
 
     // Drive the DATA window — pull upcoming live MP4s to disk, no decoders.
     // So the players opened here, and the next promoted on swipe, read a local file.
-    _prefetch.prefetchAround(_wallpapers, _currentIndex);
+    _prefetch.prefetchAround(_items, _currentIndex);
 
     // 2. Assign a player to every wanted index without one, reusing an idle player where possible.
     //    A new one is created only while the pool is below _poolSize.
@@ -402,8 +461,8 @@ class VideoPreloadController extends ChangeNotifier
     for (final i in wanted) {
       final existing = _playerServing(i);
       if (existing == null) {
-        _assignPlayer(i, playWhenReady: i == _currentIndex);
-      } else if (i == _currentIndex) {
+        _assignPlayer(i, playWhenReady: i == _currentIndex && _canPlay);
+      } else if (i == _currentIndex && _canPlay) {
         unawaited(existing.handle.play());
       } else {
         unawaited(existing.handle.pause());
@@ -463,7 +522,7 @@ class VideoPreloadController extends ChangeNotifier
     int index, {
     required bool playWhenReady,
   }) async {
-    if (_appPaused || _disposed) return null;
+    if (_appPaused || _disposed || !_visible) return null;
 
     _PooledPlayer? pooled;
     for (final p in _pool_) {
@@ -485,7 +544,7 @@ class VideoPreloadController extends ChangeNotifier
       final epoch = _releaseEpoch;
       FeedVideoPlayer? handle;
       try {
-        handle = await _pool.create();
+        handle = await _pool.create(audio: _audio);
       } finally {
         _creating--;
       }
@@ -493,7 +552,11 @@ class VideoPreloadController extends ChangeNotifier
       // Drop the fresh player rather than add it to a pool that was just emptied.
       // The EPOCH check covers a FOREGROUND release; `_appPaused` alone catches only backgrounding.
       // Without it a late-landing player holds a decoder the apply flow promised the OS was free.
-      if (handle == null || _disposed || _appPaused || _releaseEpoch != epoch) {
+      if (handle == null ||
+          _disposed ||
+          _appPaused ||
+          !_visible ||
+          _releaseEpoch != epoch) {
         unawaited(handle?.dispose());
         return null;
       }
@@ -505,6 +568,7 @@ class VideoPreloadController extends ChangeNotifier
       // A silent software-decoder fallback fires NO error -> the other contention signal, wired alike.
       handle.onDecoder = (name, isSoftware) =>
           _onDecoderReported(errPooled, name, isSoftware);
+      handle.onFocusLost = _onFocusLost;
       _pool_.add(pooled);
     }
 
@@ -582,7 +646,7 @@ class VideoPreloadController extends ChangeNotifier
       painted.removeListener(onPainted);
       if (_disposed || _prefetch.windowWidened) return;
       _prefetch.widenWindow();
-      _prefetch.prefetchAround(_wallpapers, _currentIndex);
+      _prefetch.prefetchAround(_items, _currentIndex);
     }
 
     painted.addListener(onPainted);
@@ -596,9 +660,10 @@ class VideoPreloadController extends ChangeNotifier
     required bool playWhenReady,
   }) async {
     // Guard — the list may have shrunk between assignment and here.
-    if (index < 0 || index >= _wallpapers.length) return;
+    if (index < 0 || index >= _items.length) return;
     // Capture the network URL now — it is both the disk-cache key and the streaming fallback.
-    final url = _prefetch.urlFor(_wallpapers[index]);
+    final url = _prefetch.urlFor(_items[index]);
+    if (url == null) return;
 
     // Open the local FILE, never a CDN stream.
     //
@@ -639,9 +704,10 @@ class VideoPreloadController extends ChangeNotifier
     // The current index passes true. Re-opening a reused player swaps media without the surface.
     // Looping, so the short preview repeats seamlessly.
     // `url` is reached only when the transfer FAILED — a stream is the last resort, never the plan.
+    // Re-read here, not at assignment: the reel may have been hidden during the transfer.
     await pooled.handle.open(
       localPath ?? url,
-      playWhenReady: playWhenReady,
+      playWhenReady: playWhenReady && _canPlay,
       looping: true,
     );
   }
@@ -736,7 +802,7 @@ class VideoPreloadController extends ChangeNotifier
           pooled,
           index,
           token,
-          playWhenReady: index == _currentIndex && !_settling,
+          playWhenReady: index == _currentIndex && !_settling && _canPlay,
         ),
       );
     });
@@ -818,6 +884,14 @@ class VideoPreloadController extends ChangeNotifier
     for (final pooled in _pool_) {
       unawaited(pooled.handle.pause());
     }
+  }
+
+  /// Native already paused the player; the latch keeps every later reconcile from restarting it.
+  void _onFocusLost() {
+    if (_disposed || _focusLost) return;
+    _focusLost = true;
+    _pauseAll();
+    notifyListeners();
   }
 
   @override

@@ -6,24 +6,31 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/analytics/analytics_provider.dart';
 import '../../core/deeplink/deep_link_target.dart';
+import '../../core/deeplink/install_referrer_service.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../features/ringtones/providers/ringtone_catalog_providers.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
+import '../../features/status/providers/status_providers.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/motion.dart';
 import '../widgets/arul_line_icons.dart';
+import '../widgets/reel/reel_item.dart';
+import '../widgets/reel/video_preload_controller.dart';
+import 'shell_route_observer.dart';
 
-/// The tabbed scaffold around Wallpapers / Ringtones / Settings — everything else pushes OVER it.
+/// The tabbed scaffold around Wallpapers / Ringtones / Status — everything else, Settings included,
+/// pushes OVER it. Status is a dock item only while `feature_flags.status_tab` is true.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
+  // Branch index = dock index = position in router.dart's `branches` -> keep the three in step.
   static const int wallpapersBranch = 0;
   static const int ringtonesBranch = 1;
-  static const int settingsBranch = 2;
+  static const int statusBranch = 2;
 
   /// Bottom padding a scrollable owes the floating dock it runs under — 0 when there is no dock.
   /// The handoff's 120 assumes a 390×844 frame with no gesture bar -> add the bottom safe area on top.
@@ -37,13 +44,24 @@ class AppShell extends ConsumerStatefulWidget {
   static int branchFor(ArulTab tab) => switch (tab) {
     ArulTab.wallpapers => wallpapersBranch,
     ArulTab.ringtones => ringtonesBranch,
+    ArulTab.status => statusBranch,
   };
 
   @override
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell> with RouteAware {
+  PageRoute<dynamic>? _route;
+
+  /// A full screen is pushed over the shell -> no reel underneath may decode or play.
+  bool _covered = false;
+
+  /// Bumped per Wallpapers<->Status swap -> a swap overtaken during its await never reclaims.
+  int _swapSeq = 0;
+
+  bool _bouncing = false;
+
   @override
   void initState() {
     super.initState();
@@ -53,17 +71,66 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       ref.read(ringtoneCatalogProvider);
+      // A push tap can open the shell straight onto Status -> no switch ever runs to show its reel.
+      if (widget.navigationShell.currentIndex == AppShell.statusBranch) {
+        ref.read(videoPreloadControllerProvider).visible = false;
+        ref.read(statusVideoControllerProvider)
+          ..visible = true
+          ..reclaimDecoders();
+      }
     });
     // A link decides which tab the shell opens on -> check once here; a target can be parked pre-sign-in.
     // GA4F and the Meta SDK deliver mid-startup and an App Link can land warm -> listen for later ones.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
     _onDeepLinkChanged();
+    // A cold status link waits for the flag; it re-runs here the moment the config answers.
+    ref.listenManual(statusTabFlagProvider, (_, _) => _onDeepLinkChanged());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute<dynamic> && route != _route) {
+      if (_route != null) shellRouteObserver.unsubscribe(this);
+      _route = route;
+      shellRouteObserver.subscribe(this, route);
+    }
   }
 
   @override
   void dispose() {
+    shellRouteObserver.unsubscribe(this);
     ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     super.dispose();
+  }
+
+  /// The reel a branch shows, or null for a branch without video.
+  VideoPreloadController<ReelItem>? _reelFor(int branch) => switch (branch) {
+    AppShell.wallpapersBranch => ref.read(videoPreloadControllerProvider),
+    AppShell.statusBranch => ref.read(statusVideoControllerProvider),
+    _ => null,
+  };
+
+  /// Settings, the paywall, upload or a policy went over the shell: the reel stops now and frees
+  /// its decoders after the same grace as a tab leave — Back is the trip most likely undone.
+  @override
+  void didPushNext() {
+    _covered = true;
+    final reel = _reelFor(widget.navigationShell.currentIndex);
+    if (reel == null) return;
+    reel.visible = false;
+    reel.releaseDecodersOnLeave();
+  }
+
+  @override
+  void didPopNext() {
+    _covered = false;
+    final reel = _reelFor(widget.navigationShell.currentIndex);
+    if (reel == null) return;
+    reel
+      ..visible = true
+      ..reclaimDecoders();
   }
 
   /// Written from go_router's redirect, and `goBranch` must not navigate during a build -> microtask.
@@ -75,6 +142,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (!mounted) return;
     final target = ArulDeepLink.pendingTarget;
     if (target == null) return;
+    if (target.tab == ArulTab.status) {
+      final enabled = ref.read(statusTabFlagProvider);
+      if (enabled == null) return;
+      if (!enabled) {
+        _dropStatusTarget(target);
+        return;
+      }
+    }
     if (target is TabLinkTarget) {
       ArulDeepLink.consumeTab();
       ref
@@ -87,6 +162,42 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
+  /// The tab is off: the link is taken, reported, and the user lands on Wallpapers.
+  void _dropStatusTarget(DeepLinkTarget target) {
+    if (target is StatusLinkTarget) {
+      ArulDeepLink.consumeStatus();
+      unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
+    } else {
+      ArulDeepLink.consumeTab();
+    }
+    ref
+        .read(analyticsServiceProvider)
+        .track('deep_link_opened', properties: target.analyticsProperties);
+    if (widget.navigationShell.currentIndex != AppShell.wallpapersBranch) {
+      widget.navigationShell.goBranch(AppShell.wallpapersBranch);
+    }
+  }
+
+  static bool _isReelPair(int a, int b) => {
+    a,
+    b,
+  }.containsAll(const {AppShell.wallpapersBranch, AppShell.statusBranch});
+
+  /// Two pools never decode at once: the leaving one is released IN FULL before the entering one
+  /// claims a session, with no grace — budget SoCs hold about two hardware decoders in total.
+  Future<void> _swapReels(int from, int to) async {
+    final seq = ++_swapSeq;
+    final leaving = _reelFor(from);
+    final entering = _reelFor(to);
+    if (leaving == null || entering == null) return;
+    leaving.visible = false;
+    await leaving.releaseDecoders();
+    if (!mounted || seq != _swapSeq || _covered) return;
+    entering
+      ..visible = true
+      ..reclaimDecoders();
+  }
+
   @override
   void didUpdateWidget(covariant AppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -94,14 +205,24 @@ class _AppShellState extends ConsumerState<AppShell> {
     final to = widget.navigationShell.currentIndex;
     if (from == to) return;
 
-    if (from == AppShell.wallpapersBranch) {
-      // The pool's epoch guard makes a release racing a quick return safe -> fire-and-forget.
-      ref.read(videoPreloadControllerProvider).releaseDecodersOnLeave();
+    if (_isReelPair(from, to)) {
+      unawaited(_swapReels(from, to));
+    } else {
+      _swapSeq++;
+      final leaving = _reelFor(from);
+      if (leaving != null) {
+        leaving.visible = false;
+        // The pool's epoch guard makes a release racing a quick return safe -> fire-and-forget.
+        leaving.releaseDecodersOnLeave();
+      }
+      final entering = _reelFor(to);
+      if (entering != null && !_covered) {
+        entering
+          ..visible = true
+          ..reclaimDecoders();
+      }
     }
-    if (to == AppShell.wallpapersBranch) {
-      ref.read(videoPreloadControllerProvider).reclaimDecoders();
-    }
-    if (from == AppShell.ringtonesBranch) {
+    if (from == AppShell.ringtonesBranch || to == AppShell.statusBranch) {
       // `stop()` writes the notifier's state at once, and didUpdateWidget runs INSIDE a build ->
       // Riverpod refuses a provider write mid-build (a debug assert; in release the write lands
       // while dependents are half-built). One microtask later is after this frame's build phase and
@@ -125,20 +246,41 @@ class _AppShellState extends ConsumerState<AppShell> {
     );
   }
 
+  /// The tab went away under the user (flag flipped off, or a `/status` push with it off) ->
+  /// back to Wallpapers, after the frame: `goBranch` must never run during a build.
+  void _bounceOffStatus() {
+    if (_bouncing) return;
+    _bouncing = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _bouncing = false;
+      if (!mounted) return;
+      if (widget.navigationShell.currentIndex == AppShell.statusBranch &&
+          ref.read(statusTabFlagProvider) != true) {
+        widget.navigationShell.goBranch(AppShell.wallpapersBranch);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final statusOn = ref.watch(statusTabFlagProvider) ?? false;
+    if (!statusOn &&
+        widget.navigationShell.currentIndex == AppShell.statusBranch) {
+      _bounceOffStatus();
+    }
     return Scaffold(
       extendBody: true,
       body: widget.navigationShell,
       bottomNavigationBar: ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,
+        // Dock index = branch index: Status is the LAST branch, so hiding it shifts nothing.
         items: [
           // Tab and screen are the same word -> one ARB key for both.
           (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
           (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
-          (glyph: ArulLineGlyph.settings, label: l10n.settingsTitle),
+          if (statusOn) (glyph: ArulLineGlyph.status, label: l10n.statusTitle),
         ],
       ),
     );
@@ -225,8 +367,8 @@ class _ArulBranchCrossfadeState extends State<ArulBranchCrossfade>
   }
 }
 
-/// Three tabs need names -> every tab shows icon AND label, and the active cell moves, never glides.
-/// A label on the active side only made the other two read as unlabelled glyphs under a sliding pill.
+/// Every tab shows icon AND label, and the active cell moves, never glides.
+/// A label on the active side only made the others read as unlabelled glyphs under a sliding pill.
 /// Without a fade behind the capsule, rows keep scrolling in the 18px side channels and 14px below.
 /// The eye reads that as a bar with rows sliding out from under it -> fade to the surface's own colour.
 /// The fade absorbs no touches -> a drag starting in the transparent zone still scrolls the list.
