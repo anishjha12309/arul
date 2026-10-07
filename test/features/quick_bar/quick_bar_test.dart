@@ -8,7 +8,6 @@ import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/quick_bar/data/quick_bar_channel.dart';
 import 'package:arul/features/quick_bar/data/quick_bar_taps.dart';
 import 'package:arul/features/quick_bar/providers/quick_bar_providers.dart';
-import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,15 +18,14 @@ class _FakeBar extends QuickBarChannel {
     permitted: true,
     channelBlocked: false,
   );
-  final syncs = <({bool on, bool? showStatus, QuickBarLabels labels})>[];
+  final syncs = <({bool on, QuickBarLabels labels})>[];
 
   @override
   Future<QuickBarStatus?> sync({
     required bool on,
-    required bool? showStatus,
     required QuickBarLabels labels,
   }) async {
-    syncs.add((on: on, showStatus: showStatus, labels: labels));
+    syncs.add((on: on, labels: labels));
     return current;
   }
 
@@ -87,7 +85,6 @@ void main() {
 
   Future<ProviderContainer> containerWith({
     Map<String, dynamic> flags = const {},
-    bool? statusTab = true,
   }) async {
     final container = ProviderContainer(
       overrides: [
@@ -95,7 +92,6 @@ void main() {
         quickBarChannelProvider.overrideWithValue(bar),
         analyticsServiceProvider.overrideWithValue(analytics),
         appConfigProvider.overrideWithBuild((ref, _) async => _config(flags)),
-        statusTabFlagProvider.overrideWith((ref) => statusTab),
         localeProvider.overrideWith(_English.new),
       ],
     );
@@ -225,25 +221,16 @@ void main() {
   });
 
   group('quickBarSync', () {
-    test('mirrors the choice, the Status flag and English labels', () async {
+    test('mirrors the choice and English labels', () async {
       await prefs.setBool(QuickBarSetting.prefKey, true);
       final container = await containerWith();
       await container.read(quickBarSyncProvider.future);
 
       final sync = bar.syncs.single;
       expect(sync.on, isTrue);
-      expect(sync.showStatus, isTrue);
       expect(sync.labels.wallpapers, 'Wallpaper');
       expect(sync.labels.ringtones, 'Ringtone');
       expect(sync.labels.channelName, 'Quick Access Bar');
-    });
-
-    test('an unknown Status flag keeps the button as it was', () async {
-      await prefs.setBool(QuickBarSetting.prefKey, true);
-      final container = await containerWith(statusTab: null);
-      await container.read(quickBarSyncProvider.future);
-
-      expect(bar.syncs.single.showStatus, isNull);
     });
 
     test('the kill switch takes a chosen bar down', () async {

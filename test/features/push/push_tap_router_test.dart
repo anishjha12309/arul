@@ -218,7 +218,6 @@ void main() {
     expect(
       PushTapRouter.locationFor(const StatusLinkTarget('s')),
       '/status',
-      reason: 'the shell bounces it to Wallpapers when the tab is off',
     );
   });
 }

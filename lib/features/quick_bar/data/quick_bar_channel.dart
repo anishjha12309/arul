@@ -47,18 +47,14 @@ class QuickBarChannel {
 
   static const _channel = MethodChannel('com.hsrutility.arul/quick_bar');
 
-  /// [showStatus] null keeps the button as it was — the flag is unknown until the config lands, and
-  /// guessing would redraw the bar on every launch.
   Future<QuickBarStatus?> sync({
     required bool on,
-    required bool? showStatus,
     required QuickBarLabels labels,
   }) async {
     try {
       return QuickBarStatus.fromMap(
         await _channel.invokeMethod<Object?>('sync', {
           'on': on,
-          'showStatus': showStatus,
           'channelName': labels.channelName,
           'wallpapers': labels.wallpapers,
           'ringtones': labels.ringtones,

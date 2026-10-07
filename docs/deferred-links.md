@@ -41,8 +41,7 @@ pref). A legacy `ref=` (old builds' share links, passed through by the Worker) o
 `install_channel=share`; login no longer sends it and the Worker would ignore it. `captureOnce` also
 deletes the dead `pending_referral_code` pref on launch. A replayed `s=` persists as
 `pending_deeplink_status` — one slot shared with the wallpaper and ringtone keys, last write wins — and
-waits on the `status_tab` flag like an App Link; with the tab off it is consumed and the install lands on
-Wallpapers. A staged rollout can still serve a new install an older build that ignores `s=`.
+opens Status like an App Link. A staged rollout can still serve a new install an older build that ignores `s=`.
 
 Proving it needs a Play install of THIS build: uninstall, then fire the REAL link on the phone —
 `adb shell "am start -a android.intent.action.VIEW -d 'https://arul.hsrutility.com/r/<uuid>?lang=ta'"`

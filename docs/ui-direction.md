@@ -77,10 +77,8 @@ and the wall show the region's deity, Murugan by default.
 - Labels shrink, never clip: a 1.1 text-scale clamp (`PaywallGround`'s 1.3 is the only other) plus
   `FittedBox(scaleDown)`, because a long Malayalam label at 2× bursts the fixed cells. Keep the theme's
   own tracking — at 0 the labels read as a different typeface.
-- **Status is the third, LAST branch, shown in the dock only while `feature_flags.status_tab` is
-  `true`** (owner); off, absent or loading is the two-tab app. go_router's branch list is fixed, so the
-  branch is always declared and only the dock item hides — last, so hiding it shifts no index. Never
-  `routingConfig`. Losing the flag while on Status bounces to Wallpapers after the frame.
+- **Status is the third, LAST branch and always in the dock** (owner). Never gate a dock item on the
+  remote config: it lands after the first paint, so the dock grows a tab mid-launch.
 - Leaving a reel releases its decoders ([video-feed.md](video-feed.md)); leaving Ringtones or entering
   Status stops the preview. All branches stay mounted (scroll positions survive), and
   `ArulBranchCrossfade` keeps `TickerMode` off for hidden ones.

@@ -41,7 +41,6 @@ object QuickBar {
     // Mirrored from Dart on every launch -> the boot and dismiss paths run with no Flutter alive.
     private const val PREFS = "arul.quick_bar"
     private const val KEY_ON = "on"
-    private const val KEY_SHOW_STATUS = "show_status"
     private const val KEY_CHANNEL_NAME = "channel_name"
     private const val KEY_WALLPAPERS = "label_wallpapers"
     private const val KEY_RINGTONES = "label_ringtones"
@@ -66,11 +65,9 @@ object QuickBar {
         val status: String,
     )
 
-    /** A null [showStatus] keeps the stored one: the flag is unknown until the config lands. */
-    fun sync(context: Context, on: Boolean, showStatus: Boolean?, labels: Labels) {
+    fun sync(context: Context, on: Boolean, labels: Labels) {
         prefs(context).edit()
             .putBoolean(KEY_ON, on)
-            .apply { if (showStatus != null) putBoolean(KEY_SHOW_STATUS, showStatus) }
             .putString(KEY_CHANNEL_NAME, labels.channelName)
             .putString(KEY_WALLPAPERS, labels.wallpapers)
             .putString(KEY_RINGTONES, labels.ringtones)
@@ -95,7 +92,7 @@ object QuickBar {
             val manager = NotificationManagerCompat.from(context)
             if (!manager.areNotificationsEnabled()) return
             ensureChannel(context, labels.channelName)
-            manager.notify(NOTIFICATION_ID, build(context, labels, prefs.getBoolean(KEY_SHOW_STATUS, false)))
+            manager.notify(NOTIFICATION_ID, build(context, labels))
         } catch (e: SecurityException) {
             Log.i(TAG, "bar not posted: POST_NOTIFICATIONS not granted")
         } catch (e: Exception) {
@@ -135,15 +132,11 @@ object QuickBar {
         )
     }
 
-    private fun build(context: Context, labels: Labels, showStatus: Boolean): Notification {
-        val names = listOfNotNull(
-            labels.wallpapers,
-            labels.ringtones,
-            labels.status.takeIf { showStatus },
-        )
-        val collapsed = buttons(context, R.layout.quick_bar_collapsed, labels, showStatus)
+    private fun build(context: Context, labels: Labels): Notification {
+        val names = listOf(labels.wallpapers, labels.ringtones, labels.status)
+        val collapsed = buttons(context, R.layout.quick_bar_collapsed, labels)
             .apply { fitCollapsed(context, this, names) }
-        val expanded = buttons(context, R.layout.quick_bar_expanded, labels, showStatus)
+        val expanded = buttons(context, R.layout.quick_bar_expanded, labels)
             .apply { fitExpanded(context, this, names) }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -166,7 +159,7 @@ object QuickBar {
             .apply { flags = flags or Notification.FLAG_NO_CLEAR }
     }
 
-    private fun buttons(context: Context, layout: Int, labels: Labels, showStatus: Boolean) =
+    private fun buttons(context: Context, layout: Int, labels: Labels) =
         RemoteViews(context.packageName, layout).apply {
             setTextViewText(R.id.quick_bar_wallpapers_label, labels.wallpapers)
             setTextViewText(R.id.quick_bar_ringtones_label, labels.ringtones)
@@ -177,7 +170,6 @@ object QuickBar {
             setOnClickPendingIntent(R.id.quick_bar_wallpapers, openTab(context, "wallpapers", 4101))
             setOnClickPendingIntent(R.id.quick_bar_ringtones, openTab(context, "ringtones", 4102))
             setOnClickPendingIntent(R.id.quick_bar_status, openTab(context, "status", 4103))
-            setViewVisibility(R.id.quick_bar_status, if (showStatus) View.VISIBLE else View.GONE)
         }
 
     /**

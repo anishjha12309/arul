@@ -28,7 +28,6 @@ class QuickBarChannel(private val activity: Activity) : MethodChannel.MethodCall
                 QuickBar.sync(
                     activity.applicationContext,
                     on = call.argument<Boolean>("on") ?: false,
-                    showStatus = call.argument<Boolean>("showStatus"),
                     labels = labels,
                 )
                 result.success(QuickBar.status(activity.applicationContext))

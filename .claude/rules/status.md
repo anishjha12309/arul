@@ -1,12 +1,12 @@
 ---
-description: Status tab — remote flag, lazy catalog, premium gate, MediaStore save.
+description: Status tab — fixed dock tab, lazy catalog, premium gate, MediaStore save.
 paths:
   - "lib/features/status/**"
   - "android/app/src/main/kotlin/**/status/**"
 ---
 
-- **`feature_flags.status_tab` off, absent or loading = the two-tab app and NO status catalog fetch.**
-  Only a literal `true` shows the tab; the branch stays declared and only the dock item hides.
+- **Status is a fixed dock tab — never gate it on the remote config**, which lands after the first
+  paint and grows the dock mid-launch. Older builds still read `feature_flags.status_tab`: keep it `true`.
 - **The catalog drains on the first open of the tab**, never before the first paint.
 - **Share and Save are premium and gate like the feed**: await `entitlementProvider.future`, then
   `/media/signed-url` (`kind: status`, `action: share|download`) on EVERY action — a cached clip is

@@ -52,8 +52,8 @@ CMS's secret a local CMS publish cannot rebuild the local catalog. `down` delete
 7. Premium on/off for the gated actions: `node tools/local-premium.mjs grant <email>` / `revoke <email>`
    / `status <email>` — it sets `users.reward_premium_until`, so a live debug subscription row still
    grants premium after a revoke. The gate reads it live; reopen the app for the badge.
-8. Flag on/off: `node tools/local-seed-statuses.mjs --flag off` (or `on`). Takes effect on the next cold
-   start (swipe the app away, reopen).
+8. Flag on/off (older builds only — the current one ignores it): `node tools/local-seed-statuses.mjs
+   --flag off` (or `on`). Takes effect on the next cold start (swipe the app away, reopen).
 9. Rebuild the catalog after any manual DB edit: `node tools/local-seed-statuses.mjs --build-only`.
 10. Old build must show no Status: `git worktree add ../arul-92 83d10fd` (build 92), then in it
     `flutter pub get && flutter build apk --debug --split-per-abi --dart-define-from-file=../Arul/env/local.json`,

@@ -3,7 +3,7 @@
 // A tab-only link consumes on switch.
 // A real GoRouter + StatefulShellRoute, because `goBranch` is the thing under test.
 // The branches are stand-ins -> the feed and the ringtone list have their own suites for what follows the switch.
-// Status is a static third branch whose dock item follows `feature_flags.status_tab`; off = the two-tab app.
+// Status is the third branch and always in the dock; a status link never waits on remote config.
 
 import 'dart:async';
 
@@ -107,19 +107,6 @@ class _RecordingAnalytics implements AnalyticsService {
   void register(String key, Object value) {}
 }
 
-/// The remote flag, flippable mid-test the way a refetched config flips it.
-class _Flag extends Notifier<bool?> {
-  _Flag(this._initial);
-  final bool? _initial;
-
-  @override
-  bool? build() => _initial;
-
-  void set(bool? value) => state = value;
-}
-
-final _flagState = NotifierProvider<_Flag, bool?>(() => _Flag(false));
-
 void main() {
   setUp(ArulDeepLink.reset);
   tearDown(ArulDeepLink.reset);
@@ -129,9 +116,8 @@ void main() {
   late _StubReel<StatusVideo> status;
   late _RecordingAnalytics analytics;
   late GoRouter router;
-  late ProviderContainer container;
 
-  Future<void> pumpShell(WidgetTester tester, {bool? flag = false}) async {
+  Future<void> pumpShell(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     log = [];
@@ -188,8 +174,6 @@ void main() {
       ProviderScope(
         overrides: [
           sharedPreferencesProvider.overrideWithValue(prefs),
-          _flagState.overrideWith(() => _Flag(flag)),
-          statusTabFlagProvider.overrideWith((ref) => ref.watch(_flagState)),
           // No onDispose -> the stubs must never reach the native pool, not even on teardown.
           videoPreloadControllerProvider.overrideWith((_) => video),
           statusVideoControllerProvider.overrideWith((_) => status),
@@ -203,9 +187,6 @@ void main() {
           routerConfig: router,
         ),
       ),
-    );
-    container = ProviderScope.containerOf(
-      tester.element(find.byType(AppShell)),
     );
     await tester.pump();
   }
@@ -328,57 +309,57 @@ void main() {
     expect(video.calls, contains('reclaim'));
   });
 
-  group('status flag', () {
-    testWidgets('off → exactly the two-tab dock, the status reel untouched', (
-      tester,
-    ) async {
+  group('status tab', () {
+    testWidgets('three dock cells from the first frame, Status at the status '
+        'branch index, the status reel untouched', (tester) async {
       await pumpShell(tester);
-      await tester.pump();
-      expect(dockGlyphs(tester), [
-        ArulLineGlyph.wallpapers,
-        ArulLineGlyph.ringtones,
-      ]);
-      expect(status.calls, isEmpty);
-    });
-
-    testWidgets('not loaded yet → still two tabs', (tester) async {
-      await pumpShell(tester, flag: null);
-      await tester.pump();
-      expect(dockGlyphs(tester), hasLength(2));
-    });
-
-    testWidgets('on → a third Status cell at the status branch index', (
-      tester,
-    ) async {
-      await pumpShell(tester, flag: true);
-      await tester.pump();
       expect(dockGlyphs(tester), [
         ArulLineGlyph.wallpapers,
         ArulLineGlyph.ringtones,
         ArulLineGlyph.status,
       ]);
       expect(AppShell.statusBranch, 2);
+      expect(status.calls, isEmpty);
     });
 
-    testWidgets('flipped off while on Status → back to Wallpapers, after the '
-        'frame', (tester) async {
-      await pumpShell(tester, flag: true);
-      await tester.tap(find.text('Status'));
-      await tester.pump();
-      await settle(tester);
+    testWidgets('a status link parked before the shell mounts opens Status at '
+        'once and is left for the reel to consume', (tester) async {
+      ArulDeepLink.requestTarget(
+        const StatusLinkTarget('s1', source: DeepLinkSource.installReferrer),
+      );
+      await pumpShell(tester);
       expect(currentBranch(tester), AppShell.statusBranch);
-
-      container.read(_flagState.notifier).set(false);
-      await tester.pump();
       await settle(tester);
 
-      expect(currentBranch(tester), AppShell.wallpapersBranch);
-      expect(dockGlyphs(tester), hasLength(2));
+      expect(
+        ArulDeepLink.pendingTarget,
+        const StatusLinkTarget('s1', source: DeepLinkSource.installReferrer),
+        reason: 'only PEEKED here — the reel resolves the id',
+      );
+      expect(analytics.events, isEmpty);
     });
 
-    testWidgets('a status link with the tab on opens Status and is left for '
-        'the reel to consume', (tester) async {
-      await pumpShell(tester, flag: true);
+    testWidgets('a status tab link parked before the shell mounts opens Status '
+        'at once, consumed and reported once', (tester) async {
+      ArulDeepLink.requestTarget(
+        const TabLinkTarget(ArulTab.status, source: DeepLinkSource.meta),
+      );
+      await pumpShell(tester);
+      expect(currentBranch(tester), AppShell.statusBranch);
+      await settle(tester);
+
+      expect(ArulDeepLink.pendingTarget, isNull, reason: 'nothing left to show');
+      expect(analytics.events.single.$1, 'deep_link_opened');
+      expect(analytics.events.single.$2, {
+        'kind': 'tab',
+        'source': 'meta',
+        'tab': 'status',
+      });
+    });
+
+    testWidgets('a status link that lands while the shell is up opens Status '
+        'and is left for the reel to consume', (tester) async {
+      await pumpShell(tester);
       ArulDeepLink.requestTarget(const StatusLinkTarget('s1'));
       await tester.pump();
       await settle(tester);
@@ -387,50 +368,12 @@ void main() {
       expect(ArulDeepLink.pendingTarget, const StatusLinkTarget('s1'));
       expect(analytics.events, isEmpty);
     });
-
-    testWidgets('a status link with the tab off is consumed, reported as '
-        'status and lands on Wallpapers', (tester) async {
-      ArulDeepLink.requestTarget(const TabLinkTarget(ArulTab.ringtones));
-      await pumpShell(tester);
-      await tester.pump();
-      await settle(tester);
-      analytics.events.clear();
-
-      ArulDeepLink.requestTarget(
-        const StatusLinkTarget('s1', source: DeepLinkSource.installReferrer),
-      );
-      await tester.pump();
-      await settle(tester);
-
-      expect(currentBranch(tester), AppShell.wallpapersBranch);
-      expect(ArulDeepLink.pendingTarget, isNull);
-      expect(analytics.events.single.$1, 'deep_link_opened');
-      expect(analytics.events.single.$2, {
-        'kind': 'status',
-        'source': 'install_referrer',
-        'status_id': 's1',
-      });
-    });
-
-    testWidgets('a cold status link waits for the config rather than being '
-        'dropped as off', (tester) async {
-      ArulDeepLink.requestTarget(const StatusLinkTarget('s1'));
-      await pumpShell(tester, flag: null);
-      await tester.pump();
-      expect(currentBranch(tester), AppShell.wallpapersBranch);
-      expect(ArulDeepLink.pendingTarget, const StatusLinkTarget('s1'));
-
-      container.read(_flagState.notifier).set(true);
-      await tester.pump();
-      await settle(tester);
-      expect(currentBranch(tester), AppShell.statusBranch);
-    });
   });
 
   group('two reels, one decoder budget', () {
     testWidgets('Wallpapers → Status releases the feed IN FULL before Status '
         'claims anything, with no grace', (tester) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Status'));
       await tester.pump();
       await settle(tester);
@@ -456,7 +399,7 @@ void main() {
     testWidgets('Status → Wallpapers is the same swap the other way', (
       tester,
     ) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Status'));
       await settle(tester);
       log.clear();
@@ -479,7 +422,7 @@ void main() {
     });
 
     testWidgets('a reel left for Ringtones keeps the grace', (tester) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Ringtones'));
       await settle(tester);
       expect(video.calls, containsAllInOrder(['visible=false', 'leave']));
@@ -497,7 +440,7 @@ void main() {
 
     testWidgets('a hop through Ringtones still releases the other reel IN '
         'FULL before the entering one claims', (tester) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Ringtones'));
       await settle(tester);
       await tester.tap(find.text('Status'));
@@ -545,7 +488,7 @@ void main() {
 
     testWidgets('Ringtones → Wallpapers never builds the status controller '
         'just to release it', (tester) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Ringtones'));
       await settle(tester);
       await tester.tap(find.text('Wallpapers'));
@@ -581,7 +524,7 @@ void main() {
 
     testWidgets('Settings over Status silences the status reel, not the '
         'hidden feed', (tester) async {
-      await pumpShell(tester, flag: true);
+      await pumpShell(tester);
       await tester.tap(find.text('Status'));
       await settle(tester);
       expect(status.visible, isTrue);

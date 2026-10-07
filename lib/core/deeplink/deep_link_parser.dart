@@ -88,7 +88,7 @@ DeepLinkRequest? parseDeepLinkUri(Uri uri, {required DeepLinkSource source}) {
     if (target == null && segments.isNotEmpty && segments[0] == 'r') {
       target = TabLinkTarget(ArulTab.ringtones, source: source);
     }
-    // `/s/` names the Status tab the same way; the shell decides what that means with the tab off.
+    // `/s/` names the Status tab the same way.
     if (target == null && segments.isNotEmpty && segments[0] == 's') {
       target = TabLinkTarget(ArulTab.status, source: source);
     }

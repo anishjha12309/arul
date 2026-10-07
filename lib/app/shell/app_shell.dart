@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/analytics/analytics_provider.dart';
 import '../../core/deeplink/deep_link_target.dart';
-import '../../core/deeplink/install_referrer_service.dart';
 import '../../core/haptics/arul_haptics.dart';
 import '../../features/ringtones/providers/ringtone_catalog_providers.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
@@ -21,7 +20,7 @@ import '../widgets/reel/video_preload_controller.dart';
 import 'shell_route_observer.dart';
 
 /// The tabbed scaffold around Wallpapers / Ringtones / Status — everything else, Settings included,
-/// pushes OVER it. Status is a dock item only while `feature_flags.status_tab` is true.
+/// pushes OVER it.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.navigationShell});
 
@@ -60,8 +59,6 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
   /// Bumped per Wallpapers<->Status swap -> a swap overtaken during its await never reclaims.
   int _swapSeq = 0;
 
-  bool _bouncing = false;
-
   /// This shell's number, for [ArulDeepLink.mayTake].
   final int _shell = ArulDeepLink.registerShell();
 
@@ -97,8 +94,6 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     // GA4F and the Meta SDK deliver mid-startup and an App Link can land warm -> listen for later ones.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
     _onDeepLinkChanged();
-    // A cold status link waits for the flag; it re-runs here the moment the config answers.
-    ref.listenManual(statusTabFlagProvider, (_, _) => _onDeepLinkChanged());
   }
 
   @override
@@ -160,15 +155,6 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
       _openScope();
       return;
     }
-    if (target.tab == ArulTab.status) {
-      final enabled = ref.read(statusTabFlagProvider);
-      if (enabled == null) return;
-      if (!enabled) {
-        _dropStatusTarget(target);
-        _openScope();
-        return;
-      }
-    }
     if (target is TabLinkTarget) {
       ArulDeepLink.consumeTab(shell: _shell);
       ref
@@ -182,22 +168,6 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     _openScope();
   }
 
-  /// The tab is off: the link is taken, reported, and the user lands on Wallpapers.
-  void _dropStatusTarget(DeepLinkTarget target) {
-    if (target is StatusLinkTarget) {
-      ArulDeepLink.consumeStatus(shell: _shell);
-      unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
-    } else {
-      ArulDeepLink.consumeTab(shell: _shell);
-    }
-    ref
-        .read(analyticsServiceProvider)
-        .track('deep_link_opened', properties: target.analyticsProperties);
-    if (widget.navigationShell.currentIndex != AppShell.wallpapersBranch) {
-      widget.navigationShell.goBranch(AppShell.wallpapersBranch);
-    }
-  }
-
   /// Two pools never decode at once: the OTHER reel is released IN FULL before the entering one
   /// claims a session, with no grace — whether it was left on this switch or is still inside an
   /// earlier leave's grace (a hop through Ringtones). Budget SoCs hold about two hardware decoders.
@@ -205,7 +175,7 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     final seq = ++_swapSeq;
     final entering = _reelFor(to);
     if (entering == null) return;
-    // Never build the status controller just to release it -> the flag-off app creates none.
+    // Never build the status controller just to release it.
     final other = to == AppShell.statusBranch
         ? _reelFor(AppShell.wallpapersBranch)
         : ref.exists(statusVideoControllerProvider)
@@ -263,41 +233,20 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     );
   }
 
-  /// The tab went away under the user (flag flipped off, or a `/status` push with it off) ->
-  /// back to Wallpapers, after the frame: `goBranch` must never run during a build.
-  void _bounceOffStatus() {
-    if (_bouncing) return;
-    _bouncing = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _bouncing = false;
-      if (!mounted) return;
-      if (widget.navigationShell.currentIndex == AppShell.statusBranch &&
-          ref.read(statusTabFlagProvider) != true) {
-        widget.navigationShell.goBranch(AppShell.wallpapersBranch);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final statusOn = ref.watch(statusTabFlagProvider) ?? false;
-    if (!statusOn &&
-        widget.navigationShell.currentIndex == AppShell.statusBranch) {
-      _bounceOffStatus();
-    }
     return Scaffold(
       extendBody: true,
       body: ArulShellScope(shell: _scopeShell, child: widget.navigationShell),
       bottomNavigationBar: ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,
-        // Dock index = branch index: Status is the LAST branch, so hiding it shifts nothing.
         items: [
           // Tab and screen are the same word -> one ARB key for both.
           (glyph: ArulLineGlyph.wallpapers, label: l10n.tabWallpapers),
           (glyph: ArulLineGlyph.ringtones, label: l10n.tabRingtones),
-          if (statusOn) (glyph: ArulLineGlyph.status, label: l10n.statusTitle),
+          (glyph: ArulLineGlyph.status, label: l10n.statusTitle),
         ],
       ),
     );

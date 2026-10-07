@@ -5,22 +5,22 @@ Read before touching `lib/features/status/**`, `android/**/status/**` or the sta
 decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md](share.md) §Status clips
 · links: [deep-links.md](deep-links.md) · contracts: [edge-cases-reel.md](edge-cases-reel.md).
 
-## The flag decides everything a fielded phone sees
+## A fixed tab, no remote switch
 
-- **`app_config.feature_flags.status_tab`** through `statusTabFlagProvider`: `null` while the config
-  loads, on ONLY for a literal `true`. Off, absent or loading is exactly the two-tab app AND no status
-  catalog fetch, so a phone that never sees the tab never pays a byte for it.
-- The config is read once per cold start, so a flip lands on the NEXT cold start. **Flip it on only
-  after `catalog/statuses/all_1.json` exists and the release is at 100%** — a staged rollout still
-  serves older builds to new installs, which drop a deferred `s=`.
-- The CMS flag save bumps `content_version`, which re-downloads every build's catalogs; so does every
-  status upload — put a library up as ONE batch.
+- **Status is always in the dock, like Wallpapers and Ringtones** (owner). A dock gated on the config
+  grows its third tab a moment after the first paint on every launch: the config has no disk copy and
+  lands late. Hiding the tab takes a release.
+- **Older builds still gate it on `app_config.feature_flags.status_tab`** (on only for a literal
+  `true`; anything else is their two-tab app), so keep it `true` while they are in the field. The CMS
+  flag save bumps `content_version`, which re-downloads every build's catalogs; so does every status
+  upload — put a library up as ONE batch.
 
 ## Catalog and order
 
 - **Drained on the first open of the tab**, straight from the CDN with no disk copy, never in the
-  pre-first-paint drain. A missing page 1 is the error state with retry: the flag stays off until the
-  page exists, so a user meeting it is an operational fault.
+  pre-first-paint drain, so a phone that never opens the tab never pays a byte for it. A missing page 1
+  is the error state with retry: every status publish writes it, so a user meeting it is an operational
+  fault.
 - Chips derive from the items, ordered by `category_order.statuses`; row order is the catalog's
   `feed_rank` (pins, then shares + saves), never re-derived on the phone.
 

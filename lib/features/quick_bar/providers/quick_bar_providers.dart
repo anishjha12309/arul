@@ -9,7 +9,6 @@ import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
-import '../../status/providers/status_providers.dart';
 import '../data/quick_bar_channel.dart';
 
 part 'quick_bar_providers.g.dart';
@@ -86,7 +85,7 @@ void quickBarKillSwitch(Ref ref) {
 const _flag = 'quick_bar';
 const _killedKey = 'arul_quick_bar_killed';
 
-/// Mirrors the bar onto the phone: the choice, the kill switch, the Status tab and the labels in
+/// Mirrors the bar onto the phone: the choice, the kill switch and the labels in
 /// the app's language. Listened at the root (never watched: the resume below invalidates it, and a
 /// watch would rebuild the whole app twice per resume), so it runs on every launch and whenever one
 /// of those moves. A resume re-runs it, which is how a permission granted in system settings shows
@@ -106,7 +105,6 @@ Future<void> quickBarSync(Ref ref) async {
   final on =
       ref.watch(quickBarSettingProvider) == true &&
       ref.watch(quickBarAllowedProvider);
-  final showStatus = ref.watch(statusTabFlagProvider);
   final locale = ref.watch(localeProvider);
   // No BuildContext: the labels must not depend on one, exactly like the channel names.
   final l10n = await AppLocalizations.delegate.load(locale);
@@ -115,7 +113,6 @@ Future<void> quickBarSync(Ref ref) async {
       .read(quickBarChannelProvider)
       .sync(
         on: on,
-        showStatus: showStatus,
         labels: QuickBarLabels(
           channelName: l10n.settingsQuickBar,
           wallpapers: l10n.quickBarWallpaper,

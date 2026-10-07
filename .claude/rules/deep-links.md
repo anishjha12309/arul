@@ -30,7 +30,6 @@ Every trap here fails SILENTLY — nothing logs.
   `ACTION_SEND`, then the `whatsapp://send` scheme); a wallpaper's payload is the FILE, which that scheme silently drops, so it uses a
   native targeted `ACTION_SEND`. A direct-share `false` is ROUTINE — fall through to the sheet.
 - **Typed takes:** `consumeWallpaper()` must never eat a pending ringtone or status, or the reverse.
-  A status target with the tab flagged off is consumed by the shell, never left parked.
 
 Read [docs/deep-links.md](../../docs/deep-links.md), [docs/share.md](../../docs/share.md) and
 [docs/deferred-links.md](../../docs/deferred-links.md).

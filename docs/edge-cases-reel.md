@@ -21,9 +21,8 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Data Saver on a metered link stages nothing ahead
 
 ## Status tab — [status.md](status.md)
-- [ ] `status_tab` off, absent or still loading = exactly two tabs AND no status catalog fetch
-- [ ] The flag going off while on Status lands on Wallpapers after the frame, never during a build
-- [ ] A cold status link waits for the config; with the tab off it is consumed, reported, and lands on Wallpapers
+- [ ] Three dock tabs from the first frame of every launch, a fresh install included — no tab pops in
+- [ ] A cold status link (App Link, deferred `s=`, Quick Access bar) opens Status without waiting for the config
 - [ ] The status catalog loads on the first open of the tab, never in the pre-first-paint drain
 - [ ] Status clips prefetch into their OWN cache store — they never evict live wallpapers
 - [ ] Share and Save re-read entitlement every time; a cached clip is never a licence

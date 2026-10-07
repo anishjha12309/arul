@@ -1,5 +1,5 @@
-// The Status screen: no catalog byte with the tab flagged off, the shared empty and error faces, and
-// a non-premium tap that goes STRAIGHT to the paywall stamped with the verb it came from.
+// The Status screen: the shared empty and error faces, and a non-premium tap that goes STRAIGHT to
+// the paywall stamped with the verb it came from.
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/app/widgets/reel/video_preload_controller.dart';
@@ -101,7 +101,6 @@ void main() {
 
   Future<void> pump(
     WidgetTester tester, {
-    bool? flag = true,
     bool premium = false,
     Future<List<StatusVideo>> Function()? catalog,
   }) async {
@@ -140,7 +139,6 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          statusTabFlagProvider.overrideWithValue(flag),
           statusCatalogProvider.overrideWith(
             () => _Catalog(catalog ?? () async => _clips, builds),
           ),
@@ -163,17 +161,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  testWidgets('flag off or unknown → the catalog is never fetched', (
-    tester,
-  ) async {
-    for (final flag in [false, null]) {
-      await pump(tester, flag: flag);
-      expect(builds, isEmpty, reason: 'flag $flag');
-      expect(find.text('Status'), findsNothing);
-    }
-  });
-
-  testWidgets('flag on → the reel, the chips and both actions', (tester) async {
+  testWidgets('the reel, the chips and both actions', (tester) async {
     await pump(tester);
     expect(builds, [1]);
     expect(find.text('Status'), findsOneWidget);

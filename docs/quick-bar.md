@@ -34,10 +34,9 @@ Clear all (`FLAG_NO_CLEAR`). The re-post is what makes it come back.
 
 ## Traps
 
-- **Two copies of the state.** Dart prefs are the truth; `QuickBar.sync` mirrors them, the labels and
-  the Status flag into native prefs (`arul.quick_bar`) on every launch, resume and change, because the
-  boot, update and dismiss paths run with no Flutter alive. A null `showStatus` keeps the stored one:
-  the flag is unknown until the config lands, and guessing redraws the bar on every launch.
+- **Two copies of the state.** Dart prefs are the truth; `QuickBar.sync` mirrors them and the labels
+  into native prefs (`arul.quick_bar`) on every launch, resume and change, because the boot, update
+  and dismiss paths run with no Flutter alive.
 - **Collapsed custom content is capped at 48dp on Android 12+** — the collapsed root is a fixed 48dp
   (36dp buttons + 6dp padding). A `wrap_content` root lets the fitXY art's intrinsic size inflate it.
 - **The banner's corners are baked into the art**, drawn fitXY: `android:clipToOutline` exists only

@@ -72,7 +72,6 @@ final router = GoRouter(
             ),
           ],
         ),
-        // Always declared -> go_router's branch list is fixed; the remote flag hides the DOCK item.
         StatefulShellBranch(
           routes: [
             GoRoute(path: '/status', builder: (_, _) => const StatusScreen()),

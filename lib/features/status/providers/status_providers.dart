@@ -12,18 +12,6 @@ import '../data/status_media_service.dart';
 import '../data/status_prefetch_service.dart';
 import '../domain/status_video.dart';
 
-/// `app_config.feature_flags.status_tab`: null while the config is unknown (loading, or a failed
-/// fetch that settles to null until the reconnect retry), so a cold link waits instead of dropping.
-/// Anything but a literal `true` is off -> an absent flag is exactly the two-tab app.
-final statusTabFlagProvider = Provider<bool?>((ref) {
-  return switch (ref.watch(appConfigProvider)) {
-    AsyncData(value: null) => null,
-    AsyncData(:final value) => value?.featureFlags['status_tab'] == true,
-    AsyncError() => false,
-    _ => null,
-  };
-});
-
 final statusPrefetchServiceProvider =
     Provider<ReelPrefetchService<StatusVideo>>((ref) {
       final service = StatusPrefetchService(cdnBaseUrl: AppConfig.cdnBaseUrl);
@@ -80,7 +68,7 @@ class StatusCatalogNotifier extends AsyncNotifier<List<StatusVideo>> {
 
     final first = await fetch(1);
     if (first == null) {
-      // The flag stays off until page 1 exists, so reaching this is an operational fault.
+      // Every status publish writes page 1, so its absence is an operational fault, not an empty tab.
       throw StateError('status catalog page 1 missing on CDN');
     }
     final all = [...first.items];

@@ -26,10 +26,10 @@ needs App Dashboard → Settings → Android (package `com.hsrutility.arul`, cla
 **Status links** — `/s/<uuid>`, id-less `/s/` `/s`; query `status_id`/`s`, `screen=status|statuses`
 (the Meta form takes the same keys). An id outranks: wallpaper > ringtone > status > a bare `screen=`.
 Builds without the `/s/` filters open a browser there, so the Worker route never 404s: its bounce sends
-Play `s=<uuid>` (or `screen=status`), and Play offers Open or Update. **The tab is remote-flagged**: with
-`status_tab` off the shell CONSUMES the target, fires `deep_link_opened` (kind `status`) and lands on
-Wallpapers; while the config is still loading a cold link waits instead of being dropped. Never put a
-`/s/` link in an ad or push before the parsing build is at 100% and the flag is on.
+Play `s=<uuid>` (or `screen=status`), and Play offers Open or Update. Status is a fixed tab, so a link
+never waits for the config; older builds gate the tab on `status_tab` and, with it off, consume the
+target and land on Wallpapers. Never put a `/s/` link in an ad or push before the parsing build is at
+100%.
 
 ## One URL, many deliveries, ONE parser, one slot
 

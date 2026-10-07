@@ -114,7 +114,6 @@ final class RingtoneLinkTarget extends DeepLinkTarget {
   String toString() => 'RingtoneLinkTarget($id, ${source.key})';
 }
 
-/// A status clip by id. With the Status tab flagged off the shell takes it and lands on Wallpapers.
 final class StatusLinkTarget extends DeepLinkTarget {
   const StatusLinkTarget(this.id, {super.source = DeepLinkSource.appLink});
 

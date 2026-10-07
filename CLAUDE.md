@@ -7,7 +7,7 @@ matching file; the reasoning behind them is in `docs/` (§8). Open defects: `doc
 
 Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional wallpapers (static
 and live), ringtones and status clips (video with music), premium via PhonePe UPI Autopay. Dock:
-Wallpapers · Ringtones · Status, the last only while `feature_flags.status_tab` is `true`; **Settings
+Wallpapers · Ringtones · Status, all three fixed (never gated on the remote config); **Settings
 is a pushed route from the header gear, never a dock branch.** No screen promises a push or a
 reminder — campaign pushes come only from the CMS through the Worker.
 

@@ -267,11 +267,6 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
 
-    // Flag off (or not known yet): nothing below may watch the catalog -> no status fetch at all.
-    // The shell moves the user off this branch; this only covers the frame before it does.
-    final enabled = ref.watch(statusTabFlagProvider) ?? false;
-    if (!enabled) return Scaffold(backgroundColor: frameColor);
-
     if (ref.watch(statusCatalogProvider) case AsyncData(:final value)) {
       _maybeOpenDeepLink(value);
     }
