@@ -4,10 +4,9 @@ Worker, CDN and CMS run on this PC; the USB phone reaches them over `adb reverse
 branch + **local** R2 on disk. Release/prod APKs keep using `env/prod.json` and are unaffected: nothing
 here edits `main` resources, `prod.json` or `wrangler.toml`.
 
-> **Never upload the seeded Status clips to production.** They are third-party (scraped from the Crafto
-> app) and exist for local testing only. Production needs owned or licensed clips — the WhatsApp
-> Share-to-Status terms require a warranty that we hold the rights. The seed tool refuses any non-local R2
-> target and any database but the debug branch.
+> **The seed never reaches production**: it refuses any non-local R2 target and any database but the debug
+> branch. The clips are third-party (scraped from the Crafto app); which of them go to prod is the owner's
+> call, through `tools/status-import.mjs` ([status-clips.md](status-clips.md)).
 
 ## What runs where
 

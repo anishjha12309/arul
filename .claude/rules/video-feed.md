@@ -22,8 +22,9 @@ SILENTLY — a software fallback, a green edge strip, or a black card.
 - **ONE process-global EventChannel hub** — a second listener silently steals the single native sink.
 - **Software-decoder fallback demotes the pool 3 → 2, floor 2**; only a real codec error goes to 1.
   Never query decoder capability and assume — attempt and degrade. The budget is shared by both reels.
-- **Two reel pools never decode at once**: Wallpapers↔Status awaits the leaving pool's full release
-  before the entering one claims; every other leave keeps the 3 s grace.
+- **Two reel pools never decode at once**: entering a reel awaits the OTHER reel's full release
+  before claiming, even through a Ringtones hop (its grace still holds decoders); a leave to
+  Ringtones keeps the 3 s grace.
 - **Poster first, mounted under the texture, revealed on `onRenderedFirstFrame`.** No shimmer or
   spinner: an undecoded live card looks static, so "nothing is moving" is cold-cache latency — check
   the pool, not the catalog. Poster, full image and texture share one `cropAlignment`.

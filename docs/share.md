@@ -38,7 +38,8 @@ AND bring someone back; these rules were paid for by getting the second half wro
       Business only) is routine and falls to the wallpaper path's targeted chat `ACTION_SEND`, then the
       sheet. It is started for a result nobody reads (5101), which `MainActivity` keeps off the plugin chain.
 - [ ] **The composer carries NO link** — it takes no text; the owner-accepted exception to one link per
-      share. The chat and sheet fallbacks carry `referShareMessage` with exactly one `/s/<id>?ilang=`.
+      share. The chat and sheet fallbacks carry `statusShareCaption` (status videos, never wallpapers)
+      with exactly one `/s/<id>?ilang=`.
 - [ ] Share and Save use the same traced copy under the live-share watermark rule; below API 31 the clip
       goes out clean as `watermarked: false` on the status event, not `share_watermark_skipped`.
 

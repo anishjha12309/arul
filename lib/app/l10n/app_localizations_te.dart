@@ -190,6 +190,11 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
+  String statusShareCaption(String link) {
+    return 'ఇలాంటి మరిన్ని భక్తి స్టేటస్ వీడియోలు Arulలో:\n$link';
+  }
+
+  @override
   String referShareMessage(String link) {
     return 'దక్షిణ భారత భక్తి వాల్‌పేపర్ల కోసం నేను Arul వాడుతున్నా — అమ్మవారు, మురుగన్, వెంకటేశ్వర స్వామి, శివుడు, కదిలే లైవ్ వాల్‌పేపర్లు కూడా ఉన్నాయి. మీకూ నచ్చుతుందనుకున్నా.\n\n$link';
   }

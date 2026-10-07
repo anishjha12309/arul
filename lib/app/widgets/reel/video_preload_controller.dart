@@ -294,6 +294,9 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
   void detach() {
     _items = const [];
     _currentIndex = 0;
+    // The next mount is a fresh surface -> a latch left from this one would show it frozen.
+    _focusLost = false;
+    _userPaused = false;
     unawaited(releaseDecoders());
   }
 
@@ -360,7 +363,9 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
   /// Without this, every live card stranded on a poster that never revealed.
   /// A no-op while backgrounded — the resume path owns that case — and idempotent when serving.
   void reclaimDecoders() {
-    if (_disposed || _appPaused) return;
+    // Hidden -> the shell reclaims on the way back in; cancelling the leave grace here would hold the
+    // pool with no timer, and the other reel would then decode alongside it.
+    if (_disposed || _appPaused || !_visible) return;
     // Returning inside [_leaveGrace] cancels the pending release, so the pool was never emptied and
     // this reconcile is a resume rather than three MediaCodec instantiations.
     _leaveTimer?.cancel();
@@ -400,6 +405,12 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
     final end = min(_items.length - 1, _currentIndex + _effPreloadAhead);
     return index >= start && index <= end;
   }
+
+  bool _stillWants(int index) =>
+      index < _items.length &&
+      _inWindow(index) &&
+      _isVideo(index) &&
+      _playerServing(index) == null;
 
   _PooledPlayer? _playerServing(int index) {
     for (final p in _pool_) {
@@ -570,6 +581,13 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
           _onDecoderReported(errPooled, name, isSoftware);
       handle.onFocusLost = _onFocusLost;
       _pool_.add(pooled);
+      // The window may have moved while create() awaited (a swipe, a link jump) -> the stale index
+      // would decode off-screen, and in the audible pool PLAY over the card on screen. Park it idle;
+      // reconcile hands it to whichever wanted index still lacks a player.
+      if (!_stillWants(index)) {
+        _reconcile();
+        return null;
+      }
     }
 
     pooled.servingIndex = index;
@@ -704,10 +722,12 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
     // The current index passes true. Re-opening a reused player swaps media without the surface.
     // Looping, so the short preview repeats seamlessly.
     // `url` is reached only when the transfer FAILED — a stream is the last resort, never the plan.
-    // Re-read here, not at assignment: the reel may have been hidden during the transfer.
+    // Re-read here, not at assignment: the reel may have been hidden, or the user moved to another
+    // card, during the transfer — only the card on screen may start, or two clips play at once.
     await pooled.handle.open(
       localPath ?? url,
-      playWhenReady: playWhenReady && _canPlay,
+      playWhenReady:
+          playWhenReady && index == _currentIndex && !_settling && _canPlay,
       looping: true,
     );
   }

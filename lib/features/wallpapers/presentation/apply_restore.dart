@@ -69,7 +69,9 @@ mixin ApplyRestore<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   void maybeOpenDeepLink(List<Wallpaper> allItems) {
     if (allItems.isEmpty) return;
 
-    final target = ArulDeepLink.consumeWallpaper();
+    final target = ArulDeepLink.consumeWallpaper(
+      shell: ArulShellScope.of(context),
+    );
     if (target == null) return;
 
     unawaited(

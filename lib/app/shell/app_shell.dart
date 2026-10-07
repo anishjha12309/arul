@@ -62,6 +62,18 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
 
   bool _bouncing = false;
 
+  /// This shell's number, for [ArulDeepLink.mayTake].
+  final int _shell = ArulDeepLink.registerShell();
+
+  /// What [ArulShellScope] tells the branch screens: 0 until this shell has picked the branch for a
+  /// pending link -> a screen moved in from the outgoing shell cannot take it before the switch.
+  int _scopeShell = 0;
+
+  void _openScope() {
+    if (!mounted || _scopeShell == _shell) return;
+    setState(() => _scopeShell = _shell);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -72,11 +84,13 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
       if (!mounted) return;
       ref.read(ringtoneCatalogProvider);
       // A push tap can open the shell straight onto Status -> no switch ever runs to show its reel.
-      if (widget.navigationShell.currentIndex == AppShell.statusBranch) {
-        ref.read(videoPreloadControllerProvider).visible = false;
-        ref.read(statusVideoControllerProvider)
-          ..visible = true
-          ..reclaimDecoders();
+      // The reels are app-scoped, so a REBUILT shell (sign-out and back, a paywall `go`) inherits the
+      // hidden flag the feed got when it was covered -> restate it, or every live card stays a poster.
+      final index = widget.navigationShell.currentIndex;
+      if (index == AppShell.statusBranch ||
+          (index == AppShell.wallpapersBranch &&
+              !ref.read(videoPreloadControllerProvider).visible)) {
+        unawaited(_enterReel(index));
       }
     });
     // A link decides which tab the shell opens on -> check once here; a target can be parked pre-sign-in.
@@ -140,18 +154,23 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
   /// A tab-only target (`screen=ringtones`, no id) has nothing further to show -> consumed on the switch.
   void _followDeepLink() {
     if (!mounted) return;
+    if (!ArulDeepLink.mayTake(_shell)) return;
     final target = ArulDeepLink.pendingTarget;
-    if (target == null) return;
+    if (target == null) {
+      _openScope();
+      return;
+    }
     if (target.tab == ArulTab.status) {
       final enabled = ref.read(statusTabFlagProvider);
       if (enabled == null) return;
       if (!enabled) {
         _dropStatusTarget(target);
+        _openScope();
         return;
       }
     }
     if (target is TabLinkTarget) {
-      ArulDeepLink.consumeTab();
+      ArulDeepLink.consumeTab(shell: _shell);
       ref
           .read(analyticsServiceProvider)
           .track('deep_link_opened', properties: target.analyticsProperties);
@@ -160,15 +179,16 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     if (widget.navigationShell.currentIndex != branch) {
       widget.navigationShell.goBranch(branch);
     }
+    _openScope();
   }
 
   /// The tab is off: the link is taken, reported, and the user lands on Wallpapers.
   void _dropStatusTarget(DeepLinkTarget target) {
     if (target is StatusLinkTarget) {
-      ArulDeepLink.consumeStatus();
+      ArulDeepLink.consumeStatus(shell: _shell);
       unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
     } else {
-      ArulDeepLink.consumeTab();
+      ArulDeepLink.consumeTab(shell: _shell);
     }
     ref
         .read(analyticsServiceProvider)
@@ -178,20 +198,23 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     }
   }
 
-  static bool _isReelPair(int a, int b) => {
-    a,
-    b,
-  }.containsAll(const {AppShell.wallpapersBranch, AppShell.statusBranch});
-
-  /// Two pools never decode at once: the leaving one is released IN FULL before the entering one
-  /// claims a session, with no grace — budget SoCs hold about two hardware decoders in total.
-  Future<void> _swapReels(int from, int to) async {
+  /// Two pools never decode at once: the OTHER reel is released IN FULL before the entering one
+  /// claims a session, with no grace — whether it was left on this switch or is still inside an
+  /// earlier leave's grace (a hop through Ringtones). Budget SoCs hold about two hardware decoders.
+  Future<void> _enterReel(int to) async {
     final seq = ++_swapSeq;
-    final leaving = _reelFor(from);
     final entering = _reelFor(to);
-    if (leaving == null || entering == null) return;
-    leaving.visible = false;
-    await leaving.releaseDecoders();
+    if (entering == null) return;
+    // Never build the status controller just to release it -> the flag-off app creates none.
+    final other = to == AppShell.statusBranch
+        ? _reelFor(AppShell.wallpapersBranch)
+        : ref.exists(statusVideoControllerProvider)
+        ? _reelFor(AppShell.statusBranch)
+        : null;
+    if (other != null) {
+      other.visible = false;
+      await other.releaseDecoders();
+    }
     if (!mounted || seq != _swapSeq || _covered) return;
     entering
       ..visible = true
@@ -205,8 +228,8 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     final to = widget.navigationShell.currentIndex;
     if (from == to) return;
 
-    if (_isReelPair(from, to)) {
-      unawaited(_swapReels(from, to));
+    if (to == AppShell.wallpapersBranch || to == AppShell.statusBranch) {
+      unawaited(_enterReel(to));
     } else {
       _swapSeq++;
       final leaving = _reelFor(from);
@@ -214,12 +237,6 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
         leaving.visible = false;
         // The pool's epoch guard makes a release racing a quick return safe -> fire-and-forget.
         leaving.releaseDecodersOnLeave();
-      }
-      final entering = _reelFor(to);
-      if (entering != null && !_covered) {
-        entering
-          ..visible = true
-          ..reclaimDecoders();
       }
     }
     if (from == AppShell.ringtonesBranch || to == AppShell.statusBranch) {
@@ -271,7 +288,7 @@ class _AppShellState extends ConsumerState<AppShell> with RouteAware {
     }
     return Scaffold(
       extendBody: true,
-      body: widget.navigationShell,
+      body: ArulShellScope(shell: _scopeShell, child: widget.navigationShell),
       bottomNavigationBar: ArulNavDock(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: _onTap,

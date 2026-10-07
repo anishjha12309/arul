@@ -34,16 +34,20 @@ never with an error.
 and the status reel (pool 2: current + next, audible). **The decoder budget is static and shared** —
 one device, one set of hardware sessions — so a demotion in either reel binds both.
 
-- **Two pools never decode at once.** Wallpapers↔Status releases the leaving pool IN FULL (awaited)
-  before the entering one claims, with no grace: 3 + 2 players against ~2 hardware sessions is the
-  silent-failure class. A swap overtaken during its await never reclaims (`_swapSeq`). Every other
-  switch keeps the grace.
+- **Two pools never decode at once.** Entering a reel releases the OTHER reel IN FULL (awaited) before
+  claiming, with no grace: 3 + 2 players against ~2 hardware sessions is the silent-failure class.
+  That includes a hop through Ringtones — the left reel is still inside its grace, and the A001 read
+  5 video decoders for the whole 3 s before this. A swap overtaken during its await never reclaims
+  (`_swapSeq`). A leave to Ringtones keeps the grace. A hidden reel's `reclaimDecoders` is a no-op,
+  or a catalog refresh under another tab cancels the grace and holds the pool with no timer.
 - **`visible` gates every `play()`** — reconcile, assignment and the `resumed` handler — and a hidden
   reel claims no decoders: an audible pool playing hidden is sound from nowhere. The shell owns the
   flag: tab switches, and `RouteAware` on the root navigator (`shellRouteObserver`) for any PAGE route
   pushed over it (Settings, paywall, upload, policy) — pause now, release after the grace, restore on
   pop. A dialog or sheet is not a page route and pauses nothing. A cold start straight onto Status (a
-  push tap) runs no switch, so the shell sets visibility in its first post-frame.
+  push tap) runs no switch, so the shell sets visibility in its first post-frame — as does a REBUILT
+  shell on Wallpapers (sign-out and back, a paywall `go`): the app-scoped feed kept the hidden flag
+  from being covered, and every live card stayed a poster.
 - **Focus loss latches.** Native reports `focusLost` and the reel controller holds the clip until a
   TAP — no reconcile, resume or swipe restarts it over the call or music that took the speaker. A
   user's tap-pause clears on a swipe; the focus latch only on a tap.

@@ -190,6 +190,11 @@ class AppLocalizationsMl extends AppLocalizations {
   }
 
   @override
+  String statusShareCaption(String link) {
+    return 'ഇതുപോലെ കൂടുതൽ ഭക്തി സ്റ്റാറ്റസ് വീഡിയോകൾ Arul ആപ്പിൽ:\n$link';
+  }
+
+  @override
   String referShareMessage(String link) {
     return 'ദക്ഷിണേന്ത്യൻ ഭക്തി വാൾപേപ്പറുകൾക്കായി ഞാൻ Arul ഉപയോഗിക്കുന്നു — അമ്മൻ, മുരുകൻ, പെരുമാൾ, ശിവൻ, ചലിക്കുന്ന ലൈവ് വാൾപേപ്പറുകളും ഉണ്ട്. നിങ്ങൾക്കും ഇഷ്ടപ്പെടുമെന്ന് തോന്നി.\n\n$link';
   }

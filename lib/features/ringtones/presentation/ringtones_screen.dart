@@ -76,7 +76,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
   /// Takes ONLY a ringtone target; a pending wallpaper passes through untouched for the feed.
   void _maybeOpenDeepLink(List<Ringtone> all) {
     if (all.isEmpty) return;
-    final target = ArulDeepLink.consumeRingtone();
+    final target = ArulDeepLink.consumeRingtone(
+      shell: ArulShellScope.of(context),
+    );
     if (target == null) return;
 
     // Clear the deferred copy too — it and ArulDeepLink are seeded together, either can win the race.

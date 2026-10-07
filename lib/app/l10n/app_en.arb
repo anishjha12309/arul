@@ -92,6 +92,15 @@
       }
     }
   },
+  "statusShareCaption": "More devotional status videos like this one on Arul:\n{link}",
+  "@statusShareCaption": {
+    "description": "Caption on a shared status CLIP when WhatsApp's status composer is unavailable (the chat and share-sheet fallbacks). The recipient is already watching the clip, so this says where more came from. ONE short line, then the link alone on the last line. NEVER a second URL.",
+    "placeholders": {
+      "link": {
+        "type": "String"
+      }
+    }
+  },
   "referShareMessage": "I've been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you'd like it.\n\n{link}",
   "@referShareMessage": {
     "description": "Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and never self-serving — 'install this so I get something' suppresses the tap. Link alone on the last line.",

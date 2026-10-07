@@ -98,6 +98,27 @@ void main() {
     });
   });
 
+  test('a link the router parks on its way through `/` is left for the '
+      'shell that mounts after it — the one on screen is torn down', () {
+    final onScreen = ArulDeepLink.registerShell();
+    ArulDeepLink.deferToNextShell();
+    ArulDeepLink.requestTarget(const StatusLinkTarget('s1'));
+
+    expect(ArulDeepLink.mayTake(onScreen), isFalse);
+    expect(ArulDeepLink.consumeStatus(shell: onScreen), isNull);
+    expect(ArulDeepLink.pendingTarget, const StatusLinkTarget('s1'));
+
+    final next = ArulDeepLink.registerShell();
+    expect(ArulDeepLink.consumeStatus(shell: next)?.id, 's1');
+  });
+
+  test('a target from anywhere else (a push tap, a deferred link) is taken '
+      'by the shell already on screen', () {
+    final onScreen = ArulDeepLink.registerShell();
+    ArulDeepLink.requestTarget(const WallpaperLinkTarget('w1'));
+    expect(ArulDeepLink.consumeWallpaper(shell: onScreen)?.id, 'w1');
+  });
+
   test('DeepLinkSource round-trips its persisted key', () {
     for (final source in DeepLinkSource.values) {
       expect(DeepLinkSource.fromKey(source.key), source);

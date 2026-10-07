@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 enum ArulTab { wallpapers, ringtones, status }
 
@@ -238,6 +238,23 @@ class ArulDeepLink {
   static bool _landed = false;
   static final _DeepLinkNotifier _notifier = _DeepLinkNotifier();
 
+  /// Shells number themselves as they mount. A link the router delivers hops through `/`, which
+  /// rebuilds the shell -> only a shell mounted AFTER it may take it. The outgoing shell's screen
+  /// would consume it, be torn down mid-jump, and the user lands on Wallpapers.
+  static int _shells = 0;
+  static int _firstTakingShell = 0;
+
+  /// Called once per shell mount; its branch screens read the number through [ArulShellScope].
+  static int registerShell() => ++_shells;
+
+  /// The router parks a link and heads for `/` -> the shell on screen now must leave it alone.
+  static void deferToNextShell() => _firstTakingShell = _shells + 1;
+
+  /// Whether a screen or shell numbered [shell] may peek or take the pending target; null (a push
+  /// tap, a test) always may.
+  static bool mayTake(int? shell) =>
+      shell == null || shell >= _firstTakingShell;
+
   /// Fires after every [requestTarget]/[requestLocale] — consumers read the pending value themselves.
   static Listenable get changes => _notifier;
 
@@ -276,28 +293,32 @@ class ArulDeepLink {
 
   /// Take the pending target if it is a wallpaper, clearing it.
   /// Read-and-clear in ONE call: a target left behind drags the user back on every later rebuild.
-  static WallpaperLinkTarget? consumeWallpaper() {
+  static WallpaperLinkTarget? consumeWallpaper({int? shell}) {
+    if (!mayTake(shell)) return null;
     final t = _target;
     if (t is! WallpaperLinkTarget) return null;
     _target = null;
     return t;
   }
 
-  static RingtoneLinkTarget? consumeRingtone() {
+  static RingtoneLinkTarget? consumeRingtone({int? shell}) {
+    if (!mayTake(shell)) return null;
     final t = _target;
     if (t is! RingtoneLinkTarget) return null;
     _target = null;
     return t;
   }
 
-  static StatusLinkTarget? consumeStatus() {
+  static StatusLinkTarget? consumeStatus({int? shell}) {
+    if (!mayTake(shell)) return null;
     final t = _target;
     if (t is! StatusLinkTarget) return null;
     _target = null;
     return t;
   }
 
-  static TabLinkTarget? consumeTab() {
+  static TabLinkTarget? consumeTab({int? shell}) {
+    if (!mayTake(shell)) return null;
     final t = _target;
     if (t is! TabLinkTarget) return null;
     _target = null;
@@ -314,5 +335,22 @@ class ArulDeepLink {
     _target = null;
     _lang = null;
     _landed = false;
+    _firstTakingShell = 0;
   }
+}
+
+/// The number of the shell a branch screen sits in, read when the screen takes a link.
+/// Read live, never captured: go_router MOVES the branch screens into the rebuilt shell (one
+/// navigation-shell GlobalKey), so a screen built in the outgoing shell ends up in the next one.
+class ArulShellScope extends InheritedWidget {
+  const ArulShellScope({super.key, required this.shell, required super.child});
+
+  final int shell;
+
+  /// Null outside a shell (a screen pumped alone in a test) -> [ArulDeepLink.mayTake] lets it take.
+  static int? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ArulShellScope>()?.shell;
+
+  @override
+  bool updateShouldNotify(ArulShellScope oldWidget) => oldWidget.shell != shell;
 }

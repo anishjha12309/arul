@@ -156,7 +156,9 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   /// Opens the clip a share or ad link asked for, on All. A miss is silent — it may be unpublished.
   void _maybeOpenDeepLink(List<StatusVideo> all) {
     if (all.isEmpty) return;
-    final target = ArulDeepLink.consumeStatus();
+    final target = ArulDeepLink.consumeStatus(
+      shell: ArulShellScope.of(context),
+    );
     if (target == null) return;
     unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
 
@@ -222,7 +224,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     final l10n = AppLocalizations.of(context);
     final outcome = await ref
         .read(statusActionProvider.notifier)
-        .shareToWhatsApp(status, buildCaption: l10n.referShareMessage);
+        .shareToWhatsApp(status, buildCaption: l10n.statusShareCaption);
     if (!mounted || outcome == null) return;
     switch (outcome) {
       case StatusActionOutcome.done:
@@ -417,7 +419,9 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                         busy: busy,
                         primary: ReelAction(
                           icon: Icons.send_rounded,
-                          image: const AssetImage('assets/images/whatsapp.webp'),
+                          image: const AssetImage(
+                            'assets/images/whatsapp.webp',
+                          ),
                           label: l10n.statusWhatsapp,
                           semanticsId: 'arul_status_whatsapp',
                           onTap: () => _onAction(StatusVerb.share, items[i]),
@@ -479,8 +483,7 @@ class StatusMedia extends StatelessWidget {
             fadeInDuration: Duration.zero,
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
-          if (slot != null)
-            ReelLiveTexture(slot: slot, alignment: _statusCrop),
+          if (slot != null) ReelLiveTexture(slot: slot, alignment: _statusCrop),
         ],
       ),
     );

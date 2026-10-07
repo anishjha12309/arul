@@ -93,4 +93,29 @@ void main() {
 
     expect(teardowns, 1, reason: 'and the superseded timer never ran a second');
   });
+
+  testWidgets('a reclaim while hidden leaves the grace running — a catalog '
+      'refresh under another tab must not hold the pool forever', (
+    tester,
+  ) async {
+    controller
+      ..visible = false
+      ..releaseDecodersOnLeave();
+    await tester.pump(const Duration(seconds: 1));
+    controller.reclaimDecoders();
+    await tester.pump(const Duration(seconds: 4));
+
+    expect(teardowns, 1, reason: 'the hidden pool was still freed');
+  });
+
+  testWidgets('detach clears a tap-pause, so the next mount of the reel is '
+      'not frozen on a play mark', (tester) async {
+    controller.toggleHeldByUser();
+    expect(controller.isHeld, isTrue);
+
+    controller.detach();
+    await tester.pump();
+
+    expect(controller.isHeld, isFalse);
+  });
 }

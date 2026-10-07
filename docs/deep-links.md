@@ -94,6 +94,11 @@ The first four drop the link into a browser; the rest keep the app but lose the 
       navigation) and `/` for every foreign-scheme URI, parseable or not — a typo'd ad link lands on the
       app, never on go_router's error page. It parks the target BEFORE the location becomes `/`, because
       the feed is reached only through the splash's auth decision.
+- [ ] **A warm link is shown by the NEXT shell** (`deferToNextShell`). `/` rebuilds the shell, but
+      go_router MOVES the branch screens into the new one (one navigation-shell GlobalKey), so a screen
+      that took the link in the outgoing shell jumped, then sat under a shell that opened on Wallpapers.
+      Screens take a link only through `ArulShellScope.of(context)`, read live, and a shell publishes
+      its number only after it has picked the branch for the pending link.
 - [ ] **ONE level of encoding on `referrer`** — double-encoding hands the app one key literally named
       `ref=CODE&w=<uuid>`. The six codes are duplicated in the Worker (`LANG_RE`), and so is the
       NORMALISATION: lower-case and strip the region tag exactly as `normalizeLang` does, or `hi-IN` is

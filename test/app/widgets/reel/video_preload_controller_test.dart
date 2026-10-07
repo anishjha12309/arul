@@ -1,6 +1,8 @@
 // What a reel may do while nobody can see or hear it. The status pool is audible, so a play() off
 // screen is sound from nowhere; a decoder claimed off screen starves the reel that IS on screen.
 // A focus loss (another app took the speaker, headphones out) holds the clip until a tap on it.
+import 'dart:async';
+
 import 'package:arul/app/widgets/reel/reel_item.dart';
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/app/widgets/reel/video_preload_controller.dart';
@@ -225,5 +227,50 @@ void main() {
 
     expect(controller.isHeld, isFalse);
     expect(plays(), isNotEmpty);
+  });
+
+  testWidgets('a player still being created when the reel jumps (a status '
+      'link) never plays the card it was created for', (tester) async {
+    final gate = Completer<void>();
+    messenger.setMockMethodCallHandler(_method, (call) async {
+      calls.add(call);
+      if (call.method == 'create') {
+        await gate.future;
+        final id = nextId++;
+        return {'playerId': id, 'textureId': 100 + id};
+      }
+      return null;
+    });
+    const six = [
+      _Clip('a'),
+      _Clip('b'),
+      _Clip('c'),
+      _Clip('d'),
+      _Clip('e'),
+      _Clip('f'),
+    ];
+    controller = build(visible: true);
+    controller.setItems(six);
+    await tester.pump();
+    controller.setItems(six, initialIndex: 5);
+    await tester.pump();
+
+    gate.complete();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    final played = [
+      for (final c in plays())
+        if (c.method == 'open') (c.arguments as Map)['url'],
+    ];
+    expect(played, ['https://cdn.test/clips/f.mp4']);
+    expect(
+      calls.where(
+        (c) =>
+            c.method == 'open' &&
+            (c.arguments as Map)['url'] == 'https://cdn.test/clips/a.mp4',
+      ),
+      isEmpty,
+      reason: 'a stale card decodes off screen for nothing',
+    );
   });
 }

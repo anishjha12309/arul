@@ -10,8 +10,14 @@ limited `yuv420p`, `+faststart`, ~2 Mbps (1.5 Mbps when 2 overshoots), AAC-LC 12
 Status composer documents only 720p/1080p: probe one clip through it on a real phone before encoding a
 library. `workers/tools/local-seed-statuses.mjs` runs this recipe and validates the output.
 
-**Only owned or licensed clips reach production** (owner sign-off): WhatsApp's Share to Status terms
-make us warrant the rights. The local starter set is third-party ([local-stack.md](local-stack.md)).
+**Which clips reach production is the owner's call, per library**: WhatsApp's Share to Status terms make
+us warrant the rights. The owner took that risk for the third-party Crafto set's Tamil and Telugu clips
+(categories `tamil`, `telugu`); never widen an upload to another language without asking.
+
+Bulk upload = `cd workers && node tools/status-import.mjs --langs tamil,telugu` (encode + QC + plan into
+`C:/Anish/arul-import/statuses`, writes nothing), then the same with `--write`: R2 clip + poster, ONE Neon
+txn (rows, one category per language, one `content_version` bump), rebuild. Ids derive from the Crafto
+record, so a re-run refuses rather than doubling. It never touches `status_tab`.
 
 **The poster `thumbs/statuses/<category>/<uuid>.jpg` is REQUIRED at upload** — derived from the clip's
 stem, stored in no column, and a missing poster's 404 is edge-cached ([caching.md](caching.md)). It sits

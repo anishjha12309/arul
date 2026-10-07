@@ -150,7 +150,7 @@ final class PushChannelNameProvider
   }
 }
 
-String _$pushChannelNameHash() => r'2831d3546f2b8770e9b452b809413d2e775bfb81';
+String _$pushChannelNameHash() => r'5a72fd9d1cc4919375afa313c34ae17d6639f7e1';
 
 /// Registers this phone, once per launch, and re-registers when the language, the token or the
 /// account moves.

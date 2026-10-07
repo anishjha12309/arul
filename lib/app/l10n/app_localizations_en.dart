@@ -188,6 +188,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String statusShareCaption(String link) {
+    return 'More devotional status videos like this one on Arul:\n$link';
+  }
+
+  @override
   String referShareMessage(String link) {
     return 'I\'ve been using Arul for South Indian devotional wallpapers — Amman, Murugan, Perumal, Sivan, and live ones that actually move. Thought you\'d like it.\n\n$link';
   }

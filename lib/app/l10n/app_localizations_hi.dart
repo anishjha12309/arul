@@ -188,6 +188,11 @@ class AppLocalizationsHi extends AppLocalizations {
   }
 
   @override
+  String statusShareCaption(String link) {
+    return 'ऐसे और भक्ति स्टेटस वीडियो Arul पर:\n$link';
+  }
+
+  @override
   String referShareMessage(String link) {
     return 'दक्षिण भारतीय भक्ति वॉलपेपर के लिए मुझे Arul बहुत पसंद है — अम्मन, मुरुगन, पेरुमाल, शिवन, और चलने वाले लाइव वॉलपेपर भी। सोचा आपको भी पसंद आएगा।\n\n$link';
   }

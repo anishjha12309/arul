@@ -52,6 +52,11 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   inserts a synthetic `expired` row carrying the OLD `trial_end`, which lands back in the original
   cohort as "expired, never converted" even if they had paid. The tombstone stores only `trial_end`,
   and widening it would put PII behind the trial-farming guard. Read cohort counts as "≥".
+- **Every warm link rebuilds the whole shell.** The top-level `redirect` sends each https/fb URI to
+  `/`, so the splash re-routes, both reels release and reclaim, and debug raises "Duplicate GlobalKey"
+  for `StatefulNavigationShellState` as go_router moves the branch screens across. `ArulShellScope`
+  keeps the link landing ([deep-links.md](deep-links.md)); the fix is go_router 17's top-level `onEnter`
+  parking a warm link with `Block.stop()` (a cold one still needs the `/` hop). Untried on device.
 
 ## Traps already paid for
 

@@ -241,7 +241,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     final wm = ref.read(shareWatermarkServiceProvider);
     final spec = wm.plan(wallpaperId: status.id, userId: _userIdOrNull());
     final dir = src.parent.path;
-    _cleanStaleWatermarks(dir);
+    _cleanStaleCopies(dir, keep: src.path);
     return wm.watermarkVideo(
       src,
       spec,
@@ -250,12 +250,16 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
   }
 
   /// Every output is unique, so they only accumulate -> sweep status copies over a day old.
-  void _cleanStaleWatermarks(String dir) {
+  /// The ~8 MB source copies too, one per clip ever acted on; never [keep], which is about to be read.
+  void _cleanStaleCopies(String dir, {required String keep}) {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));
     Future(() async {
       await for (final entry in Directory(dir).list()) {
-        if (entry is! File || !entry.path.contains('status-')) continue;
-        if (!entry.path.contains('-wm-')) continue;
+        if (entry is! File ||
+            !entry.uri.pathSegments.last.startsWith('status-')) {
+          continue;
+        }
+        if (entry.path == keep) continue;
         try {
           if ((await entry.stat()).modified.isBefore(cutoff)) {
             await entry.delete();

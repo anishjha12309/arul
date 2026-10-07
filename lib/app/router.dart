@@ -31,7 +31,11 @@ final router = GoRouter(
     final request = parseDeepLinkUri(state.uri, source: DeepLinkSource.appLink);
     if (request != null) {
       final target = request.target;
-      if (target != null) ArulDeepLink.requestTarget(target);
+      if (target != null) {
+        // `/` rebuilds the shell -> the one on screen now must not take what the next one will show.
+        ArulDeepLink.deferToNextShell();
+        ArulDeepLink.requestTarget(target);
+      }
       final lang = request.lang;
       if (lang != null) ArulDeepLink.requestLocale(lang);
     }

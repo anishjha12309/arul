@@ -8,11 +8,13 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Players REUSED (`setMediaItem`); ONE process-global EventChannel hub
 - [ ] Software fallback demotes the pool 3→2, floor 2; only a codec error goes to 1; never query capability
 - [ ] Leaving a reel pauses at once, frees decoders after a 3 s grace; other releases are immediate
-- [ ] Wallpapers↔Status: the leaving pool is released IN FULL before the entering one claims — no grace
+- [ ] Entering a reel releases the OTHER reel IN FULL before claiming — no grace, even via a Ringtones hop
 - [ ] Two reel pools never decode at once; ONE decoder budget per device, shared by both
 - [ ] The feed opens FILES, never a stream by plan; a network error never re-opens a painted card
 - [ ] Poster under the texture, revealed on `onRenderedFirstFrame`; one shared `cropAlignment`
 - [ ] Audio decided at CREATE; only the paywall's ONE shared player and the status pool are audible
+- [ ] Only the card on screen starts: a player whose `create()` or transfer outlived a jump (a `/s/`
+      link, a swipe) parks idle or opens paused — the A001 played two status clips aloud at once
 - [ ] No reel plays while hidden: another tab, a pushed full screen, or the background — a dialog or
       sheet does not pause; a resume never plays a hidden reel
 - [ ] Focus taken by another app, or headphones out → the clip holds until a TAP, never resumes itself

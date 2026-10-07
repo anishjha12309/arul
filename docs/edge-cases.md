@@ -104,6 +104,7 @@ each heading's docs.
 - [ ] The link's `lang` beats a Settings pick, the region and the phone
 - [ ] The region is asked once per FRESH install, never picks the language; an older build's stored region language stays
 - [ ] Typed takes: `consumeWallpaper()` never eats a pending ringtone, or the reverse
+- [ ] A warm link on its own tab still opens the item
 
 ## Catalog / storage — [cron.md](cron.md), [caching.md](caching.md)
 - [ ] Pages `max-age=86400` + `?v=`; stale = rebuild with a version bump, never a purge

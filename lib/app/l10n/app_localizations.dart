@@ -448,6 +448,12 @@ abstract class AppLocalizations {
   /// **'More devotional wallpapers like this one — still and live — on Arul:\n{link}'**
   String wallpaperShareCaption(String link);
 
+  /// Caption on a shared status CLIP when WhatsApp's status composer is unavailable (the chat and share-sheet fallbacks). The recipient is already watching the clip, so this says where more came from. ONE short line, then the link alone on the last line. NEVER a second URL.
+  ///
+  /// In en, this message translates to:
+  /// **'More devotional status videos like this one on Arul:\n{link}'**
+  String statusShareCaption(String link);
+
   /// Text the user sends a friend via WhatsApp / the system share sheet, and the copy behind every 'Tell a friend' entry point. Written in the SENDER's voice: first-person, natural, and never self-serving — 'install this so I get something' suppresses the tap. Link alone on the last line.
   ///
   /// In en, this message translates to:

@@ -270,6 +270,20 @@ void main() {
     expect(currentBranch(tester), AppShell.ringtonesBranch);
   });
 
+  testWidgets('a link the router parks on its way through `/` is left '
+      'alone by the shell on screen — the next shell shows it', (tester) async {
+    await pumpShell(tester);
+    await tester.pump();
+
+    ArulDeepLink.deferToNextShell();
+    ArulDeepLink.requestTarget(const RingtoneLinkTarget('r1'));
+    await tester.pump();
+    await settle(tester);
+
+    expect(currentBranch(tester), AppShell.wallpapersBranch);
+    expect(ArulDeepLink.pendingTarget, const RingtoneLinkTarget('r1'));
+  });
+
   testWidgets('a tab-only link is consumed on the switch and reported', (
     tester,
   ) async {
@@ -464,7 +478,7 @@ void main() {
       expect(status.calls, isNot(contains('leave')));
     });
 
-    testWidgets('any other switch keeps the grace', (tester) async {
+    testWidgets('a reel left for Ringtones keeps the grace', (tester) async {
       await pumpShell(tester, flag: true);
       await tester.tap(find.text('Ringtones'));
       await settle(tester);
@@ -473,12 +487,73 @@ void main() {
 
       await tester.tap(find.text('Status'));
       await settle(tester);
-      expect(status.calls, containsAllInOrder(['visible=true', 'reclaim']));
+      log.clear();
 
       await tester.tap(find.text('Ringtones'));
       await settle(tester);
       expect(status.calls, containsAllInOrder(['visible=false', 'leave']));
       expect(status.calls, isNot(contains('release')));
+    });
+
+    testWidgets('a hop through Ringtones still releases the other reel IN '
+        'FULL before the entering one claims', (tester) async {
+      await pumpShell(tester, flag: true);
+      await tester.tap(find.text('Ringtones'));
+      await settle(tester);
+      await tester.tap(find.text('Status'));
+      await tester.pump();
+      await settle(tester);
+
+      expect(
+        log,
+        containsAllInOrder([
+          'feed:leave',
+          'feed:release',
+          'feed:released',
+          'status:visible=true',
+          'status:reclaim',
+        ]),
+        reason: 'the feed may still be inside its grace, holding decoders',
+      );
+      expect(
+        log.indexOf('feed:released'),
+        lessThan(log.indexOf('status:visible=true')),
+      );
+
+      log.clear();
+      await tester.tap(find.text('Ringtones'));
+      await settle(tester);
+      await tester.tap(find.text('Wallpapers'));
+      await tester.pump();
+      await settle(tester);
+
+      expect(
+        log,
+        containsAllInOrder([
+          'status:leave',
+          'status:release',
+          'status:released',
+          'feed:visible=true',
+          'feed:reclaim',
+        ]),
+      );
+      expect(
+        log.indexOf('status:released'),
+        lessThan(log.indexOf('feed:visible=true')),
+      );
+    });
+
+    testWidgets('Ringtones → Wallpapers never builds the status controller '
+        'just to release it', (tester) async {
+      await pumpShell(tester, flag: true);
+      await tester.tap(find.text('Ringtones'));
+      await settle(tester);
+      await tester.tap(find.text('Wallpapers'));
+      await tester.pump();
+      await settle(tester);
+
+      expect(status.calls, isEmpty);
+      expect(video.calls, containsAllInOrder(['visible=true', 'reclaim']));
     });
   });
 
