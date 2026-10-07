@@ -201,6 +201,7 @@
   "premiumTrialFinePrint": "తర్వాత నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.",
   "premiumPaidFinePrint": "నెలకు {price} ఆటోపే ద్వారా. ఎప్పుడైనా రద్దు చేయవచ్చు.",
   "premiumSocialProof": "{city}-లో {name} లైవ్ వాల్‌పేపర్ సెట్ చేశారు 🙏",
+  "pushCampaignChannelName": "కొత్త వాల్‌పేపర్లు, ఆఫర్లు",
   "pushChannelName": "Arul అప్‌డేట్‌లు",
   "purchaseErrorNetwork": "ఇంటర్నెట్ లేదు. కనెక్షన్ చూసుకుని మళ్లీ ప్రయత్నించండి.",
   "purchaseErrorGeneric": "ఏదో తప్పు జరిగింది. మళ్లీ ప్రయత్నించండి.",

@@ -79,8 +79,11 @@ each heading's docs.
 - [ ] Moderation never ships an off-spec video as-is
 - [ ] ONE picker per app (guard the call); no permission, no `resolveActivity` pre-flight
 
-## Push — [push.md](push.md), [notifications.md](notifications.md)
-- [ ] ONE channel, created at launch; campaigns only through the CMS; retired reminders cleared
+## Push — [push.md](push.md), [push-registry.md](push-registry.md), [notifications.md](notifications.md)
+- [ ] Two channels, created at launch; campaigns only through the CMS; retired reminders cleared
+- [ ] The campaign channel copies a blocked or lowered `arul_updates_v1` once, and is never created natively
+- [ ] Every campaign to a build >= `HEADSUP_MIN_BUILD` is data-only; a premium campaign stays PRIVATE on the lock screen
+- [ ] An Android 13+ phone that never signed in is in no audience; the count and `left_out` say how many
 - [ ] Permission asked once, on the first feed frame after sign-in — never on the wall
 - [ ] No Dart background handler; an unreadable payload opens the app
 - [ ] BOTH tap paths deliver: killed and backgrounded

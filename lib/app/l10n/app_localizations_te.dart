@@ -669,6 +669,9 @@ class AppLocalizationsTe extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'కొత్త వాల్‌పేపర్లు, ఆఫర్లు';
+
+  @override
   String get pushChannelName => 'Arul అప్‌డేట్‌లు';
 
   @override

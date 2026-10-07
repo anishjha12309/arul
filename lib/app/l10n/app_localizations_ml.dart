@@ -673,6 +673,9 @@ class AppLocalizationsMl extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'പുതിയ വാൾപേപ്പറുകൾ, ഓഫറുകൾ';
+
+  @override
   String get pushChannelName => 'Arul അപ്ഡേറ്റുകൾ';
 
   @override

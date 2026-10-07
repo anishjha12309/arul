@@ -357,7 +357,7 @@ Future<void> _startApp() async {
   // Local devotional reminders. Constructed BEFORE runApp so a tap that LAUNCHED
   // the app has a live plugin to replay into, but `initialize()` is deliberately
   // NOT awaited here — see below.
-  final notificationService = NotificationService();
+  final notificationService = NotificationService(prefs: prefs);
 
   BootTrace.mark('runApp()');
   runApp(

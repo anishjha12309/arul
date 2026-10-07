@@ -89,6 +89,7 @@ function parseFilter(a: Record<string, unknown>): PushFilter | null {
   return f;
 }
 
+/** Word for word the CMS's `audienceLabel` (hsr-cms src/pages/push.tsx) — change both together. */
 export function audienceLabel(a: PushAudience): string {
   switch (a.kind) {
     case "all":
@@ -98,16 +99,15 @@ export function audienceLabel(a: PushAudience): string {
     case "premium":
       return PLAN_LABELS[a.state];
     case "inactive":
-      return `Haven't opened in ${a.days} days`;
+      return `Last opened ${a.days}+ days ago`;
     case "internal":
-      return "My own phones";
+      return "Test accounts";
     case "filter": {
       const parts: string[] = [];
       if (a.lang) parts.push(LANG_LABELS[a.lang] ?? a.lang);
       if (a.plan) parts.push(PLAN_LABELS[a.plan]);
-      if (a.idle_days) parts.push(`Haven't opened in ${a.idle_days} days`);
-      if (a.joined_hours)
-        parts.push(JOINED_LABELS[a.joined_hours] ?? `Joined in the last ${a.joined_hours} hours`);
+      if (a.idle_days) parts.push(`Last opened ${a.idle_days}+ days ago`);
+      if (a.joined_hours) parts.push(JOINED_LABELS[a.joined_hours] ?? `Joined last ${a.joined_hours} hours`);
       if (a.signed_in !== undefined) parts.push(a.signed_in ? "Signed in" : "Not signed in");
       return parts.join(" · ");
     }
@@ -115,9 +115,9 @@ export function audienceLabel(a: PushAudience): string {
 }
 
 const JOINED_LABELS: Record<number, string> = {
-  1: "Joined in the last hour",
-  24: "Joined in the last 24 hours",
-  168: "Joined in the last 7 days",
+  1: "Joined last hour",
+  24: "Joined last 24 hours",
+  168: "Joined last 7 days",
 };
 
 const LANG_LABELS: Record<string, string> = {
@@ -130,11 +130,16 @@ const LANG_LABELS: Record<string, string> = {
 };
 
 const PLAN_LABELS: Record<string, string> = {
-  free: "Free users",
+  free: "Free",
   trialing: "On trial",
-  paid: "Paying users",
+  paid: "Paying",
   lapsed: "Stopped paying",
 };
+
+export interface AudienceOptions {
+  /** Counting only: keep the phones every send leaves out, so the CMS can say how many there are. */
+  includeWaiting?: boolean;
+}
 
 /**
  * `SELECT d.fid FROM push_devices d …` for one audience, as a composable fragment.
@@ -142,15 +147,22 @@ const PLAN_LABELS: Record<string, string> = {
  * Callers wrap it: `SELECT count(*) FROM (${audienceQuery(sql, a)}) q` for the CMS's live count, and
  * `INSERT INTO push_deliveries … SELECT … FROM (${audienceQuery(sql, a)}) q` for the fan-out, so tens
  * of thousands of rows never travel through the Worker.
+ *
+ * No kind includes an Android 13+ phone that never signed in (docs/push.md §Audience); the CMS's
+ * "Phones that can receive" stat repeats that clause — change both together.
  */
 export function audienceQuery(
   sql: postgres.Sql,
   audience: PushAudience,
+  { includeWaiting = false }: AudienceOptions = {},
 ): postgres.PendingQuery<postgres.Row[]> {
   const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
-  const eligible = sql`
+  const reachable = sql`
     NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL
   `;
+  const eligible = includeWaiting
+    ? reachable
+    : sql`${reachable} AND NOT (d.user_id IS NULL AND coalesce(d.android_sdk, 0) >= 33)`;
 
   switch (audience.kind) {
     case "internal":

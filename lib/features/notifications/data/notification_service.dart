@@ -2,16 +2,20 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_10y.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../../theme/arul_tokens.dart';
 
-/// Owns the [FlutterLocalNotificationsPlugin]: the campaign channel and the app's one-off local posts.
+/// Owns the [FlutterLocalNotificationsPlugin]: both channels and the app's one-off local posts.
 class NotificationService {
-  NotificationService([FlutterLocalNotificationsPlugin? plugin])
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  NotificationService({
+    required this._prefs,
+    FlutterLocalNotificationsPlugin? plugin,
+  }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
+  final SharedPreferences _prefs;
   final FlutterLocalNotificationsPlugin _plugin;
 
   /// Ids below this belonged to the retired devotional reminders (weekly 1000+, festivals 2000+).
@@ -42,6 +46,20 @@ class NotificationService {
   static const _defaultUpdatesChannelName = 'Updates from Arul';
 
   String _updatesChannelName = _defaultUpdatesChannelName;
+
+  /// The heads-up channel campaigns post to (ArulMessagingService), when this phone has it.
+  static const campaignChannelId = 'arul_campaigns_v1';
+
+  static const _defaultCampaignChannelName = 'New wallpapers and offers';
+
+  String _campaignChannelName = _defaultCampaignChannelName;
+
+  /// The importance [campaignChannelId] was created at, or `Importance.none` when it never will be.
+  /// Absent until decided — a failed read retries next launch.
+  static const campaignChannelPrefKey = 'arul_campaign_channel_importance';
+
+  /// Null until [initialize] settles it; `Importance.none` means the channel was never created.
+  Importance? _campaignImportance;
 
   /// Superseded channels, deleted on init -> no stale duplicates in the system notification settings.
   /// The two devotional-reminder channels went with the reminders themselves.
@@ -98,8 +116,53 @@ class NotificationService {
       ],
     ]);
 
+    if (android != null) await _settleCampaignChannel(android);
     _initialized = true;
     await _retireLegacyReminders();
+  }
+
+  /// What [campaignChannelId] is created at, given the user's level on [updatesChannelId] — the
+  /// channel campaigns used before. Null: do not create it, so a blocked choice stays blocked.
+  @visibleForTesting
+  static Importance? campaignImportanceFor(Importance? updates) =>
+      switch (updates) {
+        Importance.none => null,
+        Importance.min || Importance.low => updates,
+        _ => Importance.high,
+      };
+
+  /// Decides the campaign channel ONCE, then re-creates it at that level on every launch like
+  /// [updatesChannelId], which only refreshes its name: Android never raises an existing channel.
+  Future<void> _settleCampaignChannel(
+    AndroidFlutterLocalNotificationsPlugin android,
+  ) async {
+    try {
+      var importance = _storedCampaignImportance();
+      if (importance == null) {
+        final channels = await android.getNotificationChannels() ?? const [];
+        final updates = channels
+            .where((c) => c.id == updatesChannelId)
+            .firstOrNull
+            ?.importance;
+        importance = campaignImportanceFor(updates) ?? Importance.none;
+        await _prefs.setInt(campaignChannelPrefKey, importance.value);
+      }
+      _campaignImportance = importance;
+      if (importance != Importance.none) {
+        await android.createNotificationChannel(_campaignChannel(importance));
+      }
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] campaign channel not settled: $e');
+    }
+  }
+
+  Importance? _storedCampaignImportance() {
+    final stored = _prefs.getInt(campaignChannelPrefKey);
+    if (stored == null) return null;
+    return Importance.values.firstWhere(
+      (i) => i.value == stored,
+      orElse: () => Importance.high,
+    );
   }
 
   Future<void> _retireLegacyReminders() async {
@@ -113,15 +176,21 @@ class NotificationService {
     }
   }
 
-  /// The campaign channel. `defaultImportance`, not high: these are ours to send, not the user's to
-  /// expect, so they belong in the shade rather than as a heads-up banner over whatever they are
-  /// doing.
   AndroidNotificationChannel _updatesChannel() => AndroidNotificationChannel(
     updatesChannelId,
     _updatesChannelName,
     description: 'New wallpapers, ringtones and offers',
     importance: Importance.defaultImportance,
   );
+
+  /// The system default sound: a channel's sound is fixed the moment it is created.
+  AndroidNotificationChannel _campaignChannel(Importance importance) =>
+      AndroidNotificationChannel(
+        campaignChannelId,
+        _campaignChannelName,
+        description: 'New wallpapers, ringtones and offers',
+        importance: importance,
+      );
 
   /// Rename the campaign channel into the user's language, and on every later language change.
   ///
@@ -135,6 +204,21 @@ class NotificationService {
       await _android?.createNotificationChannel(_updatesChannel());
     } on PlatformException catch (e) {
       debugPrint('[NotificationService] updates channel rename failed: $e');
+    }
+  }
+
+  /// [setUpdatesChannelName] for [campaignChannelId]; never creates a channel the user's choice skipped.
+  Future<void> setCampaignChannelName(String name) async {
+    if (name.isEmpty || name == _campaignChannelName) return;
+    _campaignChannelName = name;
+    final importance = _campaignImportance;
+    if (!_initialized || importance == null || importance == Importance.none) {
+      return;
+    }
+    try {
+      await _android?.createNotificationChannel(_campaignChannel(importance));
+    } on PlatformException catch (e) {
+      debugPrint('[NotificationService] campaign channel rename failed: $e');
     }
   }
 

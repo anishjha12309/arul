@@ -1312,6 +1312,12 @@ abstract class AppLocalizations {
   /// **'{name} in {city} just applied a live wallpaper 🙏'**
   String premiumSocialProof(String name, String city);
 
+  /// Android notification channel name for CMS-composed campaign pushes, which pop up. pushChannelName now names the channel the app's own reminders use.
+  ///
+  /// In en, this message translates to:
+  /// **'New wallpapers and offers'**
+  String get pushCampaignChannelName;
+
   /// Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push.
   ///
   /// In en, this message translates to:

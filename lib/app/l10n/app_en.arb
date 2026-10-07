@@ -404,6 +404,10 @@
       }
     }
   },
+  "pushCampaignChannelName": "New wallpapers and offers",
+  "@pushCampaignChannelName": {
+    "description": "Android notification channel name for CMS-composed campaign pushes, which pop up. pushChannelName now names the channel the app's own reminders use."
+  },
   "pushChannelName": "Updates from Arul",
   "@pushChannelName": {
     "description": "Android notification channel name for CMS-composed campaign pushes. The only user-visible string this feature has — no screen mentions push."

@@ -211,10 +211,13 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="arul_updates_v1"/>
 
-        <!-- Coloured campaigns are data-only and drawn by ArulMessagingService, which SUBCLASSES the
-             plugin's service (onNewToken still reaches Dart). One service may own MESSAGING_EVENT ->
-             the plugin's own declaration is removed here rather than left to a priority race.
-             Plain campaigns never reach it: Play services posts a notification message itself. -->
+        <!-- Data-only campaigns (every campaign to a heads-up build, coloured ones to older builds) are
+             drawn by ArulMessagingService, which SUBCLASSES the plugin's service (onNewToken still
+             reaches Dart). One service may own MESSAGING_EVENT -> the plugin's own declaration is
+             removed here rather than left to a priority race. An older build's plain campaign never
+             reaches it: Play services posts a notification message itself.
+             The default channel above stays arul_updates_v1, never arul_campaigns_v1: a phone that
+             blocked campaigns must not fall back to a fresh, unblocked channel. -->
         <service
             android:name="io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingService"
             tools:node="remove"/>

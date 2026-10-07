@@ -11,7 +11,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type postgres from "postgres";
 
 import { audienceLabel, audienceQuery, parseAudience, type PushAudience } from "../src/lib/push-audience.js";
-import { COLOR_MIN_BUILD, isDeadRegistration, sendPush, textFor, type PushCampaign } from "../src/lib/fcm.js";
+import {
+  COLOR_MIN_BUILD,
+  HEADSUP_MIN_BUILD,
+  isDeadRegistration,
+  sendPush,
+  textFor,
+  type PushCampaign,
+} from "../src/lib/fcm.js";
 import { handleRegisterDevice, handleRegisterAnonDevice, handlePushOpened } from "../src/routes/me.js";
 import { handlePushCount, handlePushDispatch, handlePushTest } from "../src/routes/internal.js";
 import { signAccessToken } from "../src/lib/jwt.js";
@@ -87,6 +94,27 @@ describe("audienceQuery", () => {
     }
   });
 
+  it("every kind leaves out Android 13+ phones that never signed in; includeWaiting drops only that", () => {
+    const clause = "AND NOT (d.user_id IS NULL AND coalesce(d.android_sdk, 0) >= 33)";
+    const kinds: PushAudience[] = [
+      { kind: "all" },
+      { kind: "internal" },
+      { kind: "lang", lang: "ta" },
+      { kind: "inactive", days: 7 },
+      { kind: "premium", state: "paid" },
+      { kind: "filter", signed_in: false },
+      { kind: "filter", lang: "hi", joined_hours: 24 },
+    ];
+    for (const kind of kinds) {
+      const sent = flat(audienceQuery(sql, kind));
+      // Through coalesce: `NULL >= 33` is NULL, and NOT NULL would drop every phone whose SDK is unknown.
+      expect(sent, JSON.stringify(kind)).toContain(clause);
+      const counted = flat(audienceQuery(sql, kind, { includeWaiting: true }));
+      expect(counted, JSON.stringify(kind)).not.toContain("android_sdk");
+      expect(counted, JSON.stringify(kind)).toBe(sent.replace(` ${clause}`, ""));
+    }
+  });
+
   it("`internal` targets ONLY test accounts, and never the tokenless robots", () => {
     const text = flat(audienceQuery(sql, { kind: "internal" }));
     expect(text).toContain(
@@ -145,7 +173,7 @@ describe("audienceQuery", () => {
 
     const langOnly = flat(audienceQuery(sql, { kind: "filter", lang: "ta" }));
     expect(langOnly).toBe(
-      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL AND d.lang = ?",
+      "SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id WHERE NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL AND NOT (d.user_id IS NULL AND coalesce(d.android_sdk, 0) >= 33) AND d.lang = ?",
     );
   });
 
@@ -269,17 +297,20 @@ describe("audienceLabel", () => {
   it("joins a filter's parts in the CMS's words", () => {
     expect(
       audienceLabel({ kind: "filter", lang: "ta", plan: "free", joined_hours: 24, signed_in: false }),
-    ).toBe("Tamil · Free users · Joined in the last 24 hours · Not signed in");
+    ).toBe("Tamil · Free · Joined last 24 hours · Not signed in");
     expect(audienceLabel({ kind: "filter", idle_days: 14, joined_hours: 1, signed_in: true })).toBe(
-      "Haven't opened in 14 days · Joined in the last hour · Signed in",
+      "Last opened 14+ days ago · Joined last hour · Signed in",
     );
-    expect(audienceLabel({ kind: "filter", joined_hours: 168 })).toBe("Joined in the last 7 days");
+    expect(audienceLabel({ kind: "filter", joined_hours: 168 })).toBe("Joined last 7 days");
+    expect(audienceLabel({ kind: "filter", plan: "paid" })).toBe("Paying");
   });
 
-  it("keeps the old kinds' labels for historical rows", () => {
+  it("labels the old kinds in the same words for historical rows", () => {
     expect(audienceLabel({ kind: "all" })).toBe("Everyone");
+    expect(audienceLabel({ kind: "internal" })).toBe("Test accounts");
     expect(audienceLabel({ kind: "premium", state: "lapsed" })).toBe("Stopped paying");
-    expect(audienceLabel({ kind: "inactive", days: 30 })).toBe("Haven't opened in 30 days");
+    expect(audienceLabel({ kind: "premium", state: "free" })).toBe("Free");
+    expect(audienceLabel({ kind: "inactive", days: 30 })).toBe("Last opened 30+ days ago");
   });
 });
 
@@ -347,7 +378,10 @@ describe("sendPush", () => {
     }
 
     it("a campaign with no colour is today's notification message; only ttl follows the expiry", async () => {
-      const m = await sent({ ...DEVICE, app_build: 99 }, { ...CAMPAIGN, color: null, expires_hours: 6 });
+      const m = await sent(
+        { ...DEVICE, app_build: HEADSUP_MIN_BUILD - 1 },
+        { ...CAMPAIGN, color: null, expires_hours: 6 },
+      );
       expect(Object.keys(m)).toEqual(["token", "notification", "data", "fcm_options", "android"]);
       expect(m["notification"]).toEqual({ title: "Hello", body: "World", image: CAMPAIGN.image_url });
       expect(m["data"]).toEqual({ campaign_id: CAMPAIGN_ID, dest: "category", lang: "en", id: "ganapathi" });
@@ -360,6 +394,7 @@ describe("sendPush", () => {
           color: "#D4A017",
           tag: CAMPAIGN_ID,
           notification_priority: "PRIORITY_DEFAULT",
+          visibility: "PUBLIC",
         },
       });
     });
@@ -386,6 +421,7 @@ describe("sendPush", () => {
         color: "#2b3a8a",
         channel_id: "arul_updates_v1",
         tag: CAMPAIGN_ID,
+        visibility: "public",
       });
       expect(m["android"]).toEqual({ priority: "HIGH", ttl: "3600s", collapse_key: CAMPAIGN_ID });
       expect((m["fcm_options"] as Record<string, string>)["analytics_label"]).toBe(CAMPAIGN_ID);
@@ -419,6 +455,77 @@ describe("sendPush", () => {
         { ...CAMPAIGN, image_url: null, color: "#1b1b2f" },
       );
       expect(m["data"]).not.toHaveProperty("image");
+    });
+  });
+
+  describe("heads-up builds", () => {
+    async function sent(device: typeof DEVICE & { app_build?: number | null }, campaign: PushCampaign) {
+      const fetchMock = vi.fn(async (_url: unknown, _init: RequestInit) => fcmOk());
+      vi.stubGlobal("fetch", fetchMock);
+      await sendPush(makeEnv(), "tok", device, campaign);
+      return (JSON.parse(String(fetchMock.mock.calls[0]![1].body)) as { message: Record<string, unknown> })
+        .message;
+    }
+
+    it("a plain campaign to a heads-up build is data-only on the campaign channel", async () => {
+      const m = await sent(
+        { ...DEVICE, app_build: HEADSUP_MIN_BUILD },
+        { ...CAMPAIGN, color: null, expires_hours: 6 },
+      );
+      expect(m["notification"]).toBeUndefined();
+      expect(m["data"]).toEqual({
+        campaign_id: CAMPAIGN_ID,
+        dest: "category",
+        lang: "en",
+        id: "ganapathi",
+        title: "Hello",
+        body: "World",
+        image: CAMPAIGN.image_url,
+        channel_id: "arul_campaigns_v1",
+        tag: CAMPAIGN_ID,
+        visibility: "public",
+      });
+      expect(m["android"]).toEqual({ priority: "HIGH", ttl: "21600s", collapse_key: CAMPAIGN_ID });
+      for (const v of Object.values(m["data"] as Record<string, unknown>)) expect(typeof v).toBe("string");
+    });
+
+    it("a coloured campaign to a heads-up build keeps its colour on the campaign channel", async () => {
+      const m = await sent(
+        { ...DEVICE, app_build: 2000 + HEADSUP_MIN_BUILD },
+        { ...CAMPAIGN, color: "#7a1f2b" },
+      );
+      expect(m["notification"]).toBeUndefined();
+      const data = m["data"] as Record<string, string>;
+      expect(data["color"]).toBe("#7a1f2b");
+      expect(data["channel_id"]).toBe("arul_campaigns_v1");
+    });
+
+    it("older builds are unchanged: plain stays a notification, coloured stays on the old channel", async () => {
+      const plain = await sent({ ...DEVICE, app_build: 2000 + HEADSUP_MIN_BUILD - 1 }, CAMPAIGN);
+      const android = plain["android"] as Record<string, Record<string, string>>;
+      expect(plain["notification"]).toBeDefined();
+      expect(android["notification"]!["channel_id"]).toBe("arul_updates_v1");
+      const coloured = await sent(
+        { ...DEVICE, app_build: HEADSUP_MIN_BUILD - 1 },
+        { ...CAMPAIGN, color: "#7a1f2b" },
+      );
+      expect((coloured["data"] as Record<string, string>)["channel_id"]).toBe("arul_updates_v1");
+      for (const device of [{ ...DEVICE, app_build: null }, DEVICE]) {
+        const m = await sent(device, CAMPAIGN);
+        expect(m["notification"], JSON.stringify(device)).toBeDefined();
+      }
+    });
+
+    it("a premium-screen campaign keeps Android's private lock-screen default on both paths", async () => {
+      const premium = { ...CAMPAIGN, dest: "premium", dest_id: null };
+      const plain = await sent({ ...DEVICE, app_build: HEADSUP_MIN_BUILD - 1 }, premium);
+      expect((plain["android"] as Record<string, unknown>)["notification"]).not.toHaveProperty("visibility");
+      const drawn = await sent({ ...DEVICE, app_build: HEADSUP_MIN_BUILD }, premium);
+      expect(drawn["data"]).not.toHaveProperty("visibility");
+      for (const dest of ["home", "wallpaper", "ringtone", "category"]) {
+        const m = await sent({ ...DEVICE, app_build: HEADSUP_MIN_BUILD }, { ...CAMPAIGN, dest });
+        expect((m["data"] as Record<string, string>)["visibility"], dest).toBe("public");
+      }
     });
   });
 
@@ -836,6 +943,12 @@ describe("test accounts in a campaign's numbers", () => {
       expect(totalWrite).toContain(
         "WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0",
       );
+      // The phones the send skipped, in the same write: the wider count minus what fanned out.
+      expect(totalWrite.replace(/\s+/g, " ")).toContain(
+        "left_out = greatest((?) - (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id), 0)",
+      );
+      const wider = routed.statements.map((s) => s.replace(/\s+/g, " "));
+      expect(wider.some((s) => s.includes("SELECT count(*) FROM (?) w"))).toBe(true);
     }
   });
 });
@@ -1192,7 +1305,7 @@ describe("/internal/push/* auth gate", () => {
     );
     expect(res.status).toBe(200);
     expect(((await res.json()) as { devices: number }).devices).toBe(42);
-    expect(db.text()).toContain("SELECT count(*)::int AS n FROM (");
+    expect(db.text()).toContain("SELECT (SELECT count(*)::int FROM (");
     expect(db.text()).toContain("d.created_at >= now() - (? || ' hours')::interval");
 
     const before = db.captured.length;
@@ -1205,6 +1318,17 @@ describe("/internal/push/* auth gate", () => {
     );
     expect(contradiction.status).toBe(400);
     expect(db.captured).toHaveLength(before);
+  });
+
+  it("count returns the phones it reaches and, apart, the ones left out until sign-in", async () => {
+    const db = recordingSql([{ n: 900, with_waiting: 1033 }]);
+    const env = makeEnv({ PUSH_SECRET: "s", _testSql: db.sql });
+    const res = await handlePushCount(makeCtx({ env, token: "s", jsonBody: { audience: { kind: "all" } } }));
+    expect(await res.json()).toEqual({ devices: 900, waiting_sign_in: 133 });
+    // One audience twice: once with the left-out clause, once without it.
+    const text = db.text();
+    expect(text).toContain("AS with_waiting");
+    expect(text.match(/coalesce\(d\.android_sdk, 0\) >= 33/g)).toHaveLength(1);
   });
 
   it("dispatch is inert while PUSH_ENABLED is off, but still answers the CMS", async () => {

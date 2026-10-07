@@ -664,6 +664,9 @@ class AppLocalizationsKn extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'ಹೊಸ ವಾಲ್‌ಪೇಪರ್‌ಗಳು, ಆಫರ್‌ಗಳು';
+
+  @override
   String get pushChannelName => 'Arul ಅಪ್‌ಡೇಟ್‌ಗಳು';
 
   @override

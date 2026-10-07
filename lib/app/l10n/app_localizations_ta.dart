@@ -672,6 +672,9 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'புதிய வால்பேப்பர்கள், சலுகைகள்';
+
+  @override
   String get pushChannelName => 'Arul அப்டேட்கள்';
 
   @override

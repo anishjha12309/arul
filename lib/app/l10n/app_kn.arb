@@ -201,6 +201,7 @@
   "premiumTrialFinePrint": "ನಂತರ ತಿಂಗಳಿಗೆ {price} ಆಟೋಪೇ ಮೂಲಕ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದುಗೊಳಿಸಿ.",
   "premiumPaidFinePrint": "{price}/ತಿಂಗಳು ಆಟೋಪೇ. ಯಾವಾಗ ಬೇಕಾದರೂ ರದ್ದು.",
   "premiumSocialProof": "{city}-ನಲ್ಲಿ {name} ಲೈವ್ ವಾಲ್‌ಪೇಪರ್ ಸೆಟ್ ಮಾಡಿದರು 🙏",
+  "pushCampaignChannelName": "ಹೊಸ ವಾಲ್‌ಪೇಪರ್‌ಗಳು, ಆಫರ್‌ಗಳು",
   "pushChannelName": "Arul ಅಪ್‌ಡೇಟ್‌ಗಳು",
   "purchaseErrorNetwork": "ಇಂಟರ್ನೆಟ್ ಇಲ್ಲ. ಸಂಪರ್ಕ ಪರಿಶೀಲಿಸಿ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
   "purchaseErrorGeneric": "ಏನೋ ತಪ್ಪಾಗಿದೆ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",

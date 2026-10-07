@@ -49,6 +49,7 @@ Future<void> pushChannelName(Ref ref) async {
   final service = ref.watch(notificationServiceProvider);
   final l10n = await AppLocalizations.delegate.load(locale);
   await service.setUpdatesChannelName(l10n.pushChannelName);
+  await service.setCampaignChannelName(l10n.pushCampaignChannelName);
 }
 
 /// Registers this phone, once per launch, and re-registers when the language, the token or the

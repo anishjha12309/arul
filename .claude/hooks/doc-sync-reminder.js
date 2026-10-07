@@ -55,9 +55,11 @@ const ROUTES = [
       "workers/src/lib/fcm.ts",
       "workers/src/lib/push-audience.ts",
       "lib/features/push/**",
+      "android/**/push/**",
       "db/schema/17_push.sql",
+      "db/schema/31_push_left_out.sql",
     ],
-    docs: ["docs/push.md", "docs/edge-cases.md §Push"],
+    docs: ["docs/push.md", "docs/push-registry.md", "docs/edge-cases.md §Push"],
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],

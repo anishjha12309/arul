@@ -14,8 +14,15 @@ const KV_TOKEN_KEY = "fcm:access_token";
 /** Google mints a 1 h token; cache it five minutes short so a send never races the expiry. */
 const TOKEN_SKEW_SECONDS = 300;
 
-/** The dedicated campaign channel. Immutable once created on a device — app + payload must agree. */
+/** The first campaign channel. Immutable once created on a device — app + payload must agree. */
 export const PUSH_CHANNEL_ID = "arul_updates_v1";
+
+/**
+ * The heads-up campaign channel (IMPORTANCE_HIGH), named for builds >= HEADSUP_MIN_BUILD. The app
+ * posts to it only when it exists and falls back to PUSH_CHANNEL_ID, so a phone that blocked campaigns
+ * stays blocked (docs/notifications.md).
+ */
+export const CAMPAIGN_CHANNEL_ID = "arul_campaigns_v1";
 
 /** Arul gold. Mirrors NotificationService._accent and @color/notification_accent — three copies. */
 const PUSH_ACCENT = "#D4A017";
@@ -29,6 +36,13 @@ const PUSH_ICON = "ic_notification";
  * the plain notification message instead.
  */
 export const COLOR_MIN_BUILD = 76;
+
+/**
+ * versionCode 93 is the first build whose `ArulMessagingService` draws EVERY campaign on
+ * CAMPAIGN_CHANNEL_ID. From it every campaign is data-only, coloured or not; below it nothing changes.
+ * Must equal the versionCode of the release that ships the channel — redeploy if that release moves.
+ */
+export const HEADSUP_MIN_BUILD = 93;
 
 export function buildNumber(appBuild: number): number {
   return appBuild % 1000;
@@ -154,8 +168,11 @@ export async function sendPush(
   // of Sent/Received/Opens against the CMS's own numbers. Pattern: ^[a-zA-Z0-9-_.~%]{1,50}$ — a UUID fits.
   const fcmOptions = { analytics_label: campaign.id };
 
-  const rendersColor =
-    !!campaign.color && device.app_build != null && buildNumber(device.app_build) >= COLOR_MIN_BUILD;
+  const build = device.app_build == null ? null : buildNumber(device.app_build);
+  const headsUp = build != null && build >= HEADSUP_MIN_BUILD;
+  const rendersColor = !!campaign.color && build != null && build >= COLOR_MIN_BUILD;
+  // Full text on a secure lock screen for content; the premium screen keeps Android's PRIVATE default.
+  const onLockScreen = campaign.dest !== "premium";
 
   const plain = {
     ...target,
@@ -176,23 +193,25 @@ export async function sendPush(
         tag: campaign.id,
         // Applies on Android 7.1 and lower ONLY — from 8.0 the channel's importance decides.
         notification_priority: "PRIORITY_DEFAULT",
+        ...(onLockScreen ? { visibility: "PUBLIC" } : {}),
       },
     },
   };
 
-  const coloured = () => ({
+  const drawn = () => ({
     ...target,
     // Data-only: no `notification` block, so FCM hands the message to ArulMessagingService, which
-    // posts it with the colour. The keys the tap path reads stay exactly as the plain path sends them;
-    // the rest are what the service needs to draw the card.
+    // draws it. The keys the tap path reads stay exactly as the plain path sends them; the rest are
+    // what the service needs to draw the card.
     data: {
       ...data,
       title,
       body,
       ...(campaign.image_url ? { image: campaign.image_url } : {}),
-      color: campaign.color as string,
-      channel_id: PUSH_CHANNEL_ID,
+      ...(campaign.color ? { color: campaign.color } : {}),
+      channel_id: headsUp ? CAMPAIGN_CHANNEL_ID : PUSH_CHANNEL_ID,
       tag: campaign.id,
+      ...(onLockScreen ? { visibility: "public" } : {}),
     },
     fcm_options: fcmOptions,
     android: {
@@ -204,7 +223,7 @@ export async function sendPush(
     },
   });
 
-  const message = rendersColor ? coloured() : plain;
+  const message = headsUp || rendersColor ? drawn() : plain;
 
   const first = await postMessage(projectId, accessToken, { message });
   if (first.ok) return first;

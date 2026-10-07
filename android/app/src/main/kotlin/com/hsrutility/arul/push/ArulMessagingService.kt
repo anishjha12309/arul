@@ -26,7 +26,7 @@ import java.net.URL
 import kotlin.math.pow
 
 /**
- * Draws a COLOURED campaign notification itself (docs/push.md §Coloured campaigns).
+ * Draws every data-only campaign notification itself (docs/push.md §Drawn campaigns).
  */
 class ArulMessagingService : FlutterFirebaseMessagingService() {
 
@@ -36,6 +36,9 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         /** Mirrors NotificationService._updatesChannel() in Dart — id, importance and fallback name. */
         private const val FALLBACK_CHANNEL_ID = "arul_updates_v1"
         private const val FALLBACK_CHANNEL_NAME = "Updates from Arul"
+
+        /** Mirrors NotificationService.campaignChannelId. Only Dart creates it, at the user's level. */
+        private const val CAMPAIGN_CHANNEL_ID = "arul_campaigns_v1"
 
         /** The same text colour the CMS preview picks, so the composer and the phone agree. */
         private const val DARK_TEXT = 0xFF1B1B1F.toInt()
@@ -47,7 +50,7 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
         val data = remoteMessage.data
-        if (remoteMessage.notification != null || data["color"] == null) {
+        if (remoteMessage.notification != null || data["campaign_id"] == null) {
             super.onMessageReceived(remoteMessage)
             return
         }
@@ -56,7 +59,7 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         } catch (e: Exception) {
             // Never crash the messaging service: a broken card costs one notification, a crash here
             // costs every later message until the process restarts.
-            Log.e(TAG, "coloured campaign ${data["campaign_id"]} not posted", e)
+            Log.e(TAG, "campaign ${data["campaign_id"]} not posted", e)
         }
     }
 
@@ -66,7 +69,8 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         }
         val campaignId = data["campaign_id"].orEmpty()
         val tag = data["tag"] ?: campaignId
-        val channelId = data["channel_id"] ?: FALLBACK_CHANNEL_ID
+        val channelId = channelFor(data["channel_id"])
+        val headsUp = channelId == CAMPAIGN_CHANNEL_ID
         val title = data["title"].orEmpty()
         val body = data["body"].orEmpty()
         val background = parseColor(data["color"])
@@ -81,9 +85,18 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
             // that drops custom views still read these.
             .setContentTitle(title)
             .setContentText(body)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // Android 7.1 and lower have no channels: a heads-up there takes high priority AND a sound.
+            .setPriority(
+                if (headsUp) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT,
+            )
             .setAutoCancel(true)
             .setContentIntent(tapIntent(message, data, campaignId))
+        if (headsUp && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            builder.setDefaults(NotificationCompat.DEFAULT_SOUND)
+        }
+        if (data["visibility"] == "public") {
+            builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        }
 
         if (background != null) {
             val ink = textColorOn(background)
@@ -92,21 +105,34 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
                 .setCustomContentView(contentView(R.layout.push_colored_collapsed, background, ink, title, body, null))
                 .setCustomBigContentView(contentView(R.layout.push_colored_expanded, background, ink, title, body, picture))
         } else if (picture != null) {
-            // A colour this build cannot read still gets a notification, just not a coloured one.
-            builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(picture))
+            // FCM's own picture layout, which the CMS preview draws: a thumbnail beside the text
+            // collapsed, the whole picture expanded.
+            builder
+                .setLargeIcon(picture)
+                .setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(picture)
+                        .bigLargeIcon(null as Bitmap?),
+                )
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
         }
 
         val manager = NotificationManagerCompat.from(this)
         if (!manager.areNotificationsEnabled()) {
-            Log.i(TAG, "coloured campaign $campaignId dropped: notifications are off for Arul")
+            Log.i(TAG, "campaign $campaignId dropped: notifications are off for Arul")
             return
         }
         FlutterFirebaseMessagingStore.getInstance().storeFirebaseMessage(message)
         try {
             manager.notify(tag, 0, builder.build())
-            Log.i(TAG, "posted coloured campaign=$campaignId picture=${picture != null}")
+            Log.i(
+                TAG,
+                "posted campaign=$campaignId channel=$channelId " +
+                    "colour=${background != null} picture=${picture != null}",
+            )
         } catch (e: SecurityException) {
-            Log.i(TAG, "coloured campaign $campaignId dropped: POST_NOTIFICATIONS not granted")
+            Log.i(TAG, "campaign $campaignId dropped: POST_NOTIFICATIONS not granted")
         }
     }
 
@@ -152,9 +178,22 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         )
     }
 
+    /**
+     * The campaign channel only where Dart created it, else the first channel: a phone that blocked
+     * campaigns before the split must never be handed a fresh, unblocked channel from here.
+     */
+    private fun channelFor(requested: String?): String {
+        if (requested != CAMPAIGN_CHANNEL_ID) return requested ?: FALLBACK_CHANNEL_ID
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return CAMPAIGN_CHANNEL_ID
+        val manager = getSystemService(NotificationManager::class.java)
+        val exists = manager?.getNotificationChannel(CAMPAIGN_CHANNEL_ID) != null
+        return if (exists) CAMPAIGN_CHANNEL_ID else FALLBACK_CHANNEL_ID
+    }
+
     /** Dart creates the channel at every launch; this covers only a phone where that never finished. */
     private fun ensureChannel(channelId: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (channelId == CAMPAIGN_CHANNEL_ID) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(channelId) != null) return
         manager.createNotificationChannel(

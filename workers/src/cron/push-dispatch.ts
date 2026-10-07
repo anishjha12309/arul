@@ -219,9 +219,16 @@ async function startDueCampaigns(sql: postgres.Sql): Promise<number> {
           LEFT JOIN users u ON u.id = pd.user_id
           WHERE d.campaign_id = c.id AND NOT coalesce(u.is_internal, false)
         `;
+    // left_out = the phones this audience skipped because they cannot show it yet (audienceQuery),
+    // so the CMS card can say how many — one extra count per campaign start.
+    const withWaiting = sql`
+      SELECT count(*) FROM (${audienceQuery(sql, audience, { includeWaiting: true })}) w
+    `;
     const counted = (await sql`
       UPDATE push_campaigns c
       SET total = (${countedTotal}),
+          left_out = greatest((${withWaiting})
+            - (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id), 0),
           status = CASE
             WHEN (SELECT count(*) FROM push_deliveries d WHERE d.campaign_id = c.id) = 0
             THEN 'sent' ELSE 'sending' END,

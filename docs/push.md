@@ -2,7 +2,8 @@
 
 Read before touching `workers/src/lib/{fcm,push-audience}.ts`, `workers/src/cron/push-dispatch.ts` or
 `lib/features/push/**`. The channel, the permission and the per-Android rules:
-[notifications.md](notifications.md).
+[notifications.md](notifications.md). Registration, the fid/token split and the prune:
+[push-registry.md](push-registry.md).
 
 ## The one path
 
@@ -16,23 +17,11 @@ phone → tap → getInitialMessage()/onMessageOpenedApp → target → POST /me
 so topics would be a second code path buying nothing. **Its own cron trigger** ([cron.md](cron.md)): a
 send that stops halfway is invisible — nobody reports a notification that never arrived.
 
-## The fid is the IDENTITY, the token is the TARGET
+## Notification messages for older builds — never a Dart background handler
 
-FCM's reference deprecates `message.token` for `message.fid`, yet a registered phone refused the fid —
-same payload, same minute: `{fid}` → 404 `UNREGISTERED`, `{token}` → 200.
-**Believe the device over the reference.** `SEND_BY` in `lib/fcm.ts` is the one switch and it is
-`"token"`; retest both before flipping it, and never hedge with a per-device fallback — a silent second
-path is how "it works on some phones" starts. The fid still earns the primary key: it survives token
-rotation, so a phone keeps one row.
-
-A row with no token is registered but unreachable until `onTokenRefresh` fills it. `sendPush` fails
-that delivery `NO_TOKEN` rather than putting the fid in the token field — that answers UNREGISTERED and
-the row would be deleted for a missing column. Such a row is in NO audience.
-
-## Notification messages by default — never a Dart background handler
-
-Most of this base runs a vivo/Xiaomi/OPPO/realme battery manager that kills a background isolate on
-sight. A notification message is posted by Google Play services without waking the app, so it survives
+From `HEADSUP_MIN_BUILD` every campaign is data-only (§Drawn campaigns); this section is why the rest
+stay notification messages. Most of this base runs a vivo/Xiaomi/OPPO/realme battery manager that kills
+a background isolate on sight. A notification message is posted by Google Play services without waking the app, so it survives
 everything short of a force-stop. It also keeps `priority: HIGH` honest: Android 13 downgrades an app
 whose high-priority messages produce no notification, and every message here produces one.
 
@@ -50,14 +39,22 @@ Dart frames). Register `onBackgroundMessage` anywhere and that gate opens for ev
   launches the app. Test the killed path with `adb shell am kill`, never `am force-stop`.
 - **The foreground is ignored** for plain campaigns — `onMessage` logs one line.
 
-## Coloured campaigns
+## Drawn campaigns
 
-FCM's `color` tints the small icon only, so a true card background means the app draws it. When
-`push_campaigns.color` is set AND the phone's build is `>= COLOR_MIN_BUILD` (`lib/fcm.ts`, compared as
-`app_build % 1000` because per-ABI builds register 1000 × abiCode + build), the Worker sends a
-data-only message: texts, picture, colour, channel and tag in `data`, `android.collapse_key` = the
-campaign id. Everything else stays the plain notification message — it needs no app code alive, while
-this path is only as reliable as `ArulMessagingService`'s short `onMessageReceived` window.
+A true card colour, a heads-up and the lock-screen rule need the app to draw the card, so the Worker
+sends data-only (`lib/fcm.ts`; build = `app_build % 1000`, as per-ABI builds register 1000 × abiCode +
+build): texts, picture, colour, channel, tag and `visibility` in `data`, `android.collapse_key` = the
+campaign id. This path is only as reliable as `ArulMessagingService`'s short `onMessageReceived` window.
+
+- **Build >= `HEADSUP_MIN_BUILD`: every campaign**, with `channel_id: arul_campaigns_v1`; the service
+  posts there only if Dart created it, else on `arul_updates_v1` ([notifications.md](notifications.md)).
+  Plain = BigPicture (FCM's thumbnail-then-picture, which the CMS preview draws) or BigText.
+- **`COLOR_MIN_BUILD` to below it: coloured campaigns only**; older or unknown builds get plain messages.
+- **`HEADSUP_MIN_BUILD` = the versionCode of the release that ships the channel.** Set lower, a plain
+  campaign to the builds in between posts NOTHING: their service skips a data message with no colour.
+- **Lock screen:** content campaigns are PUBLIC (`android.notification.visibility` on the plain path);
+  a `premium` campaign keeps Android's PRIVATE default — nothing may monetize the locked display (Play
+  Ads policy). Never a full-screen intent, a category, another app's promo or an OS look-alike.
 
 - `ArulMessagingService` subclasses the plugin's `FlutterFirebaseMessagingService` and replaces its
   manifest entry — one service may own `MESSAGING_EVENT`, and the inherited `onNewToken` keeps Dart's
@@ -69,29 +66,6 @@ this path is only as reliable as `ArulMessagingService`'s short `onMessageReceiv
   campaigns only.
 - Android 12+ keeps the header row system-styled — accepted. A coloured campaign posts even in the
   foreground: a data message always reaches the service.
-
-## The registry
-
-**Phones register before sign-in, on every launch:** signed out through the public `POST /push/device`
-(upsert on `fid` that NEVER writes `user_id`), signed in through `/me/device`, which re-points it.
-`user_id` NULL = never signed in; sign-out never nulls it. `push_opens.user_id` stays NOT NULL, so a
-never-signed-in phone's tap is recorded in GA4 only. On Android 13+ such a phone counts in its audiences
-but shows nothing until it signs in and allows notifications.
-
-**Only a 404 `UNREGISTERED` or a 400 `INVALID_ARGUMENT` deletes a device row** — never a quota error or
-an outage. **A dead registration is not a failure:** an UNREGISTERED delivery, or one whose device row
-is gone, counts in `push_campaigns.gone` and leaves `total`, so a finished campaign reads total = sent
-+ failed; the delivery row keeps `failed` and its error as the audit trail.
-
-**The registry prunes itself between campaigns.** A `* * * * *` tick that started and drained nothing
-dry-runs a slice of registrations (`validate_only: true` answers 404 for a dead token and 200 without
-delivering), oldest `token_checked_at` first, deletes the dead and stamps the rest; token-less rows
-unseen for 7 days go too. **So the registry mirrors who STILL HAS the app; a low row count is not a
-registration defect.** Judge REGISTRATION by coverage within 30 minutes of sign-up, REACH against GA4
-`first_open` minus `app_remove` — never "rows ÷ sign-ups" over a multi-day cohort.
-
-Daily cleanup rides `30 21 * * *`: deliveries over 30 days, devices idle over **270 days** (FCM's own
-garbage-collection age), and `push/` pictures whose campaign row is gone.
 
 ## Audience — ONE home
 
@@ -105,6 +79,10 @@ Plan states import `premiumPredicate` — **never re-derive entitlement** (CLAUD
   removing the mandate mid-trial flips the status.
 - Every kind LEFT JOINs users, so `all` includes never-signed-in phones; every plan state requires
   `d.user_id IS NOT NULL`, or a phone with no account reads as `free`.
+- **No kind includes an Android 13+ phone that never signed in:** the permission is asked only after
+  sign-in, so it cannot show anything. NULL `android_sdk` stays in (through `coalesce`, or NOT NULL would
+  drop it). `includeWaiting` drops only that clause, to count: `/internal/push/count` adds
+  `waiting_sign_in`, fan-out stamps `push_campaigns.left_out` (db/schema/31 lands BEFORE the Worker).
 - The composer builds one combinable `filter` kind, ANDing what was picked. Nothing picked parses to
   null (it would mean everyone), and so does `plan` with `signed_in:false`. Legacy kinds keep parsing.
 - **Test accounts (`users.is_internal`) receive every real campaign; Play's robots
@@ -133,7 +111,7 @@ Plan states import `premiumPredicate` — **never re-derive entitlement** (CLAUD
   sweep reclaims them. A campaign bumps no `content_version` — a notification is not content.
 - **A campaign in `sending` cannot be deleted** — its delivery rows ARE the idempotency record, and a
   cascade under a running batch lets the retry send twice. The guard lives in the CMS DELETE's own
-  WHERE, so the cron cannot claim the row in between.
+  WHERE, so the cron cannot claim the row in between; the CMS edits only `scheduled` rows the same way.
 
 ## Going live
 

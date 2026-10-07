@@ -201,6 +201,7 @@
   "premiumTrialFinePrint": "फिर {price}/माह ऑटोपे से। कभी भी रद्द करें।",
   "premiumPaidFinePrint": "{price}/माह ऑटोपे से। कभी भी रद्द करें।",
   "premiumSocialProof": "{city} में {name} ने लाइव वॉलपेपर लगाया 🙏",
+  "pushCampaignChannelName": "नए वॉलपेपर और ऑफ़र",
   "pushChannelName": "Arul से अपडेट",
   "purchaseErrorNetwork": "इंटरनेट नहीं है। कनेक्शन जाँचें और दोबारा कोशिश करें।",
   "purchaseErrorGeneric": "कुछ गड़बड़ हो गई। फिर कोशिश करें।",

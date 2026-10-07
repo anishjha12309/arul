@@ -664,6 +664,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'New wallpapers and offers';
+
+  @override
   String get pushChannelName => 'Updates from Arul';
 
   @override

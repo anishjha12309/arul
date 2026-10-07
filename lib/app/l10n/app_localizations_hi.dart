@@ -664,6 +664,9 @@ class AppLocalizationsHi extends AppLocalizations {
   }
 
   @override
+  String get pushCampaignChannelName => 'नए वॉलपेपर और ऑफ़र';
+
+  @override
   String get pushChannelName => 'Arul से अपडेट';
 
   @override

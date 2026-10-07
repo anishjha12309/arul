@@ -334,7 +334,9 @@ export async function handleRefund(c: Context<{ Bindings: Env }>): Promise<Respo
 }
 
 /**
- * POST /internal/push/count { audience } -> { devices }
+ * POST /internal/push/count { audience } -> { devices, waiting_sign_in }
+ * `waiting_sign_in` = the phones the audience leaves out because they cannot show a notification yet
+ * (audienceQuery). Old CMS builds read `devices` only.
  */
 export async function handlePushCount(c: Context<{ Bindings: Env }>): Promise<Response> {
   const env = c.env;
@@ -354,9 +356,13 @@ export async function handlePushCount(c: Context<{ Bindings: Env }>): Promise<Re
   const sql = getDb(env);
   try {
     const rows = (await sql`
-      SELECT count(*)::int AS n FROM (${audienceQuery(sql, audience)}) q
-    `) as unknown as { n: number }[];
-    return c.json({ devices: rows[0]?.n ?? 0 });
+      SELECT (SELECT count(*)::int FROM (${audienceQuery(sql, audience)}) q) AS n,
+             (SELECT count(*)::int FROM (${audienceQuery(sql, audience, { includeWaiting: true })}) w)
+               AS with_waiting
+    `) as unknown as { n: number; with_waiting?: number }[];
+    const devices = rows[0]?.n ?? 0;
+    const waiting = Math.max(0, (rows[0]?.with_waiting ?? devices) - devices);
+    return c.json({ devices, waiting_sign_in: waiting });
   } catch (err) {
     console.error("[internal/push/count] error:", err);
     return Response.json(

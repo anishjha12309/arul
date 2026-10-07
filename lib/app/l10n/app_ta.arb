@@ -201,6 +201,7 @@
   "premiumTrialFinePrint": "பிறகு ஆட்டோபே மூலம் மாதம் {price}. எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்.",
   "premiumPaidFinePrint": "மாதம் {price}, ஆட்டோபே மூலம். எப்போது வேண்டுமானாலும் ரத்து செய்யலாம்.",
   "premiumSocialProof": "{city}-ல் {name} லைவ் வால்பேப்பர் அமைத்தார் 🙏",
+  "pushCampaignChannelName": "புதிய வால்பேப்பர்கள், சலுகைகள்",
   "pushChannelName": "Arul அப்டேட்கள்",
   "purchaseErrorNetwork": "இணையம் இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
   "purchaseErrorGeneric": "ஏதோ தவறு நடந்தது. மீண்டும் முயற்சிக்கவும்.",

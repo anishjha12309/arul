@@ -4,17 +4,25 @@ Read before touching `lib/features/notifications/**`. Campaign pushes (FCM, the 
 [push.md](push.md). There is no reminder schedule and no notification setting; no screen promises a
 notification.
 
-## ONE channel, created at launch
+## Two channels, created at launch
 
-`arul_updates_v1`, `Importance.defaultImportance`, no custom sound, created in
-`NotificationService.initialize()` on EVERY launch — not at opt-in, for three reasons: FCM falls back to
-the manifest's `default_notification_channel_id` when a payload's channel was never created; on Android
-8–12 the **channel is** the user's only control; and a phone upgrading to 13 is pre-granted only if a
-channel already exists. The app's one-off local posts ride the same channel, so system settings list
-exactly one Arul channel.
+`arul_updates_v1` (`defaultImportance`: the local posts, and campaigns on older builds) and
+`arul_campaigns_v1` (campaigns, heads-up), both in `NotificationService.initialize()` on EVERY launch —
+not at opt-in, for three reasons: FCM falls back to the manifest's `default_notification_channel_id`
+when a payload's channel was never created; on Android 8–12 the **channel is** the user's only control;
+and a phone upgrading to 13 is pre-granted only if a channel already exists.
 
-**The id is immutable once a device has seen it** — a new id appears as a second, empty toggle. The NAME
-is mutable, which is how `pushChannelNameProvider` localizes it.
+**An id is immutable once a device has seen it, its importance only goes down and its sound is fixed at
+creation** (NotificationManager reference) — so heads-up took a NEW id. Never delete `arul_updates_v1`:
+settings show a count of deleted channels as a spam signal. NAMES are mutable, which is how
+`pushChannelNameProvider` localizes both.
+
+**The campaign channel copies the person's choice on `arul_updates_v1`, ONCE**
+(`campaignImportanceFor`, stored as `arul_campaign_channel_importance`): blocked → never created, so
+campaigns keep posting to the blocked channel; LOW/MIN → created at that level; otherwise HIGH with the
+system default sound. Only Dart creates it: `ArulMessagingService` falls back to `arul_updates_v1` and
+the manifest default stays there, so a phone that blocked campaigns never gets a fresh, unblocked one. A
+custom sound needs audio Arul owns BEFORE the build that first creates the channel.
 
 ## Permission — once, after sign-in, on the feed
 
@@ -27,7 +35,7 @@ dialog after two refusals, so a third ask reads back as a fresh refusal.
 
 | Android | What governs delivery |
 | --- | --- |
-| 7.0–7.1 (`minSdk`) | No channels: the payload's `notification_priority: PRIORITY_DEFAULT` applies. No permission. |
+| 7.0–7.1 (`minSdk`) | No channels: a notification message's `notification_priority` applies; a drawn heads-up campaign needs `PRIORITY_HIGH` AND a sound. No permission. |
 | 8.0–12 | The channel governs visibility and the user's mute; `requestPermission()` returns authorized with no dialog. |
 | 12+ | **Notification trampolines** are blocked: a tap must be a PendingIntent straight to an activity. Never route one through a BroadcastReceiver or Service. |
 | 13+ | Runtime `POST_NOTIFICATIONS`, off by default on a fresh install. The FCM SDK declares it too — the merged manifest must list it ONCE. |
@@ -39,6 +47,9 @@ caught, and the phone is silently unreachable.
 
 ## Deliberate decisions that look wrong — do not "fix"
 
+- **No always-on shortcut notification.** A `specialUse` foreground service for quick access fails Play's
+  FGS policy and Core App Quality, and Google's Live Updates guidance names "quick access to app
+  features" as inappropriate. The compliant route is a home-screen widget or a Quick Settings tile.
 - **The retired reminders are cleaned up on every launch.** Upgraded phones held
   `arul_devotional_weekly_v1` / `arul_festivals_v1` and native recurring alarms (ids below 3000). The
   plugin RE-CREATES a missing channel when it posts, so deleting the channels alone would grow them back
