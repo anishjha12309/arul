@@ -558,11 +558,32 @@ export async function handlePushOpened(c: Context<{ Bindings: Env }>): Promise<R
 
   const sql = getDb(env);
   try {
+    // One statement: the per-language +1 reads the open's RETURNING, which a replayed tap leaves empty.
+    // Language = the phone this campaign reached, else the user's latest phone. A test account moves
+    // it only on an `internal` campaign, the CMS's Opened rule.
     await sql`
-      INSERT INTO push_opens (campaign_id, user_id)
-      SELECT ${campaignId}, ${sub}
-      WHERE EXISTS (SELECT 1 FROM push_campaigns WHERE id = ${campaignId})
-      ON CONFLICT DO NOTHING
+      WITH opened AS (
+        INSERT INTO push_opens (campaign_id, user_id)
+        SELECT ${campaignId}, ${sub}
+        WHERE EXISTS (SELECT 1 FROM push_campaigns WHERE id = ${campaignId})
+        ON CONFLICT DO NOTHING
+        RETURNING campaign_id
+      )
+      INSERT INTO push_campaign_langs (campaign_id, lang, opened)
+      SELECT o.campaign_id,
+             coalesce(
+               (SELECT coalesce(d.lang, pd.lang) FROM push_deliveries d
+                JOIN push_devices pd ON pd.fid = d.fid
+                WHERE d.campaign_id = o.campaign_id AND pd.user_id = ${sub}
+                ORDER BY (d.status = 'sent') DESC, pd.last_seen_at DESC LIMIT 1),
+               (SELECT pd.lang FROM push_devices pd WHERE pd.user_id = ${sub}
+                ORDER BY pd.last_seen_at DESC LIMIT 1),
+               'en'),
+             1
+      FROM opened o JOIN push_campaigns c ON c.id = o.campaign_id
+      WHERE c.audience->>'kind' = 'internal'
+         OR NOT coalesce((SELECT u.is_internal FROM users u WHERE u.id = ${sub}), false)
+      ON CONFLICT (campaign_id, lang) DO UPDATE SET opened = push_campaign_langs.opened + 1
     `;
     return c.json({ ok: true });
   } catch (err) {

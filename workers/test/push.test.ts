@@ -7,7 +7,7 @@
  * a test that only saw the outer template could not tell the difference.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import type postgres from "postgres";
 
 import { audienceLabel, audienceQuery, parseAudience, type PushAudience } from "../src/lib/push-audience.js";
@@ -18,6 +18,7 @@ import {
   sendPush,
   textFor,
   type PushCampaign,
+  type PushResult,
 } from "../src/lib/fcm.js";
 import { handleRegisterDevice, handleRegisterAnonDevice, handlePushOpened } from "../src/routes/me.js";
 import { handlePushCount, handlePushDispatch, handlePushTest } from "../src/routes/internal.js";
@@ -603,6 +604,8 @@ interface RoutedSql {
   /** Every BOUND value, unstringified. `String(["a","b"])` is `"a,b"` — the exact shape the
    *  array bug produced — so a test that only sees the rendered text cannot tell them apart. */
   bound: unknown[];
+  /** Per statement: its text, its bound values, and which `sql.begin` it ran on (null = outside one). */
+  calls: { text: string; values: unknown[]; tx: number | null }[];
   text: () => string;
 }
 
@@ -612,27 +615,33 @@ function routedSql(
   const fired = new Set<unknown>();
   const statements: string[] = [];
   const bound: unknown[] = [];
-  const fn = (strings: readonly string[], ...values: unknown[]) => {
-    const text = strings.join("?");
-    statements.push(text + " :: " + values.map((v) => String(v)).join(","));
-    bound.push(...values);
-    const hit = routes.find((r) => r.match.test(text));
-    // A route may fail instead of answering — the only way to exercise what happens when a query
-    // blows up mid-drain, which is exactly how the malformed-array bug reached production unseen.
-    if (hit?.throws && !(hit.once && fired.has(hit))) {
-      fired.add(hit);
-      return Promise.reject(new Error(hit.throws));
-    }
-    return Promise.resolve(hit?.rows ?? []);
-  };
-  const sql = Object.assign(fn, {
+  const calls: RoutedSql["calls"] = [];
+  let transactions = 0;
+  const tagged =
+    (tx: number | null) =>
+    (strings: readonly string[], ...values: unknown[]) => {
+      const text = strings.join("?");
+      statements.push(text + " :: " + values.map((v) => String(v)).join(","));
+      bound.push(...values);
+      calls.push({ text, values, tx });
+      const hit = routes.find((r) => r.match.test(text));
+      // A route may fail instead of answering — the only way to exercise what happens when a query
+      // blows up mid-drain, which is exactly how the malformed-array bug reached production unseen.
+      if (hit?.throws && !(hit.once && fired.has(hit))) {
+        fired.add(hit);
+        return Promise.reject(new Error(hit.throws));
+      }
+      return Promise.resolve(hit?.rows ?? []);
+    };
+  const sql = Object.assign(tagged(null), {
     end: vi.fn().mockResolvedValue(undefined),
-    begin: vi.fn(async (cb: (tx: unknown) => unknown) => cb(sql)),
+    begin: vi.fn(async (cb: (tx: unknown) => unknown) => cb(tagged(++transactions))),
   });
   return {
     sql: sql as unknown as postgres.Sql,
     statements,
     bound,
+    calls,
     text: () => statements.join("\n"),
   };
 }
@@ -1028,6 +1037,146 @@ describe("a dead registration is not a failure", () => {
   });
 });
 
+interface LangRow {
+  lang: string;
+  sent: number;
+  failed: number;
+  gone: number;
+}
+
+describe("per-language numbers", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("the fan-out stamps every delivery with its phone's language, off the one audience builder", async () => {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    const routed = routedSql([
+      {
+        match: /SET status = 'sending', started_at/,
+        rows: [{ id: CAMPAIGN_ID, audience: { kind: "all" } }],
+      },
+    ]);
+    await runPushDispatch(makeEnv({ PUSH_ENABLED: "true", _testSql: routed.sql }));
+    const fanOut = routed.calls.find((c) => c.text.includes("INSERT INTO push_deliveries"))!;
+    expect(fanOut.text.replace(/\s+/g, " ").trim()).toBe(
+      "INSERT INTO push_deliveries (campaign_id, fid, lang) SELECT ?, q.fid, pd.lang FROM (?) q JOIN push_devices pd ON pd.fid = q.fid ON CONFLICT DO NOTHING",
+    );
+    expect(
+      routed.statements.some((s) =>
+        s.includes("SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id"),
+      ),
+    ).toBe(true);
+  });
+
+  /** One batch covering every way a delivery ends, then nothing left to claim. */
+  async function drainMixed(audience: unknown) {
+    const { runPushDispatch } = await import("../src/cron/push-dispatch.js");
+    let claims = 0;
+    const routed = routedSql([
+      { match: /SET status = 'sending', started_at/, rows: [] },
+      {
+        match: /FROM push_campaigns\s+WHERE status = 'sending'/,
+        rows: [{ ...CAMPAIGN, last_error: null, audience }],
+      },
+      {
+        match: /AND status = 'pending'\s+LIMIT/,
+        get rows() {
+          return claims++ === 0
+            ? [
+                { fid: "ta-sent", lang: "ta" },
+                { fid: "ta-failed", lang: "ta" },
+                { fid: "hi-dead", lang: "hi" },
+                // The device row is gone: the stamp is the only language left.
+                { fid: "kn-orphan", lang: "kn" },
+                // Fanned out before deliveries carried a language: the phone's own, else English.
+                { fid: "old-sent", lang: null },
+                { fid: "old-orphan", lang: null },
+                { fid: "te-test", lang: "te" },
+              ]
+            : [];
+        },
+      },
+      {
+        match: /SELECT d\.fid, d\.token, d\.lang, d\.app_build/,
+        rows: [
+          { fid: "ta-sent", token: "tok-ok", lang: "ta", internal: false },
+          // No token: NO_TOKEN without a request, a failure rather than a dead registration.
+          { fid: "ta-failed", token: null, lang: "ta", internal: false },
+          { fid: "hi-dead", token: "tok-dead", lang: "hi", internal: false },
+          { fid: "old-sent", token: "tok-ok", lang: "ml", internal: false },
+          // Switched to English after the fan-out; the stamp still decides.
+          { fid: "te-test", token: "tok-ok", lang: "en", internal: true },
+        ],
+      },
+      { match: /count\(\*\)::int AS n FROM push_deliveries/, rows: [{ n: 0 }] },
+    ]);
+    const kv = makeMockKV(new Map([["fcm:access_token", "cached-token"]]));
+    const env = makeEnv({ PUSH_ENABLED: "true", KV: kv, _testSql: routed.sql });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: unknown, init: RequestInit) => {
+        const body = JSON.parse(String(init.body)) as { message: { token: string } };
+        return body.message.token === "tok-dead" ? fcmErr(404, "UNREGISTERED") : fcmOk();
+      }),
+    );
+    await runPushDispatch(env);
+
+    const counter = routed.calls.find((c) => c.text.includes("SET sent = sent +"))!;
+    const upsert = routed.calls.find((c) => c.text.includes("INSERT INTO push_campaign_langs"))!;
+    const json = upsert.values.find((v) => typeof v === "string" && v.startsWith("[")) as string;
+    const rows = (JSON.parse(json) as LangRow[]).sort((a, b) => a.lang.localeCompare(b.lang));
+    const [sent, failed, gone] = counter.values as number[];
+    return { routed, counter, upsert, rows, campaign: { sent, failed, gone } };
+  }
+
+  function sums(rows: LangRow[]) {
+    return {
+      sent: rows.reduce((n, r) => n + r.sent, 0),
+      failed: rows.reduce((n, r) => n + r.failed, 0),
+      gone: rows.reduce((n, r) => n + r.gone, 0),
+    };
+  }
+
+  it("a real campaign counts each outcome under its delivery's language and leaves the test phone out", async () => {
+    const { rows, campaign } = await drainMixed({ kind: "all" });
+    expect(rows).toEqual([
+      { lang: "en", sent: 0, failed: 0, gone: 1 },
+      { lang: "hi", sent: 0, failed: 0, gone: 1 },
+      { lang: "kn", sent: 0, failed: 0, gone: 1 },
+      { lang: "ml", sent: 1, failed: 0, gone: 0 },
+      { lang: "ta", sent: 1, failed: 1, gone: 0 },
+    ]);
+    expect(campaign).toEqual({ sent: 2, failed: 1, gone: 3 });
+    expect(sums(rows)).toEqual(campaign);
+  });
+
+  it("a campaign aimed at test accounts counts the test phone, under its stamped language", async () => {
+    const { rows, campaign } = await drainMixed({ kind: "internal" });
+    expect(rows.find((r) => r.lang === "te")).toEqual({ lang: "te", sent: 1, failed: 0, gone: 0 });
+    expect(rows.find((r) => r.lang === "en")).toEqual({ lang: "en", sent: 0, failed: 0, gone: 1 });
+    expect(campaign).toEqual({ sent: 3, failed: 1, gone: 3 });
+    expect(sums(rows)).toEqual(campaign);
+  });
+
+  it("the language upsert adds to the row and runs on the batch's own transaction", async () => {
+    const { routed, counter, upsert } = await drainMixed({ kind: "all" });
+    const claim = routed.calls.find((c) => /AND status = 'pending'\s+LIMIT/.test(c.text))!;
+    expect(claim.text).toContain("SELECT fid, lang FROM push_deliveries");
+    expect(upsert.tx).not.toBeNull();
+    expect(upsert.tx).toBe(counter.tx);
+    expect(upsert.tx).toBe(claim.tx);
+    const text = upsert.text.replace(/\s+/g, " ");
+    expect(text).toContain("FROM jsonb_to_recordset(?::text::jsonb)");
+    expect(text).toContain(
+      "ON CONFLICT (campaign_id, lang) DO UPDATE SET sent = push_campaign_langs.sent + EXCLUDED.sent, failed = push_campaign_langs.failed + EXCLUDED.failed, gone = push_campaign_langs.gone + EXCLUDED.gone",
+    );
+    expect(upsert.values).toContain(CAMPAIGN_ID);
+    expect(routed.bound.filter((v) => Array.isArray(v))).toEqual([]);
+  });
+});
+
 describe("the idle tick prunes the registry", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -1239,6 +1388,66 @@ describe("POST /me/push-opened", () => {
     expect(db.values()).toContain(USER_ID);
   });
 
+  async function openedStatement() {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const db = recordingSql();
+    const res = await handlePushOpened(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: db.sql }),
+        token,
+        jsonBody: { campaign_id: CAMPAIGN_ID },
+      }),
+    );
+    return { res, db, text: db.text().replace(/\s+/g, " ") };
+  }
+
+  it("adds one open to one language off the insert's own RETURNING, in the same statement", async () => {
+    const { res, db, text } = await openedStatement();
+    expect(await res.json()).toEqual({ ok: true });
+    expect(db.captured).toHaveLength(1);
+    // A replayed tap conflicts, so RETURNING is empty and the language row is not touched.
+    expect(text).toContain("WITH opened AS ( INSERT INTO push_opens (campaign_id, user_id)");
+    expect(text).toContain("ON CONFLICT DO NOTHING RETURNING campaign_id )");
+    expect(text).toContain("INSERT INTO push_campaign_langs (campaign_id, lang, opened)");
+    expect(text).toContain("FROM opened o JOIN push_campaigns c ON c.id = o.campaign_id");
+    expect(text).toContain(
+      "ON CONFLICT (campaign_id, lang) DO UPDATE SET opened = push_campaign_langs.opened + 1",
+    );
+    // Every user id in it is the verified sub; the body only ever names the campaign.
+    expect(db.values()).toEqual([CAMPAIGN_ID, USER_ID, CAMPAIGN_ID, USER_ID, USER_ID, USER_ID]);
+  });
+
+  it("the language is the user's delivery's, then their latest phone's, then English", async () => {
+    const { text } = await openedStatement();
+    expect(text).toContain(
+      "coalesce( (SELECT coalesce(d.lang, pd.lang) FROM push_deliveries d JOIN push_devices pd ON pd.fid = d.fid WHERE d.campaign_id = o.campaign_id AND pd.user_id = ?",
+    );
+    expect(text).toContain(
+      "(SELECT pd.lang FROM push_devices pd WHERE pd.user_id = ? ORDER BY pd.last_seen_at DESC LIMIT 1), 'en'), 1",
+    );
+  });
+
+  it("a test account's open moves the language numbers only on an `internal` campaign", async () => {
+    const { text } = await openedStatement();
+    expect(text).toContain(
+      "WHERE c.audience->>'kind' = 'internal' OR NOT coalesce((SELECT u.is_internal FROM users u WHERE u.id = ?), false)",
+    );
+  });
+
+  it("a database error is still a 500 server_error", async () => {
+    const token = await signAccessToken(USER_ID, JWT_SECRET);
+    const routed = routedSql([{ match: /push_opens/, throws: "connection lost" }]);
+    const res = await handlePushOpened(
+      makeCtx({
+        env: makeEnv({ JWT_SECRET, _testSql: routed.sql }),
+        token,
+        jsonBody: { campaign_id: CAMPAIGN_ID },
+      }),
+    );
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: { code: string } }).error.code).toBe("server_error");
+  });
+
   it("400s on anything that is not a campaign uuid, and writes nothing", async () => {
     const token = await signAccessToken(USER_ID, JWT_SECRET);
     const db = recordingSql();
@@ -1249,6 +1458,62 @@ describe("POST /me/push-opened", () => {
       expect(res.status).toBe(400);
     }
     expect(db.captured).toHaveLength(0);
+  });
+});
+
+describe("the one-off per-language backfill", () => {
+  let sqlText = "";
+  beforeAll(async () => {
+    // tsc sees only workers-types, so Node's fs comes in untyped; vitest runs with cwd = workers/.
+    const { readFileSync } = (await import(/* @vite-ignore */ "node:fs" as string)) as {
+      readFileSync(file: string, encoding: "utf8"): string;
+    };
+    sqlText = readFileSync("../db/migrations/2026-10-07_push_lang_backfill.sql", "utf8")
+      .split("\n")
+      .map((line) => line.replace(/--.*$/, ""))
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  });
+
+  it("fills only sent campaigns with no row yet, marks them approximate, and inserts nothing twice", () => {
+    expect(sqlText.match(/;/g)).toHaveLength(1);
+    expect(sqlText).toContain(
+      "where c.status = 'sent' and not exists (select 1 from push_campaign_langs l where l.campaign_id = c.id)",
+    );
+    expect(sqlText).toContain(
+      "insert into push_campaign_langs (campaign_id, lang, sent, failed, gone, opened, approximate)",
+    );
+    expect(sqlText).toContain("coalesce(o.opened, 0), true from by_lang b");
+    expect(sqlText).toMatch(/on conflict \(campaign_id, lang\) do nothing;$/);
+  });
+
+  it("applies the counters' test-account rule to deliveries and opens alike", () => {
+    expect(sqlText).toContain("c.audience->>'kind' = 'internal' as counts_test_accounts");
+    expect(
+      sqlText.match(/where t\.counts_test_accounts or not coalesce\(u\.is_internal, false\)/g),
+    ).toHaveLength(2);
+  });
+
+  it("reads a dead registration exactly as isDeadRegistration decided it", () => {
+    const exact = [...sqlText.matchAll(/d\.error = '([^']+)'/g)].map((m) => m[1]!);
+    const prefixes = [...sqlText.matchAll(/starts_with\(d\.error, '([^']+)'\)/g)].map((m) => m[1]!);
+    expect(exact).toEqual(["device_gone"]);
+    // The text sendOneBatch writes for a failed send is `${code}: ${message}`.
+    const isGone = (error: string) => exact.includes(error) || prefixes.some((p) => error.startsWith(p));
+    const results: PushResult[] = [
+      { ok: false, status: 404, code: "UNREGISTERED", message: "Requested entity was not found." },
+      { ok: false, status: 400, code: "INVALID_ARGUMENT", message: "The registration token is not valid" },
+      { ok: false, status: 503, code: "UNAVAILABLE", message: "nope" },
+      { ok: false, status: 429, code: "QUOTA_EXCEEDED", message: "nope" },
+      { ok: false, status: 403, code: "SENDER_ID_MISMATCH", message: "nope" },
+      { ok: false, status: 0, code: "NO_TOKEN", message: "Device row carries no FCM token" },
+      { ok: false, status: 404, code: "NOT_FOUND", message: "nope" },
+    ];
+    for (const r of results) {
+      if (r.ok) continue;
+      expect(isGone(`${r.code}: ${r.message}`), r.code).toBe(isDeadRegistration(r));
+    }
   });
 });
 

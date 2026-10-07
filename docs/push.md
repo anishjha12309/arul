@@ -89,6 +89,11 @@ Plan states import `premiumPredicate` — **never re-derive entitlement** (CLAUD
   (`%@cloudtestlabaccounts.com`) receive none.** The flag only moves numbers: `total`, `sent`/`failed`
   (`countsTestAccounts`) and Opened skip test phones, except on an `internal` campaign ("Send to test
   accounts" = a send-now `internal` campaign through `/internal/push/dispatch`).
+- **Per-language numbers live in `push_campaign_langs`**: the daily sweep deletes deliveries at 30 days.
+  A batch adds them by the same rule under each delivery's `lang` (stamped at fan-out — the device row
+  can be gone by the batch), in the counters' transaction and from the same tallies, so the rows sum to
+  the counters. An open adds one only when `push_opens` inserts. `approximate` = filled once from
+  current phone languages.
 
 ## Taps
 

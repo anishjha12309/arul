@@ -84,6 +84,7 @@ each heading's docs.
 - [ ] The campaign channel copies a blocked or lowered `arul_updates_v1` once, and is never created natively
 - [ ] Every campaign to a build >= `HEADSUP_MIN_BUILD` is data-only; a premium campaign stays PRIVATE on the lock screen
 - [ ] An Android 13+ phone that never signed in is in no audience; the count and `left_out` say how many
+- [ ] A campaign's `push_campaign_langs` rows sum to its sent/failed/gone; a replayed tap adds no open
 - [ ] Permission asked once, on the first feed frame after sign-in — never on the wall
 - [ ] No Dart background handler; an unreadable payload opens the app
 - [ ] BOTH tap paths deliver: killed and backgrounded

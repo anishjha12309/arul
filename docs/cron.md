@@ -74,7 +74,10 @@ only when it deleted something. Rules: [push.md](push.md).
 `wrangler dev --test-scheduled` against the Neon `debug` branch with local KV/R2 and PostHog blackholed. It
 refuses `--remote`, refuses unless the local Hyperdrive string is the debug branch, and refuses autopay
 unless `.dev.vars` says `PHONEPE_ENV=SANDBOX` and `--allow-autopay` is passed. Push REALLY sends to the
-debug branch's registered phones — it needs `--allow-push` and `PUSH_ENABLED=true` there. `/__scheduled`
+debug branch's registered phones — it needs `--allow-push` and `PUSH_ENABLED=true` there. **Debug is a copy
+of production, so its registry holds every real phone as of the last reset:** rehearse with one due
+campaign aimed at a throwaway Android 13+ signed-out phone — zero deliveries, no FCM call, fan-out still
+runs. Anything else on debug that is due or `sending` goes out in the same tick. `/__scheduled`
 answers at once and the work runs in `ctx.waitUntil` — read the `[cron] … complete` lines it streams, not
 the HTTP status. The canonical sweep has a preview: `POST /internal/sweep-canonical?dry_run=1` returns
 `wouldDelete` and deletes nothing.

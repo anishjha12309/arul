@@ -203,9 +203,12 @@ async function startDueCampaigns(sql: postgres.Sql): Promise<number> {
       `;
       continue;
     }
+    // The language is stamped here because the device row can be gone by the time a batch counts the
+    // delivery (a reinstall, the idle-tick prune), and its language would go with it.
     await sql`
-      INSERT INTO push_deliveries (campaign_id, fid)
-      SELECT ${row.id}, q.fid FROM (${audienceQuery(sql, audience)}) q
+      INSERT INTO push_deliveries (campaign_id, fid, lang)
+      SELECT ${row.id}, q.fid, pd.lang FROM (${audienceQuery(sql, audience)}) q
+      JOIN push_devices pd ON pd.fid = q.fid
       ON CONFLICT DO NOTHING
     `;
     // An audience of zero phones is finished the moment it starts. Saying "Sent 0" honestly beats a
@@ -337,14 +340,15 @@ async function sendOneBatch(
 ): Promise<BatchResult> {
   return sql.begin(async (tx) => {
     const claimed = (await tx`
-      SELECT fid FROM push_deliveries
+      SELECT fid, lang FROM push_deliveries
       WHERE campaign_id = ${campaign.id} AND status = 'pending'
       LIMIT ${BATCH}
       FOR UPDATE SKIP LOCKED
-    `) as unknown as { fid: string }[];
+    `) as unknown as { fid: string; lang?: string | null }[];
     if (claimed.length === 0) return { attempted: 0, sent: 0, failed: 0, gone: 0 };
 
     const fids = claimed.map((r) => r.fid);
+    const stampedLang = new Map(claimed.map((r) => [r.fid, r.lang]));
     const devices = (await tx`
       SELECT d.fid, d.token, d.lang, d.app_build, coalesce(u.is_internal, false) AS internal
       FROM push_devices d LEFT JOIN users u ON u.id = d.user_id
@@ -387,19 +391,45 @@ async function sendOneBatch(
         WHERE campaign_id = ${campaign.id} AND fid = ${f.fid}
       `;
     }
+    // The campaign counters are summed from the per-language tallies, so the language rows always add
+    // up to them. A NULL lang is a delivery fanned out before the column existed.
+    const byLang = new Map<string, LangTally>();
+    const tally = (fid: string, outcome: "sent" | "failed" | "gone") => {
+      if (!counts(fid)) return;
+      const lang = stampedLang.get(fid) ?? byFid.get(fid)?.lang ?? "en";
+      const row = byLang.get(lang) ?? { lang, sent: 0, failed: 0, gone: 0 };
+      row[outcome] += 1;
+      byLang.set(lang, row);
+    };
+    for (const fid of sentFids) tally(fid, "sent");
+    for (const f of failures) tally(f.fid, f.gone ? "gone" : "failed");
+    const langRows = [...byLang.values()];
+    const sum = (outcome: "sent" | "failed" | "gone") => langRows.reduce((n, r) => n + r[outcome], 0);
+
     // One counter write per batch, not per row: the CMS card reads these numbers every 5 s while a
     // campaign is sending, and they only have to be right at batch granularity. `gone` leaves `total`
     // by the same amount, never below zero — a test phone's delivery was never in it.
-    const sentCount = sentFids.filter(counts).length;
-    const counted = failures.filter((f) => counts(f.fid));
-    const goneCount = counted.filter((f) => f.gone).length;
-    const failedCount = counted.length - goneCount;
+    const sentCount = sum("sent");
+    const failedCount = sum("failed");
+    const goneCount = sum("gone");
     await tx`
       UPDATE push_campaigns
       SET sent = sent + ${sentCount}, failed = failed + ${failedCount}, gone = gone + ${goneCount},
           total = greatest(total - ${goneCount}, 0)
       WHERE id = ${campaign.id}
     `;
+    if (langRows.length > 0) {
+      await tx`
+        INSERT INTO push_campaign_langs (campaign_id, lang, sent, failed, gone)
+        SELECT ${campaign.id}, r.lang, r.sent, r.failed, r.gone
+        FROM jsonb_to_recordset(${JSON.stringify(langRows)}::text::jsonb)
+          AS r(lang text, sent int, failed int, gone int)
+        ON CONFLICT (campaign_id, lang) DO UPDATE
+          SET sent = push_campaign_langs.sent + EXCLUDED.sent,
+              failed = push_campaign_langs.failed + EXCLUDED.failed,
+              gone = push_campaign_langs.gone + EXCLUDED.gone
+      `;
+    }
     const gone = failures.filter((f) => f.gone).length;
     return { attempted: fids.length, sent: sentFids.length, failed: failures.length - gone, gone };
   }) as Promise<BatchResult>;
@@ -407,6 +437,13 @@ async function sendOneBatch(
 
 interface BatchResult {
   attempted: number;
+  sent: number;
+  failed: number;
+  gone: number;
+}
+
+interface LangTally {
+  lang: string;
   sent: number;
   failed: number;
   gone: number;
