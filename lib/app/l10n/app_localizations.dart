@@ -718,6 +718,30 @@ abstract class AppLocalizations {
   /// **'Share a wallpaper or ringtone'**
   String get settingsUploadSub;
 
+  /// No description provided for @settingsQuickBar.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick Access Bar'**
+  String get settingsQuickBar;
+
+  /// No description provided for @settingsQuickBarSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Arul shortcuts in your notification bar'**
+  String get settingsQuickBarSub;
+
+  /// No description provided for @quickBarWallpaper.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallpaper'**
+  String get quickBarWallpaper;
+
+  /// No description provided for @quickBarRingtone.
+  ///
+  /// In en, this message translates to:
+  /// **'Ringtone'**
+  String get quickBarRingtone;
+
   /// No description provided for @settingsLogout.
   ///
   /// In en, this message translates to:

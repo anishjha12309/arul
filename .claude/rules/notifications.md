@@ -5,10 +5,14 @@ paths:
   - "lib/features/push/**"
   - "android/app/src/main/res/raw/**"
   - "android/**/push/**"
+  - "lib/features/quick_bar/**"
+  - "android/**/quickbar/**"
+  - "android/app/src/main/res/layout/quick_bar_*"
 ---
 
-Campaign pushes come only from the CMS through the Worker. No reminders, no notification setting;
-local posts are one-offs on `arul_updates_v1`. No screen promises a notification.
+Campaign pushes come only from the CMS through the Worker. No reminders; local posts are one-offs on
+`arul_updates_v1`. No screen promises a notification. The one setting and the one ongoing post is the
+Quick Access bar — a plain post, never a foreground service ([docs/quick-bar.md](../../docs/quick-bar.md)).
 
 Campaign invariants ([docs/push.md](../../docs/push.md)):
 

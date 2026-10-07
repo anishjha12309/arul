@@ -330,6 +330,19 @@ class AppLocalizationsKn extends AppLocalizations {
   String get settingsUploadSub => 'ವಾಲ್‌ಪೇಪರ್ ಅಥವಾ ರಿಂಗ್‌ಟೋನ್ ಹಂಚಿಕೊಳ್ಳಿ';
 
   @override
+  String get settingsQuickBar => 'ಕ್ವಿಕ್ ಆಕ್ಸೆಸ್ ಬಾರ್';
+
+  @override
+  String get settingsQuickBarSub =>
+      'ನೋಟಿಫಿಕೇಶನ್ ಬಾರ್‌ನಲ್ಲಿ Arul ಶಾರ್ಟ್‌ಕಟ್‌ಗಳು';
+
+  @override
+  String get quickBarWallpaper => 'ವಾಲ್‌ಪೇಪರ್';
+
+  @override
+  String get quickBarRingtone => 'ರಿಂಗ್‌ಟೋನ್';
+
+  @override
   String get settingsLogout => 'ಲಾಗ್ ಔಟ್';
 
   @override

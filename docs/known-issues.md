@@ -22,6 +22,11 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   (`am_kill … stop by com.vivo.abe`, no LMK), state-dependent, not deterministic. The next return is a
   cold start with a second automatic attempt and no outcome for the first — the shape of the ≤11
   "attempted, then nothing" bucket. OEM behaviour; nothing app-side to fix.
+- **An App Link into a task Android restored after killing the process lands on Wallpapers.** The
+  link reaches `onNewIntent` before the router exists and Flutter drops it (reproduced with
+  `am kill` + `am start -d https://arul.hsrutility.com/r/`; the splash went to `/browse`). A true
+  cold start and a live task both work. The Quick Access bar parks its taps natively for exactly this
+  ([quick-bar.md](quick-bar.md)); ad and share links still go through the dropped path.
 - **A reel's decoder grace can starve the paywall clip on a 2-decoder SoC — ACCEPTED (owner).**
   A reel left by a tab switch or a pushed `/premium` holds its decoders for `_leaveGrace` while
   `premium_screen.dart` builds its OWN pool, so a gated action inside that window contends. It

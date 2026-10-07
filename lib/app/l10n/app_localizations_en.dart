@@ -330,6 +330,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsUploadSub => 'Share a wallpaper or ringtone';
 
   @override
+  String get settingsQuickBar => 'Quick Access Bar';
+
+  @override
+  String get settingsQuickBarSub => 'Arul shortcuts in your notification bar';
+
+  @override
+  String get quickBarWallpaper => 'Wallpaper';
+
+  @override
+  String get quickBarRingtone => 'Ringtone';
+
+  @override
   String get settingsLogout => 'Logout';
 
   @override

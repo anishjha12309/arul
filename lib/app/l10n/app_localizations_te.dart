@@ -334,6 +334,18 @@ class AppLocalizationsTe extends AppLocalizations {
   String get settingsUploadSub => 'వాల్‌పేపర్ లేదా రింగ్‌టోన్ పంచుకోండి';
 
   @override
+  String get settingsQuickBar => 'క్విక్ యాక్సెస్ బార్';
+
+  @override
+  String get settingsQuickBarSub => 'నోటిఫికేషన్ బార్‌లో Arul షార్ట్‌కట్‌లు';
+
+  @override
+  String get quickBarWallpaper => 'వాల్‌పేపర్';
+
+  @override
+  String get quickBarRingtone => 'రింగ్‌టోన్';
+
+  @override
   String get settingsLogout => 'లాగ్ అవుట్';
 
   @override

@@ -132,6 +132,14 @@ const ROUTES = [
     docs: ["docs/architecture.md §API", "workers/README.md"],
   },
   { when: ["db/schema/**", "db/seed.sql"], docs: ["docs/data-model.md", "docs/architecture.md §Schema"] },
+  {
+    when: [
+      "lib/features/quick_bar/**",
+      "android/**/quickbar/**",
+      "android/app/src/main/res/layout/quick_bar_*",
+    ],
+    docs: ["docs/quick-bar.md"],
+  },
   { when: ["lib/features/notifications/**"], docs: ["docs/notifications.md"] },
   {
     when: ["lib/core/analytics/**", "workers/src/lib/posthog.ts", "workers/src/lib/analytics-context.ts"],

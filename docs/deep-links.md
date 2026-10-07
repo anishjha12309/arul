@@ -49,7 +49,8 @@ A **campaign push** delivers into the same slot with no URL: `CategoryLinkTarget
 `PremiumLinkTarget` exist for it alone, stamped `DeepLinkSource.push` so `deep_link_opened` never
 reports a push as an ad click ([push.md](push.md)). Its handler selects the category BEFORE routing,
 so the feed's first build already filters — routing first flashes the previous chip. `deep_link_opened`
-fires on every landing and is GA4-only.
+fires on every landing and is GA4-only. A Quick Access bar tap takes the same slot through `PushTapRouter`,
+stamped `DeepLinkSource.quickBar` ([quick-bar.md](quick-bar.md)).
 
 ## Language precedence
 

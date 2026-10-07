@@ -16,6 +16,9 @@ enum DeepLinkSource {
   /// A campaign notification tapped on the phone (`docs/push.md`).
   push,
 
+  /// A button on the always-on Quick Access bar (`docs/quick-bar.md`).
+  quickBar,
+
   debug;
 
   String get key => switch (this) {
@@ -24,6 +27,7 @@ enum DeepLinkSource {
     DeepLinkSource.googleAds => 'google_ads',
     DeepLinkSource.meta => 'meta',
     DeepLinkSource.push => 'push',
+    DeepLinkSource.quickBar => 'quick_bar',
     DeepLinkSource.debug => 'debug',
   };
 

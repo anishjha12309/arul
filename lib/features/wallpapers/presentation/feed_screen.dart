@@ -27,6 +27,7 @@ import '../../../theme/arul_tokens.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../push/providers/push_providers.dart';
+import '../../quick_bar/providers/quick_bar_providers.dart';
 import '../../review/presentation/review_prompt_trigger.dart';
 import '../../ringtones/providers/ringtone_set_provider.dart';
 import '../data/feed_video_player.dart';
@@ -144,7 +145,14 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(ref.read(pushPermissionProvider).promptOnce());
+      // The bar turns itself on right after the ask settles (already spent on later launches).
+      final quickBar = ref.read(quickBarSettingProvider.notifier);
+      unawaited(
+        ref
+            .read(pushPermissionProvider)
+            .promptOnce()
+            .then((_) => quickBar.autoEnable()),
+      );
     });
   }
 

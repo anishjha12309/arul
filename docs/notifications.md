@@ -1,8 +1,8 @@
 # Notifications — the channel, the permission and the local posts
 
 Read before touching `lib/features/notifications/**`. Campaign pushes (FCM, the CMS, taps):
-[push.md](push.md). There is no reminder schedule and no notification setting; no screen promises a
-notification.
+[push.md](push.md). There is no reminder schedule; the one notification setting is the Quick Access bar
+([quick-bar.md](quick-bar.md)). No screen promises a notification.
 
 ## Two channels, created at launch
 
@@ -39,7 +39,7 @@ dialog after two refusals, so a third ask reads back as a fresh refusal.
 | 8.0–12 | The channel governs visibility and the user's mute; `requestPermission()` returns authorized with no dialog. |
 | 12+ | **Notification trampolines** are blocked: a tap must be a PendingIntent straight to an activity. Never route one through a BroadcastReceiver or Service. |
 | 13+ | Runtime `POST_NOTIFICATIONS`, off by default on a fresh install. The FCM SDK declares it too — the merged manifest must list it ONCE. |
-| 14+ | Never set `ongoing` (14 lets users dismiss it anyway); a locked Private Space showing nothing (15) is expected. |
+| 14+ | Never set `ongoing` on a campaign or local post (14 lets users dismiss it anyway) — the Quick Access bar is the one ongoing post. A locked Private Space showing nothing (15) is expected. |
 
 Pictures are downloaded and shown by the FCM SDK itself; WebP support "varies", so the CMS stores JPEG
 only, and a failed download degrades to text-only. No Google Play services → registration throws, is
@@ -47,9 +47,8 @@ caught, and the phone is silently unreachable.
 
 ## Deliberate decisions that look wrong — do not "fix"
 
-- **No always-on shortcut notification.** A `specialUse` foreground service for quick access fails Play's
-  FGS policy and Core App Quality, and Google's Live Updates guidance names "quick access to app
-  features" as inappropriate. The compliant route is a home-screen widget or a Quick Settings tile.
+- **The always-on shortcut bar is a plain ongoing post, never a foreground service** — the policy
+  trade-off and its traps are in [quick-bar.md](quick-bar.md).
 - **The retired reminders are cleaned up on every launch.** Upgraded phones held
   `arul_devotional_weekly_v1` / `arul_festivals_v1` and native recurring alarms (ids below 3000). The
   plugin RE-CREATES a missing channel when it posts, so deleting the channels alone would grow them back

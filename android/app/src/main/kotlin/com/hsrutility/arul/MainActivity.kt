@@ -39,6 +39,8 @@ import com.hsrutility.arul.auth.PlayServicesChannel
 import com.hsrutility.arul.auth.SessionBackupChannel
 import com.hsrutility.arul.feedvideo.FeedVideoPlugin
 import com.hsrutility.arul.payments.UpiIntentChannel
+import com.hsrutility.arul.quickbar.QuickBar
+import com.hsrutility.arul.quickbar.QuickBarChannel
 import com.hsrutility.arul.referral.MetaInstallReferrer
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
@@ -133,6 +135,11 @@ class MainActivity : FlutterFragmentActivity() {
     private var pendingRingtoneType: Int = RingtoneManager.TYPE_RINGTONE
     private var pendingRingtoneResult: MethodChannel.Result? = null
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        QuickBar.capture(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -142,6 +149,8 @@ class MainActivity : FlutterFragmentActivity() {
             FacebookSdk.setIsDebugEnabled(true)
             FacebookSdk.addLoggingBehavior(LoggingBehavior.APP_EVENTS)
         }
+        // A restored task re-delivers its ORIGINAL root intent -> taking it again would replay an old tap.
+        if (savedInstanceState == null) QuickBar.capture(intent)
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()
         // No BuildConfig signal separates an APK from an AAB (both are `release`) -> the installer package is the proxy.
@@ -369,6 +378,11 @@ class MainActivity : FlutterFragmentActivity() {
         val appUpdate = AppUpdateChannel(this, appUpdateLauncher, updateMethodChannel, fakeUpdate)
         appUpdateChannel = appUpdate
         updateMethodChannel.setMethodCallHandler(appUpdate)
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            QuickBarChannel.CHANNEL,
+        ).setMethodCallHandler(QuickBarChannel(this))
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

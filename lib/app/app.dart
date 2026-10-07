@@ -17,6 +17,8 @@ import '../features/notifications/providers/notification_providers.dart';
 import '../features/push/data/push_open_handler.dart';
 import '../features/push/data/push_tap_router.dart';
 import '../features/push/providers/push_providers.dart';
+import '../features/quick_bar/data/quick_bar_taps.dart';
+import '../features/quick_bar/providers/quick_bar_providers.dart';
 import '../features/settings/providers/theme_mode_provider.dart';
 import '../features/wallpapers/providers/catalog_providers.dart';
 import 'l10n/app_localizations.dart';
@@ -59,6 +61,18 @@ class _ArulAppState extends ConsumerState<ArulApp> {
       },
     );
     unawaited(_pushOpen!.start());
+
+    // A Quick Access bar button (docs/quick-bar.md): parked natively, routed like a campaign tap.
+    _quickBarTaps = QuickBarTaps(
+      channel: ref.read(quickBarChannelProvider),
+      onOpen: (target) {
+        if (!mounted) return;
+        _pushTaps?.open(target);
+      },
+    )..start();
+    ref
+      ..listenManual(quickBarSyncProvider, (_, _) {})
+      ..listenManual(quickBarKillSwitchProvider, (_, _) {});
 
     // A session that dies mid-use -> the wall, as a cold start with a dead session already gets.
     // The splash (`/`) routes on its own and the wall needs nothing; every other screen is signed-in
@@ -141,12 +155,14 @@ class _ArulAppState extends ConsumerState<ArulApp> {
 
   PushOpenHandler? _pushOpen;
   PushTapRouter? _pushTaps;
+  QuickBarTaps? _quickBarTaps;
   late final SafeBackButtonDispatcher _backButton;
 
   @override
   void dispose() {
     _pushOpen?.dispose();
     _pushTaps?.dispose();
+    _quickBarTaps?.dispose();
     super.dispose();
   }
 

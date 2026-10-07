@@ -327,6 +327,18 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <!-- Re-posts the Quick Access bar after a reboot, an update or a swipe (docs/notifications.md). -->
+        <!-- A plain post, never a foreground service -> no FOREGROUND_SERVICE_* permission and no Play FGS declaration. -->
+        <receiver
+            android:exported="false"
+            android:name=".quickbar.QuickBarReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
     </application>
 
     <queries>

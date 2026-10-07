@@ -331,6 +331,18 @@ class AppLocalizationsHi extends AppLocalizations {
   String get settingsUploadSub => 'वॉलपेपर या रिंगटोन शेयर करें';
 
   @override
+  String get settingsQuickBar => 'क्विक एक्सेस बार';
+
+  @override
+  String get settingsQuickBarSub => 'नोटिफ़िकेशन बार में Arul के शॉर्टकट';
+
+  @override
+  String get quickBarWallpaper => 'वॉलपेपर';
+
+  @override
+  String get quickBarRingtone => 'रिंगटोन';
+
+  @override
   String get settingsLogout => 'लॉग आउट';
 
   @override

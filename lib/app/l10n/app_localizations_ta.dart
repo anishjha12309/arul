@@ -335,6 +335,18 @@ class AppLocalizationsTa extends AppLocalizations {
   String get settingsUploadSub => 'வால்பேப்பர் அல்லது ரிங்டோனைப் பகிரவும்';
 
   @override
+  String get settingsQuickBar => 'குவிக் ஆக்சஸ் பார்';
+
+  @override
+  String get settingsQuickBarSub => 'நோட்டிஃபிகேஷன் பாரில் Arul ஷார்ட்கட்கள்';
+
+  @override
+  String get quickBarWallpaper => 'வால்பேப்பர்';
+
+  @override
+  String get quickBarRingtone => 'ரிங்டோன்';
+
+  @override
   String get settingsLogout => 'வெளியேறு';
 
   @override

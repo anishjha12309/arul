@@ -21,6 +21,8 @@ import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../legal/presentation/policy_screen.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../push/providers/push_providers.dart';
+import '../../quick_bar/providers/quick_bar_providers.dart';
 import '../../share/tell_a_friend.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
@@ -37,6 +39,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _quickBarBusy = false;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -64,6 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // The row shows the autonym (தமிழ், not "Tamil") — the word a speaker recognises; the sheet
     // still trades in the English NAME, which is why `language` stays what it was.
     final languageShown = appLanguageNativeNames[languageCode] ?? language;
+    final quickBarOn = ref.watch(quickBarSettingProvider) == true;
 
     return Scaffold(
       backgroundColor: bg,
@@ -121,6 +126,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         sub: themeModeLabel(l10n, themeMode),
                         onTap: () => showThemeSheet(context),
                       ),
+                      if (ref.watch(quickBarAllowedProvider))
+                        _RowData(
+                          icon: Icons.notifications_active_outlined,
+                          title: l10n.settingsQuickBar,
+                          identifier: 'arul_settings_quick_bar',
+                          sub: l10n.settingsQuickBarSub,
+                          onTap: () => _setQuickBar(!quickBarOn),
+                          trailing: _QuickBarSwitch(
+                            on: quickBarOn,
+                            onChanged: _setQuickBar,
+                          ),
+                        ),
                       _RowData(
                         icon: Icons.help_outline,
                         title: l10n.settingsNeedHelp,
@@ -174,6 +191,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           : l10n.errorGenericRetry;
       showArulToast(context, message, kind: ToastKind.error);
     }
+  }
+
+  /// Turning it on must end with a bar the person can see: ask once if never asked, otherwise send
+  /// them to the screen that blocks it. The resume re-sync posts it once they allow it there.
+  Future<void> _setQuickBar(bool on) async {
+    // A second tap before the row rebuilds would report the same choice twice.
+    if (_quickBarBusy) return;
+    _quickBarBusy = true;
+    try {
+      await _applyQuickBar(on);
+    } finally {
+      _quickBarBusy = false;
+    }
+  }
+
+  Future<void> _applyQuickBar(bool on) async {
+    await ref.read(quickBarSettingProvider.notifier).set(on, via: 'settings');
+    if (!on || !mounted) return;
+    final bar = ref.read(quickBarChannelProvider);
+    var status = await bar.status();
+    if (!mounted || status == null || status.visible) return;
+    final permission = ref.read(pushPermissionProvider);
+    if (!permission.alreadyPrompted) {
+      await permission.promptOnce();
+      if (!mounted) return;
+      status = await bar.status();
+      if (!mounted || status == null || status.visible) {
+        ref.invalidate(quickBarSyncProvider);
+        return;
+      }
+    }
+    await bar.openSettings();
   }
 
   Future<void> _pickLanguage(String current) async {
@@ -469,6 +518,7 @@ class _RowData {
     required this.sub,
     required this.onTap,
     required this.identifier,
+    this.trailing,
   }) : assert(icon != null || glyph != null, 'a row needs one or the other');
 
   final IconData? icon;
@@ -485,6 +535,9 @@ class _RowData {
   final VoidCallback onTap;
 
   final String identifier;
+
+  /// Replaces the chevron — a switch row toggles in place instead of opening anything.
+  final Widget? trailing;
 }
 
 class _RowsCard extends StatelessWidget {
@@ -591,11 +644,32 @@ class _SettingsRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(Icons.chevron_right, size: 20, color: chevronColor),
+              data.trailing ??
+                  Icon(Icons.chevron_right, size: 20, color: chevronColor),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QuickBarSwitch extends StatelessWidget {
+  const _QuickBarSwitch({required this.on, required this.onChanged});
+
+  final bool on;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Switch(
+      value: on,
+      onChanged: onChanged,
+      // The row is the tap target -> the switch's own 48dp padding would make this row taller.
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      activeThumbColor: Colors.white,
+      activeTrackColor: isDark ? ArulTokens.gold : ArulTokens.maroon,
     );
   }
 }

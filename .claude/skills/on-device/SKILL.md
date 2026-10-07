@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # On-Device Run & Debug
 
-**Run:** `adb devices` (must list one) → `flutter run --dart-define-from-file=env/dev.json`. Release feel: add `--release`. **`dev.json` already points at the LIVE production worker** — it differs from `prod.json` only in `GOOGLE_ANDROID_CLIENT_ID`, so a "dev" run writes real rows. `env/sbx.json` is the only local one (`API_BASE_URL=http://127.0.0.1:8787`, for the verify-payments harness).
+**Run:** `adb devices` (must list one) → `flutter run --device-user 0 --dart-define-from-file=env/dev.json`; release feel: add `--release`. **`dev.json` points at the LIVE worker** (only `GOOGLE_ANDROID_CLIENT_ID` differs from `prod.json`), so a run writes real rows; `env/sbx.json` (`127.0.0.1:8787`) is the only local one. **On the owner's phone install for user 0 only** (`--device-user 0`, `adb install --user 0`) **and `adb shell pm uninstall com.hsrutility.arul` before handing it back**: a plain install also lands in Private space, and its kept data leaves a differently signed record that blocks the Play install.
 
 **More than one target attached — a phone and an emulator both answer** — and adb then picks for
 you silently. `export ANDROID_SERIAL=<serial>` (from `adb devices`) once per session; every adb
@@ -93,7 +93,6 @@ node tools/drive.mjs current           # focused window: how you detect an OS su
 short on a cold Vivo and wasted on a warm Pixel; the `wait*` verbs return the instant the condition
 holds and print what IS on screen when they time out, so a failure names its own cause. Sleep only
 where nothing observable changes.
-A missed `tap` prints what IS on screen, so one failure self-corrects.
 
 **Throttled and offline runs.** A flow that only ever ran on your Wi-Fi is untested: real installs
 sit on Airtel/Jio 4G, and every pre-login timeout fires there first. Throttle the PHONE (Android 13+

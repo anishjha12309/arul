@@ -335,6 +335,18 @@ class AppLocalizationsMl extends AppLocalizations {
   String get settingsUploadSub => 'വാൾപേപ്പറോ റിംഗ്ടോണോ പങ്കിടുക';
 
   @override
+  String get settingsQuickBar => 'ക്വിക്ക് ആക്സസ് ബാർ';
+
+  @override
+  String get settingsQuickBarSub => 'നോട്ടിഫിക്കേഷൻ ബാറിൽ Arul ഷോർട്ട്കട്ടുകൾ';
+
+  @override
+  String get quickBarWallpaper => 'വാൾപേപ്പർ';
+
+  @override
+  String get quickBarRingtone => 'റിംഗ്ടോൺ';
+
+  @override
   String get settingsLogout => 'ലോഗ് ഔട്ട്';
 
   @override
