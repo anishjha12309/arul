@@ -5,6 +5,8 @@
  *   node tools/cron-rehearse.mjs autopay --allow-autopay   # the quarter-hour trigger, PhonePe SANDBOX only
  *   node tools/cron-rehearse.mjs push --allow-push         # "* * * * *"   campaign push dispatch
  *   node tools/cron-rehearse.mjs hourly --wait 90  # seconds to let ctx.waitUntil work finish (default 60)
+ *   node tools/cron-rehearse.mjs hourly --twice --time 1760000400000   # two deliveries of ONE slot -> the slot claim
+ * `--time` pins `scheduledTime` (ms) through Miniflare's /cdn-cgi/handler/scheduled; /__scheduled always uses now.
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -24,10 +26,13 @@ const allowAutopay = args.includes("--allow-autopay");
 const allowPush = args.includes("--allow-push");
 const waitIdx = args.indexOf("--wait");
 const waitSeconds = waitIdx >= 0 ? Number(args[waitIdx + 1]) || 60 : 60;
+const timeIdx = args.indexOf("--time");
+const scheduledTime = timeIdx >= 0 ? Number(args[timeIdx + 1]) : null;
+const twice = args.includes("--twice");
 
-if (!which || !(which in CRONS)) {
+if (!which || !(which in CRONS) || (scheduledTime !== null && !Number.isFinite(scheduledTime))) {
   console.error(
-    `usage: node tools/cron-rehearse.mjs <${Object.keys(CRONS).join("|")}> [--allow-autopay] [--allow-push] [--wait N]`,
+    `usage: node tools/cron-rehearse.mjs <${Object.keys(CRONS).join("|")}> [--allow-autopay] [--allow-push] [--wait N] [--time MS] [--twice]`,
   );
   process.exit(2);
 }
@@ -138,18 +143,25 @@ if (!ready) {
   process.exit(1);
 }
 
-const url = `http://127.0.0.1:${PORT}/__scheduled?cron=${encodeURIComponent(cron)}`;
-console.log(`[rehearse] GET ${url}`);
-try {
-  const res = await fetch(url);
-  console.log(
-    `[rehearse] trigger answered HTTP ${res.status} — waiting ${waitSeconds}s for the handler's background work`,
-  );
-} catch (err) {
-  console.error("[rehearse] trigger failed:", err?.message ?? err);
-  stop();
-  process.exit(1);
+// A second delivery must carry the SAME scheduled time as the first -> without --time it would be "now" again
+const time = scheduledTime ?? (twice ? Date.now() : null);
+const url =
+  time === null
+    ? `http://127.0.0.1:${PORT}/__scheduled?cron=${encodeURIComponent(cron)}`
+    : `http://127.0.0.1:${PORT}/cdn-cgi/handler/scheduled?cron=${encodeURIComponent(cron)}&time=${time}`;
+for (let delivery = 1; delivery <= (twice ? 2 : 1); delivery++) {
+  console.log(`[rehearse] delivery ${delivery}: GET ${url}`);
+  try {
+    const res = await fetch(url);
+    console.log(`[rehearse] trigger answered HTTP ${res.status}`);
+  } catch (err) {
+    console.error("[rehearse] trigger failed:", err?.message ?? err);
+    stop();
+    process.exit(1);
+  }
+  if (twice && delivery === 1) await sleep(3000);
 }
+console.log(`[rehearse] waiting ${waitSeconds}s for the handler's background work`);
 await sleep(waitSeconds * 1000);
 console.log("[rehearse] done — read the [cron] lines above; nothing above touched production");
 stop();

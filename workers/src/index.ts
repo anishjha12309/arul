@@ -47,6 +47,7 @@ import { sweepSubmissions } from "./cron/sweep-submissions.js";
 import { sweepCanonical } from "./cron/sweep-canonical.js";
 import { runAutopayNotify } from "./cron/autopay-notify.js";
 import { runPushDispatch, sweepPush } from "./cron/push-dispatch.js";
+import { claimCronSlot, pruneCronRuns } from "./lib/cron-claim.js";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -137,19 +138,18 @@ app.notFound((c) => {
   );
 });
 
-interface ScheduledEvent {
-  cron: string;
-}
-
 type WorkerType = {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) => Promise<Response>;
-  scheduled: (event: ScheduledEvent, env: Env, ctx: ExecutionContext) => Promise<void>;
+  scheduled: (event: ScheduledController, env: Env, ctx: ExecutionContext) => Promise<void>;
 };
 
 const worker: WorkerType = {
   fetch: async (req, env, ctx) => app.fetch(req, env, ctx),
 
   async scheduled(event, env, ctx) {
+    // A tick can arrive twice -> every trigger but the push minute (SKIP LOCKED already) runs once per slot
+    if (!(await claimCronSlot(env, event.cron, event.scheduledTime))) return;
+
     if (event.cron === "0 * * * *") {
       console.log("[cron] Running hourly catalog rebuild");
       ctx.waitUntil(
@@ -241,6 +241,16 @@ const worker: WorkerType = {
           })
           .catch((err: unknown) => {
             console.error("[cron] Push sweep failed:", err);
+          }),
+      );
+
+      ctx.waitUntil(
+        pruneCronRuns(env)
+          .then((pruned) => {
+            console.log(`[cron] Pruned ${pruned} cron_runs rows`);
+          })
+          .catch((err: unknown) => {
+            console.error("[cron] cron_runs prune failed:", err);
           }),
       );
 

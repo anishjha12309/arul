@@ -16,6 +16,19 @@ invocation**; the hourly and daily crons get 15 min (Workers limits, "CPU time p
 Awaiting PhonePe or Neon is not CPU, but any per-row hashing or JSON work added to those two is charged
 against the 30 s.
 
+## A tick can arrive twice — every trigger but push claims its slot
+
+Cloudflare promises no exactly-once delivery: for a day and a half it delivered every trigger from two
+colos ~27 s apart, and it re-delivers a killed run with the same `scheduledTime`. Two autopay runs then
+notified the same mandates, PhonePe refused the second notify, and 61 live trials were parked.
+`scheduled()` therefore claims `cron_runs (cron, slot)` first, slot = `scheduledTime` FLOORED to the
+trigger's period (15 min / 1 h / 1 day; never rounded, offsets reach ~58 s), and a delivery whose INSERT
+conflicts logs `already claimed` and returns. KV cannot hold this lock (60 s+ to reach another colo) and
+Hyperdrive has no advisory locks. The claim fails OPEN — every job is idempotent underneath. Cost: a
+re-delivery of a run killed after claiming is skipped, so that tick is lost until the next. The push
+minute is not claimed (`SKIP LOCKED` is its guard; a claim would wake Neon every minute). Prove a change
+with `cron-rehearse <cron> --twice --time <ms>`.
+
 ## `0 * * * *` — catalog
 
 1. **build-catalog** — a no-op when `content_version` is unchanged, so most hours only rewrite
@@ -33,7 +46,7 @@ before `30_statuses.sql` and a dropped table never freezes the other two. Proof 
 
 Workers Paid gives one invocation 10,000 subrequests, so the ceiling is the 15-minute wall clock:
 PhonePe calls run sequentially at ~1 s, so a run is budgeted at 600 calls and throughput comes from run
-size AND cadence. Exactly one scan per tick. Pass logic, the 24 h skip, the top-of-hour deferral and
+size AND cadence. One scan per slot (the claim above). Pass logic, the 24 h skip, the top-of-hour deferral and
 Pass D: [autopay-debits.md](autopay-debits.md).
 
 ## `* * * * *` — campaign push only

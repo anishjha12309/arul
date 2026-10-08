@@ -837,6 +837,24 @@ describe("Pass A — a permanent rejection of a mandate PhonePe once confirmed a
     expect(backedOff(executed)).toBeDefined();
   });
 
+  it("does NOT park a never-debited mandate whose notify is rejected right after an ACTIVE status read", async () => {
+    // Two deliveries of one tick: the second notify on a mandate with an open order is refused, the mandate is fine
+    const { sql, executed } = makeSql([], [], [dueForNotify()]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+    phonepe.notifyRedemption.mockRejectedValue(
+      new FakePhonePeApiError("PhonePe notify error 400", 400, "{}"),
+    );
+
+    await runAutopayNotify(makeEnv());
+
+    expect(parked(executed)).toBe(false);
+    expect(posthog.reportPostHogSubscriptionCancel).not.toHaveBeenCalled();
+    expect(backedOff(executed)?.text, "a row another run notified must be left alone").toContain(
+      "notified_at IS NULL",
+    );
+  });
+
   it("parks a proven mandate once it is past the 45-day dunning wall", async () => {
     const { sql, executed } = makeSql(
       [],

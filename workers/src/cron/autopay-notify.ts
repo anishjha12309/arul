@@ -168,6 +168,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
     for (const row of toNotify) {
       const merchantSubId = row.merchant_subscription_id as string;
       const userId = row.user_id as string;
+      let mandateActive = false;
 
       if (!budgetLeft(2)) {
         console.warn(
@@ -203,6 +204,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           }
           continue;
         }
+        mandateActive = true;
 
         const redemptionOrderId = buildMerchantOrderId(userId, "R", merchantOf(merchantSubId));
         // The mandate is FIXED at the row's price -> any other amount is refused, and PhonePe's pre-debit notice says it
@@ -239,20 +241,32 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         const periodEnd = toDate(row.current_period_end);
         const proven = Number(row.debit_count ?? 0) > 0;
         const pastWall = periodEnd !== null && Date.now() - periodEnd.getTime() > DUNNING_WINDOW_MS;
-        if (err instanceof PhonePeApiError && err.isPermanent && proven && !pastWall) {
+        // A notify 4xx on a mandate that just read ACTIVE judges the order, not the mandate: Cloudflare can deliver one
+        // tick twice and PhonePe refuses the second notify. `notified_at IS NULL` spares a row the other run notified
+        if (err instanceof PhonePeApiError && err.isPermanent && (proven || mandateActive) && !pastWall) {
           const recheckAt = new Date(Date.now() + NOTIFY_WINDOW_HOURS * 60 * 60 * 1000 + REJECTED_RECHECK_MS);
-          await sql`
+          const backedOff = await sql`
             UPDATE subscriptions
             SET next_debit_at = ${recheckAt.toISOString()},
                 updated_at    = now()
             WHERE id = ${row.id as string}
               AND status IN ('trialing', 'active')
+              AND notified_at IS NULL
+            RETURNING id
           `;
-          console.error(
-            `[autopay-notify] ALARM — PhonePe rejected mandate ${merchantSubId}, which it confirmed before, ` +
-              `with HTTP ${err.status}. NOT parked; re-asked after ${recheckAt.toISOString()}. ` +
-              `Many of these at once = routing or PhonePe fault, not users. Body: ${err.body}`,
-          );
+          if (backedOff.length === 0) {
+            console.log(
+              `[autopay-notify] Notify for ${merchantSubId} rejected (HTTP ${err.status}) after another run ` +
+                `notified it — left to that order`,
+            );
+          } else {
+            console.error(
+              `[autopay-notify] ALARM — PhonePe rejected the notify for ${merchantSubId} ` +
+                `(${mandateActive ? "mandate read ACTIVE just now" : "a mandate it confirmed before"}) ` +
+                `with HTTP ${err.status}. NOT parked; re-asked after ${recheckAt.toISOString()}. ` +
+                `Many of these at once = routing or PhonePe fault, not users. Body: ${err.body}`,
+            );
+          }
         } else if (err instanceof PhonePeApiError && err.isPermanent) {
           await parkMandate(env, sql, row.id as string, "cancelled", "rejected_by_phonepe");
           console.error(
