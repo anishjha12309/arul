@@ -1626,7 +1626,40 @@ void main() {
       },
     );
 
-    test('never retries a server response, even a 5xx', () async {
+    test('never retries a 4xx — the server judged the request', () async {
+      var calls = 0;
+      await expectLater(
+        ApiAuthService.postWithNetworkRetry(() async {
+          calls++;
+          throw const ApiException(
+            code: 'invalid_token',
+            message: 'bad',
+            status: 401,
+          );
+        }, backoff: Duration.zero),
+        throwsA(isA<ApiException>()),
+      );
+      expect(calls, 1);
+    });
+
+    test('a 5xx is retried ONCE and the retry can win', () async {
+      var calls = 0;
+      final out = await ApiAuthService.postWithNetworkRetry(() async {
+        calls++;
+        if (calls == 1) {
+          throw const ApiException(
+            code: 'server_error',
+            message: 'boom',
+            status: 500,
+          );
+        }
+        return {'ok': true};
+      }, backoff: Duration.zero);
+      expect(calls, 2);
+      expect(out['ok'], true);
+    });
+
+    test('a second 5xx is final', () async {
       var calls = 0;
       await expectLater(
         ApiAuthService.postWithNetworkRetry(() async {
@@ -1639,7 +1672,7 @@ void main() {
         }, backoff: Duration.zero),
         throwsA(isA<ApiException>()),
       );
-      expect(calls, 1);
+      expect(calls, 2);
     });
 
     test('gives up after maxAttempts and rethrows the network error', () async {
@@ -1687,52 +1720,61 @@ void main() {
       },
     );
 
-    test('only the PICKER coming back empty reads as a Play services timeout', () {
-      const empty = GoogleSignInException(
-        code: GoogleSignInExceptionCode.unknownError,
-        description: 'No credential available: provider timed out',
-      );
-      expect(
-        ApiAuthService.isProviderTimeout(surface: 'button', e: empty),
-        isTrue,
-      );
-      expect(
-        ApiAuthService.isProviderTimeout(surface: 'button_after_dismiss', e: empty),
-        isTrue,
-      );
-      expect(
-        ApiAuthService.isProviderTimeout(surface: 'sheet', e: empty),
-        isFalse,
-        reason: 'an empty sheet falls through to the picker already',
-      );
-      expect(
-        ApiAuthService.isProviderTimeout(
-          surface: 'button',
-          e: const GoogleSignInException(
-            code: GoogleSignInExceptionCode.canceled,
-            description: 'No credential available',
+    test(
+      'only the PICKER coming back empty reads as a Play services timeout',
+      () {
+        const empty = GoogleSignInException(
+          code: GoogleSignInExceptionCode.unknownError,
+          description: 'No credential available: provider timed out',
+        );
+        expect(
+          ApiAuthService.isProviderTimeout(surface: 'button', e: empty),
+          isTrue,
+        );
+        expect(
+          ApiAuthService.isProviderTimeout(
+            surface: 'button_after_dismiss',
+            e: empty,
           ),
-        ),
-        isFalse,
-      );
-    });
+          isTrue,
+        );
+        expect(
+          ApiAuthService.isProviderTimeout(surface: 'sheet', e: empty),
+          isFalse,
+          reason: 'an empty sheet falls through to the picker already',
+        );
+        expect(
+          ApiAuthService.isProviderTimeout(
+            surface: 'button',
+            e: const GoogleSignInException(
+              code: GoogleSignInExceptionCode.canceled,
+              description: 'No credential available',
+            ),
+          ),
+          isFalse,
+        );
+      },
+    );
 
-    test('the Worker failing to fetch Google keys is retried once more', () async {
-      var calls = 0;
-      final out = await ApiAuthService.postWithNetworkRetry(() async {
-        calls++;
-        if (calls == 1) {
-          throw const ApiException(
-            code: 'google_keys_unavailable',
-            message: 'x',
-            status: 503,
-          );
-        }
-        return {'ok': true};
-      }, backoff: Duration.zero);
-      expect(calls, 2);
-      expect(out['ok'], true);
-    });
+    test(
+      'the Worker failing to fetch Google keys is retried once more',
+      () async {
+        var calls = 0;
+        final out = await ApiAuthService.postWithNetworkRetry(() async {
+          calls++;
+          if (calls == 1) {
+            throw const ApiException(
+              code: 'google_keys_unavailable',
+              message: 'x',
+              status: 503,
+            );
+          }
+          return {'ok': true};
+        }, backoff: Duration.zero);
+        expect(calls, 2);
+        expect(out['ok'], true);
+      },
+    );
 
     test('a server answer from one sibling waits for the other', () async {
       var calls = 0;
@@ -1744,7 +1786,7 @@ void main() {
       }, hedgeAfter: const Duration(milliseconds: 10));
       await Future<void>.delayed(const Duration(milliseconds: 40));
       second.completeError(
-        const ApiException(code: 'server_error', message: 'x', status: 500),
+        const ApiException(code: 'invalid_token', message: 'x', status: 401),
       );
       await Future<void>.delayed(Duration.zero);
       first.complete({'ok': true});

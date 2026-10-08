@@ -101,7 +101,9 @@ upload keys are forced under `user/<sub>/`; canonical media is writable only thr
 approval. Secrets live in the Worker only; the app holds none.
 
 Google's JWKS is cached in memory and the colo's Cache API (Google's max-age, ≤ 6 h; jose's own set
-ignores Cache-Control). A failed key fetch answers 503 `google_keys_unavailable`, never 401, which the
+ignores Cache-Control), and the last good set sits in KV `google:jwks` for a colo that never fetched:
+a degraded colo's Google fetch is the one that times out. During an outage a copy under 24 h old
+still verifies. A failed key fetch answers 503 `google_keys_unavailable`, never 401, which the
 app would read as a bad account. The session is mirrored into Google's Block Store on every token
 write and deleted with the tokens: it survives an uninstall (Backup on) and a device restore, so a
 fresh install seeds it and the first 401 refreshes or ends it. Every fresh install's sheet waits on

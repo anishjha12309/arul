@@ -24,7 +24,8 @@ paths:
   `exchanging` restarts the clock, else `stallResumeGrace` then `stalled_resumed`. A LOST callback
   relaunches ONCE, a dismissal never — bar `selectorStripped` and `addAccountAbandoned` (the
   PICKER once, never the sheet), and a picker Play services timed out (`providerTimedOut`, once).
-  `POST /auth/login` retries connectivity failures and a keys-unavailable 503, hedged at 8 s.
+  `POST /auth/login` retries connectivity failures, a keys-unavailable 503 and ONE other 5xx,
+  hedged at 8 s.
 - `noPlayServices` shows GOOGLE'S update dialog (`PlayServicesChannel`), never our copy.
 - **A RETURN re-arms the automatic sheet ONCE** (`noteAppLifecycle`; `inactive` is not away), and
   a RECONNECT (`noteConnectivity`): offline→online, network failure or GMS's `[16] reauth`

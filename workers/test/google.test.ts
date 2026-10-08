@@ -58,6 +58,22 @@ function fakeCache() {
   return { cache, store };
 }
 
+/** An in-memory stand-in for the KV binding -> only the two calls google.ts makes. */
+function fakeKv() {
+  const store = new Map<string, string>();
+  const kv = {
+    get: vi.fn(async (key: string, type?: string) => {
+      const raw = store.get(key);
+      if (raw === undefined) return null;
+      return type === "json" ? JSON.parse(raw) : raw;
+    }),
+    put: vi.fn(async (key: string, value: string, _options?: KVNamespacePutOptions) => {
+      store.set(key, value);
+    }),
+  };
+  return { kv: kv as unknown as KVNamespace, store, get: kv.get, put: kv.put };
+}
+
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -241,5 +257,60 @@ describe("verifyGoogleIdToken", () => {
     const claims = await g.verifyGoogleIdToken(await sign(key), CLIENT_ID);
     expect(claims.sub).toBe("google-sub-1");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a colo that never fetched reads the keys another colo wrote to KV, not Google", async () => {
+    const key = await makeKey("k1");
+    const { kv, put } = fakeKv();
+    fetchMock.mockImplementation(async () => jwksResponse([key]));
+
+    await (await freshModule()).verifyGoogleIdToken(await sign(key), CLIENT_ID, kv);
+    expect(put).toHaveBeenCalledTimes(1);
+    expect(put.mock.calls[0]![2]).toEqual({ expirationTtl: 24 * 60 * 60 });
+
+    // No Cache API stub -> the second isolate is in a colo with nothing cached
+    await (await freshModule()).verifyGoogleIdToken(await sign(key), CLIENT_ID, kv);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a cold colo whose Google fetch fails verifies with an expired KV copy under 24 h old", async () => {
+    const key = await makeKey("k1");
+    const { kv } = fakeKv();
+    const t0 = Date.now();
+    const now = vi.spyOn(Date, "now").mockReturnValue(t0);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetchMock.mockImplementationOnce(async () => jwksResponse([key], "max-age=60"));
+    await (await freshModule()).verifyGoogleIdToken(await sign(key), CLIENT_ID, kv);
+
+    now.mockReturnValue(t0 + 61_000);
+    fetchMock.mockImplementation(async () => {
+      throw new TypeError("Network connection lost.");
+    });
+    const claims = await (await freshModule()).verifyGoogleIdToken(await sign(key), CLIENT_ID, kv);
+    expect(claims.sub).toBe("google-sub-1");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    now.mockReturnValue(t0 + 25 * 60 * 60 * 1000);
+    const g = await freshModule();
+    await expect(g.verifyGoogleIdToken(await sign(key), CLIENT_ID, kv)).rejects.toBeInstanceOf(
+      g.GoogleKeysUnavailableError,
+    );
+  });
+
+  it("a broken KV never fails a login -> it falls through to Google", async () => {
+    const key = await makeKey("k1");
+    const kv = {
+      get: vi.fn(async () => {
+        throw new Error("kv down");
+      }),
+      put: vi.fn(async () => {
+        throw new Error("kv down");
+      }),
+    } as unknown as KVNamespace;
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    fetchMock.mockImplementation(async () => jwksResponse([key]));
+
+    const claims = await (await freshModule()).verifyGoogleIdToken(await sign(key), CLIENT_ID, kv);
+    expect(claims.sub).toBe("google-sub-1");
   });
 });

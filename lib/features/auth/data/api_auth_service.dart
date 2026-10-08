@@ -430,8 +430,8 @@ class ApiAuthService implements AuthService {
 
   /// Runs [post], retrying connectivity-class failures ([isNetworkError])
   /// until [maxAttempts] are spent or [elapsedCap] has passed since the first
-  /// attempt started. A server RESPONSE (any [ApiException], even a 5xx) is
-  /// never retried — the server spoke; retrying is the caller's decision.
+  /// attempt started. A 4xx is final; a 5xx gets ONE more try (a data-centre
+  /// blip answers 500 for one request and 200 for the next).
   /// An attempt still pending after [hedgeAfter] gets a second one BESIDE it,
   /// never instead of it: on a 2G link the first is usually almost through,
   /// and whichever answers first wins. The login upsert is idempotent.
@@ -449,6 +449,7 @@ class ApiAuthService implements AuthService {
     final clock = Stopwatch()..start();
     var attempts = 0;
     var pending = 0;
+    var serverRetried = false;
     Object? serverError;
     StackTrace? serverStack;
     Timer? hedge;
@@ -487,12 +488,14 @@ class ApiAuthService implements AuthService {
         onError: (Object e, StackTrace s) {
           pending--;
           if (done.isCompleted) return;
-          if (!isNetworkError(e) && !_keysUnavailable(e)) {
+          final serverBlip = _serverBlip(e) && !serverRetried;
+          if (!isNetworkError(e) && !_keysUnavailable(e) && !serverBlip) {
             serverError ??= e;
             serverStack ??= s;
             settleIfIdle(e, s);
             return;
           }
+          if (serverBlip) serverRetried = true;
           if (pending == 0 && mayStartAnother()) {
             onRetry?.call();
             hedge?.cancel();
@@ -513,6 +516,10 @@ class ApiAuthService implements AuthService {
   /// is safe, where every other server answer is final.
   static bool _keysUnavailable(Object e) =>
       e is ApiException && e.code == 'google_keys_unavailable';
+
+  /// Any other 5xx: the login is an idempotent upsert, so a repeat cannot make a second user.
+  static bool _serverBlip(Object e) =>
+      e is ApiException && e.status >= 500 && !_keysUnavailable(e);
 
   /// A reinstall (or a restored phone) whose session Block Store kept: the tokens go back into
   /// storage and the seed continues as a stored session, whose first 401 refreshes it or, if it is
@@ -793,10 +800,7 @@ class ApiAuthService implements AuthService {
       final data = await postWithNetworkRetry(
         () => _api.post(
           '/auth/login',
-          body: {
-            'idToken': idToken,
-            'nonce': ?GoogleSignInInit.nonce,
-          },
+          body: {'idToken': idToken, 'nonce': ?GoogleSignInInit.nonce},
           requiresAuth: false,
           withToken: false,
           timeout: const Duration(seconds: 15),

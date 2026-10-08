@@ -39,7 +39,7 @@ export async function handleLogin(c: Context<{ Bindings: Env }>): Promise<Respon
   }
   let googleClaims;
   try {
-    googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID);
+    googleClaims = await verifyGoogleIdToken(idToken, env.GOOGLE_WEB_CLIENT_ID, env.KV);
   } catch (err) {
     // Google's keys were unreachable -> the token was never judged -> a 401 would read as a bad account
     if (err instanceof GoogleKeysUnavailableError) {

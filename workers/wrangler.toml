@@ -106,7 +106,8 @@ head_sampling_rate = 1
 
 # Every DB route does 2–3 Hyperdrive round trips to Neon in ap-southeast-1, and about a fifth of Indian
 # traffic enters Cloudflare in Europe (Jio peering -> MRS), so those requests paid EU->SIN per hop.
-# Smart placement runs the Worker near Neon instead of near the user -> one long hop, not three.
+# Run the Worker next to Neon (aws ap-southeast-1) instead of near the user -> one long hop, not three.
+# Smart placement only moves colos with traffic history, so a colo India is newly routed through ran it far from Neon.
 # Browse never reaches this Worker (edge-cached catalog), so nothing latency-sensitive moves away from users.
 [placement]
-mode = "smart"
+region = "aws:ap-southeast-1"

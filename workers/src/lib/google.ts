@@ -24,6 +24,14 @@ const STALE_KEYS_MAX_MS = 24 * 60 * 60 * 1000;
 // Cache API entries carry our own absolute expiry -> the in-memory copy expires with the colo copy
 const EXPIRES_AT_HEADER = "X-Arul-Jwks-Expires-At";
 const FETCHED_AT_HEADER = "X-Arul-Jwks-Fetched-At";
+// The Cache API is per colo -> a colo that never fetched has nothing, and its Google fetch can be the one that fails
+const KV_KEYS_KEY = "google:jwks";
+
+interface StoredKeys {
+  jwks: JSONWebKeySet;
+  expiresAt: number;
+  fetchedAt: number;
+}
 
 /** Google's keys could not be fetched -> the TOKEN was never judged -> handleLogin answers 503, not 401. */
 export class GoogleKeysUnavailableError extends Error {
@@ -48,12 +56,16 @@ export interface GoogleIdTokenClaims {
   nonce: string | undefined;
 }
 
-/** Every failure THROWS -> GoogleKeysUnavailableError when the keys could not be had, anything else = bad token. */
+/**
+ * Every failure THROWS -> GoogleKeysUnavailableError when the keys could not be had, anything else = bad token.
+ * `kv` holds the last good key set for every colo; without it only this colo's caches are tried.
+ */
 export async function verifyGoogleIdToken(
   idToken: string,
   googleWebClientId: string,
+  kv?: KVNamespace,
 ): Promise<GoogleIdTokenClaims> {
-  let keys = await loadKeys();
+  let keys = await loadKeys(kv);
 
   let payload;
   try {
@@ -66,7 +78,7 @@ export async function verifyGoogleIdToken(
     if (!(err instanceof errors.JWKSNoMatchingKey) || Date.now() - keys.fetchedAt < KID_MISS_COOLDOWN_MS) {
       throw err;
     }
-    keys = await fetchAndStoreKeys();
+    keys = await fetchAndStoreKeys(kv);
     ({ payload } = await jwtVerify(idToken, keys.getKey, {
       audience: googleWebClientId,
       issuer: VALID_ISSUERS,
@@ -94,27 +106,49 @@ export async function verifyGoogleIdToken(
   };
 }
 
-async function loadKeys(): Promise<KeySet> {
+async function loadKeys(kv: KVNamespace | undefined): Promise<KeySet> {
   if (_keys && Date.now() < _keys.expiresAt) return _keys;
   const cached = await readCachedKeys();
   if (cached) {
     _keys = cached;
     return cached;
   }
+  const shared = await readSharedKeys(kv);
+  if (shared && Date.now() < shared.expiresAt) {
+    _keys = shared;
+    return shared;
+  }
   const stale = _keys;
   try {
-    return await fetchAndStoreKeys();
+    return await fetchAndStoreKeys(kv);
   } catch (err) {
+    if (!(err instanceof GoogleKeysUnavailableError)) throw err;
     // Google keeps a retired key published for days -> a recently expired copy still verifies during an outage
-    if (
-      err instanceof GoogleKeysUnavailableError &&
-      stale &&
-      Date.now() - stale.fetchedAt < STALE_KEYS_MAX_MS
-    ) {
-      console.warn("[google] JWKS fetch failed, verifying with the expired in-memory copy:", err);
-      return stale;
+    const fallback = [stale, shared]
+      .filter((k): k is KeySet => k !== null && Date.now() - k.fetchedAt < STALE_KEYS_MAX_MS)
+      .sort((a, b) => b.fetchedAt - a.fetchedAt)[0];
+    if (fallback) {
+      console.warn("[google] JWKS fetch failed, verifying with an expired copy:", err);
+      return fallback;
     }
     throw err;
+  }
+}
+
+// Like the Cache API, KV is an optimisation -> a failed read is a miss, never a failed login
+async function readSharedKeys(kv: KVNamespace | undefined): Promise<KeySet | null> {
+  if (!kv) return null;
+  try {
+    const stored = await kv.get<StoredKeys>(KV_KEYS_KEY, "json");
+    if (!stored || !Number.isFinite(stored.expiresAt) || !Number.isFinite(stored.fetchedAt)) return null;
+    return {
+      getKey: createLocalJWKSet(stored.jwks),
+      expiresAt: stored.expiresAt,
+      fetchedAt: stored.fetchedAt,
+    };
+  } catch (err) {
+    console.warn("[google] JWKS KV read failed:", err);
+    return null;
   }
 }
 
@@ -149,7 +183,7 @@ async function readCachedKeys(): Promise<KeySet | null> {
   }
 }
 
-async function fetchAndStoreKeys(): Promise<KeySet> {
+async function fetchAndStoreKeys(kv: KVNamespace | undefined): Promise<KeySet> {
   const { jwks, ttlS } = await fetchGoogleJwks();
   let getKey: KeySet["getKey"];
   try {
@@ -177,6 +211,15 @@ async function fetchAndStoreKeys(): Promise<KeySet> {
       );
     } catch (err) {
       console.warn("[google] JWKS cache write failed (non-fatal):", err);
+    }
+  }
+  if (kv) {
+    // Expires with the outage fallback's limit -> a copy older than that is never used anyway
+    try {
+      const stored: StoredKeys = { jwks, expiresAt, fetchedAt };
+      await kv.put(KV_KEYS_KEY, JSON.stringify(stored), { expirationTtl: STALE_KEYS_MAX_MS / 1000 });
+    } catch (err) {
+      console.warn("[google] JWKS KV write failed (non-fatal):", err);
     }
   }
   return _keys;

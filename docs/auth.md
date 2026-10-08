@@ -90,8 +90,9 @@ through an old-shaped request. Never log, toast or track the value.
   fails in ~2 s as `[16] Account reauth failed` and people tapped it over and over. The screen re-reads
   `checkConnectivity()` first so a stale stream never parks a live phone. Link-up or a resume releases it
   as the PICKER (`button_after_offline`), never the sheet; over a held launch the launch wins.
-- **`POST /auth/login` retries connectivity-class failures only** — ≤3 attempts, 15 s cap, 1.5 s
-  backoff, inside the 30 s stall budget. A server RESPONSE is never retried; GMS survives blackouts
+- **`POST /auth/login` retries connectivity failures and ONE 5xx** — ≤3 attempts, 15 s cap, 1.5 s
+  backoff, inside the 30 s stall budget. A 4xx is final; a degraded colo answers 500 for one request
+  and 200 for the next. GMS survives blackouts
   this POST does not, and a lost exchange must never cost a picker. A TLS failure is connectivity
   (`http`'s IOClient passes it through raw). An attempt pending 8 s gets ONE sibling beside it, never
   instead: on 2G the first is nearly through. The Worker's 503 `google_keys_unavailable` is retried —
