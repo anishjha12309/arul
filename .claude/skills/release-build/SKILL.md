@@ -72,7 +72,7 @@ disable-model-invocation: true
      `jar is unsigned` and `keytool -printcert -jarfile` says `Not a signed jar file` — both read as
      a broken build, and the `| grep "CN="` pipe above just comes back empty. Use apksigner:
      ```bash
-     "$LOCALAPPDATA/Android/Sdk/build-tools/36.0.0/apksigner.bat" verify --print-certs \
+     "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs \
        build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
      ```
    Must show `CN=HSR Apps`. `CN=Android Debug` = NOT release-signed; stop.
