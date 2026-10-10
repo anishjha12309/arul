@@ -5,8 +5,32 @@ import fs from "node:fs";
 
 export const MAX_SECONDS = 30;
 export const MAX_BYTES = 10_000_000;
+/** The video rule (docs/media-conventions.md): width % 128, height % 32, inside the 1088×1920 hw cap. */
 export const W = 1024;
-export const H = 1824;
+const H_STEP = 32;
+const MAX_H = 1920;
+const MIN_H = 512;
+
+/**
+ * The target frame for a source of `sw`×`sh`: the clip keeps the SOURCE's shape (a 2:3 source is
+ * 1024×1536), snapped to the rule — never padded to one canvas with a blurred fill (owner, Oct 2026:
+ * the fill put a blur band above every title). The snap trims at most 31 px of height.
+ */
+export function frameFor(sw, sh) {
+  const h = Math.round((W * sh) / sw / H_STEP) * H_STEP;
+  return { width: W, height: Math.min(MAX_H, Math.max(MIN_H, h)) };
+}
+
+export function onVideoRule(width, height) {
+  return (
+    width > 0 &&
+    height > 0 &&
+    width % 128 === 0 &&
+    height % H_STEP === 0 &&
+    Math.min(width, height) <= 1088 &&
+    Math.max(width, height) <= MAX_H
+  );
+}
 
 /** The CMS's titleFor (ui.tsx): stem, separators to spaces, each word capitalised. */
 export function titleFor(name) {
@@ -33,42 +57,56 @@ function run(cmd, args) {
   return spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 }
 
-export function transcode(src, out) {
+/**
+ * [opts.crop] = `{ x, y, w, h }` in source pixels, taken before the scale — the re-encode of a padded
+ * clip cuts its fill bands off here. [opts.copyAudio] keeps the source's AAC as is (already levelled).
+ */
+export function transcode(src, out, opts = {}) {
   const meta = ffprobeJson(src);
   if (!meta) return { ok: false, reason: "ffprobe could not read the source" };
   if (!meta.streams.some((s) => s.codec_type === "audio"))
     return { ok: false, reason: "source has no audio" };
+  const v = meta.streams.find((s) => s.codec_type === "video");
+  const crop = opts.crop ?? { x: 0, y: 0, w: v.width, h: v.height };
+  const { width, height } = frameFor(crop.w, crop.h);
   // Trimmed short of the cap: AAC frame rounding lands a `-t 30` encode at ~30.1 s, which QC refuses
   const seconds = Math.min(MAX_SECONDS - 0.2, Number(meta.format.duration) || MAX_SECONDS);
   const t = seconds.toFixed(3);
 
   // Pass 1 measures; pass 2 feeds the measurement back with linear=true (the paywall recipe)
-  const m = run("ffmpeg", [
-    ..."-hide_banner -nostats -t".split(" "),
-    t,
-    "-i",
-    src,
-    "-vn",
-    "-af",
-    "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json",
-    "-f",
-    "null",
-    "-",
-  ]);
-  const json = m.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/);
-  if (!json) return { ok: false, reason: "loudnorm measure pass failed" };
-  const ln = JSON.parse(json[0]);
-  const af =
-    `loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=${ln.input_i}:measured_TP=${ln.input_tp}:` +
-    `measured_LRA=${ln.input_lra}:measured_thresh=${ln.input_thresh}:offset=${ln.target_offset}:linear=true,` +
-    "aresample=48000,alimiter=limit=0.84:level=false";
-  // Blurred fill, never a crop: a 2:3 source keeps its whole frame inside the 9:16 canvas
+  const m = opts.copyAudio
+    ? null
+    : run("ffmpeg", [
+        ..."-hide_banner -nostats -t".split(" "),
+        t,
+        "-i",
+        src,
+        "-vn",
+        "-af",
+        "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json",
+        "-f",
+        "null",
+        "-",
+      ]);
+  let af = null;
+  if (m) {
+    const json = m.stderr.match(/\{[^{}]*"input_i"[^{}]*\}/);
+    if (!json) return { ok: false, reason: "loudnorm measure pass failed" };
+    const ln = JSON.parse(json[0]);
+    af =
+      `loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=${ln.input_i}:measured_TP=${ln.input_tp}:` +
+      `measured_LRA=${ln.input_lra}:measured_thresh=${ln.input_thresh}:offset=${ln.target_offset}:linear=true,` +
+      "aresample=48000,alimiter=limit=0.84:level=false";
+  }
+  // The source's own shape: a cover scale onto the snapped frame trims ≤31 px of height, never a band
   const vf =
-    `[0:v]split=2[bg][fg];` +
-    `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=bilinear,crop=${W}:${H},gblur=sigma=30,eq=brightness=-0.06[bgb];` +
-    `[fg]scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,unsharp=5:5:0.6:3:3:0.3[fgs];` +
-    `[bgb][fgs]overlay=(W-w)/2:(H-h)/2,scale=${W}:${H}:out_range=tv,setsar=1,format=yuv420p[v];` +
-    `[0:a:0]${af}[a]`;
+    `[0:v]crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},` +
+    `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos:out_range=tv,` +
+    `crop=${width}:${height},unsharp=5:5:0.6:3:3:0.3,setsar=1,format=yuv420p[v]` +
+    (af ? `;[0:a:0]${af}[a]` : "");
+  const audio = af
+    ? ["-map", "[a]", ..."-c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2".split(" ")]
+    : ["-map", "0:a:0", "-c:a", "copy"];
 
   for (const [rate, max] of [
     ["2000k", "2400k"],
@@ -81,7 +119,7 @@ export function transcode(src, out) {
       src,
       "-filter_complex",
       vf,
-      ..."-map [v] -map [a] -sn -dn -map_metadata -1".split(" "),
+      ..."-map [v] -sn -dn -map_metadata -1".split(" "),
       ..."-c:v libx264 -profile:v high -preset medium -g 60 -pix_fmt yuv420p -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709".split(
         " ",
       ),
@@ -91,7 +129,8 @@ export function transcode(src, out) {
       max,
       "-bufsize",
       "4000k",
-      ..."-c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2 -movflags +faststart".split(" "),
+      ...audio,
+      ..."-movflags +faststart".split(" "),
       out,
     ]);
     if (e.status !== 0) return { ok: false, reason: `ffmpeg encode failed: ${e.stderr.trim().slice(-300)}` };
@@ -116,7 +155,8 @@ export function validate(file) {
   const problems = [];
   if (v?.codec_name !== "h264" || v?.profile !== "High")
     problems.push(`video ${v?.codec_name}/${v?.profile}`);
-  if (v?.width !== W || v?.height !== H) problems.push(`dims ${v?.width}x${v?.height}`);
+  if (!onVideoRule(v?.width ?? 0, v?.height ?? 0))
+    problems.push(`dims ${v?.width}x${v?.height} off the video rule`);
   if (v?.pix_fmt !== "yuv420p" || v?.color_range === "pc")
     problems.push(`pix ${v?.pix_fmt}/${v?.color_range}`);
   if (a?.codec_name !== "aac" || a?.profile !== "LC" || a?.channels !== 2)

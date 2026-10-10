@@ -118,12 +118,10 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     }
   }
 
-  // A false from a targeted intent is routine and falls to the next; the fallback chain and the
-  // one-link caption rule live in docs/share.md §Status clips. Null when nothing was prepared.
-  Future<StatusActionOutcome?> shareVia(
-    StatusShareTarget target, {
-    required String Function(String link) buildCaption,
-  }) async {
+  // A false from a targeted intent is routine and falls to the next; the fallback chain lives in
+  // docs/share.md §Status clips. The caption is the link ALONE (owner): nothing is said over a
+  // clip the recipient is already watching. Null when nothing was prepared.
+  Future<StatusActionOutcome?> shareVia(StatusShareTarget target) async {
     if (state case StatusActionChoosing(
       _status: final status,
       _file: final file,
@@ -133,7 +131,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
       final direct = ref.read(directShareServiceProvider);
       final launchSheet = ref.read(shareSheetLauncherProvider);
       final analytics = ref.read(analyticsServiceProvider);
-      final caption = buildCaption(_link(status));
+      final caption = _link(status);
       try {
         String? via;
         if (target == StatusShareTarget.status) {
@@ -338,7 +336,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     }).catchError((_) {});
   }
 
-  /// The share caption's ONE link, in the sharer's language for a fresh install only.
+  /// The share caption: ONE link, in the sharer's language for a fresh install only.
   String _link(StatusVideo status) => InstallReferrerService.buildStatusLink(
     status.id,
     installLang: ref.read(localeProvider).languageCode,

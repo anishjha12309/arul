@@ -189,11 +189,6 @@ class AppLocalizationsTa extends AppLocalizations {
   }
 
   @override
-  String statusShareCaption(String link) {
-    return 'இது போன்ற இன்னும் நிறைய பக்தி ஸ்டேட்டஸ் வீடியோக்கள் Arul-இல்:\n$link';
-  }
-
-  @override
   String referShareMessage(String link) {
     return 'தென்னிந்திய பக்தி வால்பேப்பர்களுக்காக நான் Arul பயன்படுத்தி வருகிறேன் — அம்மன், முருகன், பெருமாள், சிவன், அசையும் லைவ் வால்பேப்பர்களும் உண்டு. உங்களுக்கும் பிடிக்கும் என்று நினைத்தேன்.\n\n$link';
   }

@@ -19,7 +19,7 @@ approving a user submission copies the object into that category's prefix. The s
 | Wallpaper (static) | wallpapers/&lt;category&gt;/{uuid}.jpg | JPG/PNG/WEBP | 1080×1920 JPG | 10 MB |
 | Wallpaper (live) | wallpapers/&lt;category&gt;/{uuid}.mp4 | MP4/MOV | **1024×1824** H.264 MP4 faststart, no audio, **≤10 s** | **15 MB** |
 | Ringtone (audio) | ringtones/&lt;category&gt;/{uuid}.mp3 | MP3/M4A/AAC | MP3 (libmp3lame), ≤40 s recommended | 15 MB |
-| Status clip | statuses/&lt;category&gt;/{uuid}.mp4 + REQUIRED poster | MP4 with audio | **1024×1824** H.264 + AAC at −14 LUFS, **≤30 s** — [status-clips.md](status-clips.md) | **10 MB** |
+| Status clip | statuses/&lt;category&gt;/{uuid}.mp4 + REQUIRED poster | MP4 with audio | **its source's shape on the video rule** (1024 wide, e.g. 1024×1536) H.264 + AAC at −14 LUFS, **≤30 s** — [status-clips.md](status-clips.md) | **10 MB** |
 
 **Those "Max" figures are the IMPORT PIPELINE's, not the Worker's.** The static 10 MB cap is enforced
 on both paths, but the Worker's server-side ceiling for `video/mp4` is far higher — so a

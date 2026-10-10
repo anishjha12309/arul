@@ -753,9 +753,26 @@ describe("verifyMediaObject — status role", () => {
     });
   });
 
-  it("rejects any geometry but exactly 1024×1824 — even one a live wallpaper accepts", async () => {
-    const r = await verify(mp4Fixture({ withAudio: true, width: 896, height: 1600 }));
-    expect(r).toMatchObject({ ok: false, code: "bad_dimensions" });
+  it("accepts any shape on the video rule and reports it — a 2:3 source stays 2:3", async () => {
+    for (const [width, height] of [
+      [1024, 1536],
+      [896, 1600],
+      [1024, 576],
+    ] as const) {
+      const r = await verify(mp4Fixture({ withAudio: true, width, height }));
+      expect(r).toMatchObject({ ok: true, width, height });
+    }
+  });
+
+  it("rejects a shape off the video rule, exactly as a live wallpaper would", async () => {
+    for (const [width, height] of [
+      [1080, 1920],
+      [1024, 1830],
+      [1152, 1536],
+    ] as const) {
+      const r = await verify(mp4Fixture({ withAudio: true, width, height }));
+      expect(r).toMatchObject({ ok: false, code: "bad_dimensions" });
+    }
   });
 
   it("rejects a file over 10 MB before reading a byte", async () => {

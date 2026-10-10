@@ -30,17 +30,22 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _clips = [
+  // A 2:3 clip and a 9:16 one: the reel must hold both at their own shapes.
   StatusVideo(
     id: 'c0ffee00-1c2d-4f3a-9b8e-7d6c5a4b3e2f',
     title: 'Vel',
     category: 'murugan',
     key: 'statuses/murugan/c0ffee00.mp4',
+    width: 1024,
+    height: 1536,
   ),
   StatusVideo(
     id: 'c0ffee01-1c2d-4f3a-9b8e-7d6c5a4b3e2f',
     title: 'Deepam',
     category: 'sivan',
     key: 'statuses/sivan/c0ffee01.mp4',
+    width: 1024,
+    height: 1824,
   ),
 ];
 
@@ -138,10 +143,7 @@ class _FakeActions extends StatusActionNotifier {
   void tick(double progress) => state = StatusActionBusy(progress: progress);
 
   @override
-  Future<StatusActionOutcome?> shareVia(
-    StatusShareTarget target, {
-    required String Function(String link) buildCaption,
-  }) async {
+  Future<StatusActionOutcome?> shareVia(StatusShareTarget target) async {
     if (state is! StatusActionChoosing) return null;
     state = const StatusActionIdle();
     picks.add(target);
@@ -580,10 +582,7 @@ void main() {
     });
   });
 
-  group('a card never trims into the picture, only the blurred fill around it', () {
-    const clip = Size(1024, 1824);
-    const fill = StatusMedia.fillShare;
-
+  group('a card is its clip\'s own shape, whole — never cut, never padded', () {
     testWidgets('a forward swipe folds the chips away and the card grows; back brings them', (
       tester,
     ) async {
@@ -613,75 +612,54 @@ void main() {
       expect(reveal.sizeFactor.value, 1);
     });
 
-    // Cards the solver hands real screens (squarer on short phones, the clip's own shape on tall
-    // ones) and a few beyond them: the picture between the fills always lies inside the card.
-    for (final card in const [
-      Size(328, 361),
-      Size(288, 373),
-      Size(328, 455),
-      Size(328, 525),
-      Size(361, 598),
-      Size(328, 584),
-      Size(328, 640),
-    ]) {
-      testWidgets('on a ${card.width.round()}x${card.height.round()} card', (
-        tester,
-      ) async {
-        final slot = LiveVideoSlot(
-          index: 0,
-          playerId: 1,
-          textureId: 7,
-          videoSize: ValueNotifier(clip),
-          ready: ValueNotifier(true),
-        );
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Center(
-              child: SizedBox.fromSize(
-                size: card,
-                child: StatusMedia(status: _clips.first, slot: slot),
-              ),
+    testWidgets('a 2:3 clip and a 9:16 clip each get a card of their shape inside the slot', (
+      tester,
+    ) async {
+      await pump(tester, reduceMotion: true);
+      final page = tester.getRect(find.byType(PageView));
+      final first = tester.getRect(find.byType(StatusMedia).first);
+      expect(first.height / first.width, closeTo(1536 / 1024, 0.01));
+      expect(first.center.dx, closeTo(page.center.dx, 0.5));
+      expect(first.width, lessThanOrEqualTo(page.width - 32 + 0.01));
+
+      await tester.fling(find.byType(PageView), const Offset(0, -300), 1500);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final second = tester.getRect(find.byType(StatusMedia).last);
+      expect(second.height / second.width, closeTo(1824 / 1024, 0.01));
+      expect(second.center.dx, closeTo(page.center.dx, 0.5));
+    });
+
+    testWidgets('the media fills its card edge to edge: poster and texture both', (
+      tester,
+    ) async {
+      final slot = LiveVideoSlot(
+        index: 0,
+        playerId: 1,
+        textureId: 7,
+        videoSize: ValueNotifier(const Size(1024, 1536)),
+        ready: ValueNotifier(true),
+      );
+      const card = Size(298, 447);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: SizedBox.fromSize(
+              size: card,
+              child: StatusMedia(status: _clips.first, slot: slot),
             ),
           ),
-        );
-        await tester.pump();
-
-        final box = tester.getRect(find.byType(StatusMedia));
-        final frame = tester.getRect(find.byType(Texture));
-        expect(frame.width / frame.height, closeTo(clip.aspectRatio, 0.002));
-        expect(frame.center.dx, closeTo(box.center.dx, 0.5));
-        expect(frame.center.dy, closeTo(box.center.dy, 0.5));
-        expect(frame.width, lessThanOrEqualTo(box.width + 0.01), reason: 'the sides are picture, never trimmed');
-        final picture = Rect.fromLTRB(
-          frame.left,
-          frame.top + frame.height * fill,
-          frame.right,
-          frame.bottom - frame.height * fill,
-        );
-        expect(picture.top, greaterThanOrEqualTo(box.top - 0.01));
-        expect(picture.bottom, lessThanOrEqualTo(box.bottom + 0.01));
-        if (card.height / card.width >= (clip.height / clip.width) * (1 - 2 * fill)) {
-          expect(frame.width, closeTo(box.width, 0.01), reason: 'room enough -> edge to edge');
-        }
-
-        // The poster under the texture must fit the same way, or the first frame jumps.
-        final poster = tester.getRect(
-          find.byWidgetPredicate(
-            (w) => w is CachedNetworkImage && w.fit == BoxFit.fill,
-          ),
-        );
-        expect(poster, frame);
-
-        // Any room beside the picture is its own blur, never a black bar.
-        final backdrop = find.byWidgetPredicate(
-          (w) => w is CachedNetworkImage && w.fit == BoxFit.cover,
-        );
-        if (frame.width < box.width - 0.5) {
-          expect(tester.getRect(backdrop), box);
-        } else {
-          expect(backdrop, findsNothing, reason: 'edge to edge needs no backdrop');
-        }
-      });
-    }
+        ),
+      );
+      await tester.pump();
+      final box = tester.getRect(find.byType(StatusMedia));
+      expect(tester.getRect(find.byType(Texture)), box);
+      final poster = tester.widget<CachedNetworkImage>(
+        find.byType(CachedNetworkImage),
+      );
+      expect(poster.fit, BoxFit.fill);
+      expect(tester.getRect(find.byType(CachedNetworkImage)), box);
+    });
   });
 }

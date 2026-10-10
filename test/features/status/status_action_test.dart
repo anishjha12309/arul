@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
@@ -272,15 +271,11 @@ void main() {
   /// Prepare, then pick [target] — the screen's two calls with the sheet in between.
   Future<StatusActionOutcome?> shareTo(
     ProviderContainer c,
-    StatusShareTarget target, {
-    String Function(String link)? caption,
-  }) async {
+    StatusShareTarget target,
+  ) async {
     final actions = c.read(statusActionProvider.notifier);
     expect(await actions.prepareShare(_clip), isA<StatusShareReady>());
-    return actions.shareVia(
-      target,
-      buildCaption: caption ?? (link) => 'cap\n$link',
-    );
+    return actions.shareVia(target);
   }
 
   const link =
@@ -401,7 +396,7 @@ void main() {
       await shareTo(c, StatusShareTarget.status);
 
       expect(direct.calls, ['composer', 'send_to_status', 'picker']);
-      expect(direct.caption, 'cap\n$link');
+      expect(direct.caption, link);
       expect(analytics.props['status_shared']?['via'], 'picker');
     });
 
@@ -418,7 +413,7 @@ void main() {
           await shareTo(c, target);
 
           expect(direct.calls, ['picker'], reason: 'never a status surface');
-          expect(direct.caption, 'cap\n$link');
+          expect(direct.caption, link);
           expect(RegExp('https://').allMatches(direct.caption!), hasLength(1));
           expect(sheet, isEmpty);
           expect(analytics.props['status_shared']?['channel'], channel);
@@ -435,7 +430,7 @@ void main() {
           await shareTo(c, target);
 
           expect(direct.calls, ['picker']);
-          expect(sheet.single.text, 'cap\n$link');
+          expect(sheet.single.text, link);
           expect(analytics.props['status_shared']?['channel'], channel);
           expect(analytics.props['status_shared']?['via'], 'sheet');
           expect(analytics.props['status_shared']?['result'], 'success');
@@ -452,7 +447,7 @@ void main() {
         await shareTo(c, StatusShareTarget.status);
 
         expect(direct.calls, ['composer', 'send_to_status', 'picker']);
-        expect(sheet.single.text, 'cap\n$link');
+        expect(sheet.single.text, link);
         expect(analytics.props['status_shared']?['via'], 'sheet');
       },
     );
@@ -469,7 +464,7 @@ void main() {
         final params = sheet.single;
         expect(params.files?.single.mimeType, 'video/mp4');
         expect(params.fileNameOverrides, ['arul-murugan-vel.mp4']);
-        expect(params.text, 'cap\n$link');
+        expect(params.text, link);
         expect(analytics.props['status_shared']?['channel'], 'sheet');
         expect(analytics.props['status_shared']?['via'], 'sheet');
       },
@@ -503,7 +498,7 @@ void main() {
 
       expect(c.read(statusActionProvider), isA<StatusActionIdle>());
       expect(
-        await actions.shareVia(StatusShareTarget.chat, buildCaption: (l) => l),
+        await actions.shareVia(StatusShareTarget.chat),
         isNull,
         reason: 'nothing is prepared any more',
       );
@@ -533,10 +528,7 @@ void main() {
       final actions = c.read(statusActionProvider.notifier);
       await actions.prepareShare(_clip);
 
-      final sending = actions.shareVia(
-        StatusShareTarget.groups,
-        buildCaption: (l) => l,
-      );
+      final sending = actions.shareVia(StatusShareTarget.groups);
       await Future<void>.delayed(Duration.zero);
       expect(c.read(statusActionProvider), isA<StatusActionSending>());
       expect(await actions.prepareShare(_clip), isNull);
@@ -568,14 +560,8 @@ void main() {
         final actions = c.read(statusActionProvider.notifier);
         await actions.prepareShare(_clip);
 
-        final a = actions.shareVia(
-          StatusShareTarget.chat,
-          buildCaption: (l) => l,
-        );
-        final b = actions.shareVia(
-          StatusShareTarget.chat,
-          buildCaption: (l) => l,
-        );
+        final a = actions.shareVia(StatusShareTarget.chat);
+        final b = actions.shareVia(StatusShareTarget.chat);
 
         expect(await a, StatusActionOutcome.done);
         expect(await b, isNull);
@@ -588,33 +574,18 @@ void main() {
     );
   });
 
-  group('the caption contract, in every shipped language', () {
-    for (final locale in AppLocalizations.supportedLocales) {
-      test(
-        '${locale.languageCode}: ONE link, alone on the last line',
-        () async {
-          final l10n = lookupAppLocalizations(locale);
-          final direct = _FakeDirectShare(picker: true);
-          final c = container(media: _FakeMedia(), direct: direct);
+  group('the caption contract', () {
+    test('the link ALONE, on the picker and on the sheet (owner)', () async {
+      final direct = _FakeDirectShare(picker: true);
+      final c = container(media: _FakeMedia(), direct: direct);
 
-          await shareTo(
-            c,
-            StatusShareTarget.groups,
-            caption: l10n.statusShareCaption,
-          );
-          await shareTo(
-            c,
-            StatusShareTarget.more,
-            caption: l10n.statusShareCaption,
-          );
+      await shareTo(c, StatusShareTarget.groups);
+      await shareTo(c, StatusShareTarget.more);
 
-          for (final text in [direct.caption!, sheet.single.text!]) {
-            expect(RegExp('https?://').allMatches(text), hasLength(1));
-            expect(text.trimRight().split('\n').last, link);
-          }
-        },
-      );
-    }
+      for (final text in [direct.caption!, sheet.single.text!]) {
+        expect(text, link, reason: 'no words over a clip they are watching');
+      }
+    });
   });
 
   group('Save', () {

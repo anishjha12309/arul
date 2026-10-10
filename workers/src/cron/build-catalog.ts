@@ -490,7 +490,9 @@ export async function buildScope(
       return r;
     }
     if (scope === "statuses") {
-      for (const k of ["mime", "bytes", "width", "height", "share_count", "download_count"]) {
+      // `width`/`height` STAY: a status keeps its source's shape, and the card is sized from them
+      // before a byte of video lands (StatusVideo.aspect) -> dropping them would resize every card on first frame
+      for (const k of ["mime", "bytes", "share_count", "download_count"]) {
         delete r[k];
       }
       return r;

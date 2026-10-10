@@ -27,13 +27,28 @@ export const WALLPAPER_IMAGE = {
   maxSide: 8192,
 } as const;
 
-/** Status clip: a reel video WITH music, shared to WhatsApp Status. Encode recipe: Arul media-conventions. */
+/**
+ * Status clip: a reel video WITH music, shared to WhatsApp Status. Encode recipe: Arul status-clips.md.
+ * Its SHAPE is the source's own — any size on the video rule (WALLPAPER_VIDEO), never one canvas:
+ * padding every source to 9:16 with a blurred fill put a blur band above every title (owner, Oct 2026).
+ */
 export const STATUS_VIDEO = {
-  width: 1024,
-  height: 1824,
   maxDurationMs: 30_000,
   maxBytes: 10 * 1024 * 1024,
 } as const;
+
+/** The video rule every reel MP4 obeys (docs/media-conventions.md): aligned for the padded software path, inside the hw cap. */
+export function onVideoRule(width: number, height: number): boolean {
+  const { widthMultiple, heightMultiple, maxShortSide, maxLongSide } = WALLPAPER_VIDEO;
+  return (
+    width > 0 &&
+    height > 0 &&
+    width % widthMultiple === 0 &&
+    height % heightMultiple === 0 &&
+    Math.min(width, height) <= maxShortSide &&
+    Math.max(width, height) <= maxLongSide
+  );
+}
 
 export type MediaRole = "wallpaper" | "ringtone" | "status";
 
@@ -416,14 +431,7 @@ async function verifyLiveWallpaper(reader: R2Reader, ct: string): Promise<Verify
     );
   }
   const { width, height } = video;
-  if (
-    width <= 0 ||
-    height <= 0 ||
-    width % widthMultiple !== 0 ||
-    height % heightMultiple !== 0 ||
-    Math.min(width, height) > maxShortSide ||
-    Math.max(width, height) > maxLongSide
-  ) {
+  if (!onVideoRule(width, height)) {
     return fail(
       "bad_dimensions",
       `Video is ${width}×${height} — needs width%${widthMultiple}==0, height%${heightMultiple}==0, ` +
@@ -474,10 +482,15 @@ async function verifyStatusClip(reader: R2Reader, ct: string): Promise<VerifyRes
   if (!codecs.includes(video.codec)) {
     return fail("bad_codec", `Video codec "${video.codec}" is not supported — re-encode as H.264`);
   }
-  const { width, height, maxDurationMs } = STATUS_VIDEO;
-  if (video.width !== width || video.height !== height) {
-    const got = `${video.width}×${video.height}`;
-    return fail("bad_dimensions", `Video is ${got} — a status must be exactly ${width}×${height}`);
+  const { maxDurationMs } = STATUS_VIDEO;
+  const { width, height } = video;
+  if (!onVideoRule(width, height)) {
+    const { widthMultiple, heightMultiple, maxShortSide, maxLongSide } = WALLPAPER_VIDEO;
+    return fail(
+      "bad_dimensions",
+      `Video is ${width}×${height} — a status needs width%${widthMultiple}==0, height%${heightMultiple}==0, ` +
+        `within ${maxShortSide}×${maxLongSide} (budget-phone hw decoder cap), e.g. 1024×1536 for a 2:3 source`,
+    );
   }
   if (mp4.audioTracks < 1) return fail("bad_type", "The MP4 has no audio track — a status has music");
   const ms = mp4.durationMs;

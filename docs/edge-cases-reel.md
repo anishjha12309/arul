@@ -4,7 +4,7 @@ The reel half of the regression-contract index ([edge-cases.md](edge-cases.md) h
 per paid-for bug, binding whatever the UI; walk them on device before a release.
 
 ## Video reels — [video-feed.md](video-feed.md), [media-conventions.md](media-conventions.md)
-- [ ] Live MP4s exactly 1024×1824 — the 128/32 alignment rule inside the hw-decoder cap
+- [ ] Live MP4s exactly 1024×1824; a status any size on the 128/32 rule inside the hw-decoder cap
 - [ ] Players REUSED (`setMediaItem`); ONE process-global EventChannel hub
 - [ ] Software fallback demotes the pool 3→2, floor 2; only a codec error goes to 1; never query capability
 - [ ] Leaving a reel pauses at once, frees decoders after a 3 s grace; other releases are immediate
@@ -36,6 +36,6 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Loading, empty, error and offline faces say status videos, never wallpapers; empty offers Browse all
 - [ ] A pull on the first card refreshes and the clips stay on screen through it
 - [ ] A cold `/s/` link opens on its clip — card 0 is never opened or staged first
-- [ ] A card never cuts a clip's text — the trim stays in the blurred fill, on a 320 dp phone too
+- [ ] A card never cuts a clip: it is the clip's own shape inside the slot, on a 320 dp phone too
 - [ ] A forward swipe folds the status chips away, back or card 0 brings them; never mid-drag
 - [ ] Groups, WhatsApp and Status in the status share sheet all wear the WhatsApp logo

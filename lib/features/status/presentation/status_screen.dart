@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -262,7 +261,6 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
   // Card -> the Arul sheet (or the system sheet without WhatsApp) -> the pick. Back on the card
   // or a closed sheet shares nothing and tracks nothing.
   Future<void> _doShare(StatusVideo status) async {
-    final l10n = AppLocalizations.of(context);
     final actions = ref.read(statusActionProvider.notifier);
     if (ref.read(statusActionProvider) is! StatusActionIdle) return;
     final prepared = actions.prepareShare(status);
@@ -281,10 +279,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
           target = await StatusShareSheet.show(context);
       }
       if (target == null) return;
-      final outcome = await actions.shareVia(
-        target,
-        buildCaption: l10n.statusShareCaption,
-      );
+      final outcome = await actions.shareVia(target);
       if (mounted && outcome != null) _reportShare(outcome, status);
     } finally {
       // Every way out short of a pick — the card failing to open included — must not leave the
@@ -409,7 +404,8 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
                       )
                     : LayoutBuilder(
                         builder: (context, constraints) {
-                          // A card taller than the clip would only add bands -> ask for its shape.
+                          // The SLOT asks for the tallest clip shape; each card then sits in it at
+                          // its own clip's shape, whole — never cut, never padded.
                           final geo = FeedCardGeometry.resolve(
                             context,
                             reelHeight: constraints.maxHeight,
@@ -505,65 +501,77 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
                 return false;
               },
               child: PageView.builder(
-              controller: _pagerFor(geo, geo.pagerHeight(h)),
-              scrollDirection: Axis.vertical,
-              padEnds: false,
-              physics: const AlwaysScrollableScrollPhysics(),
-              itemCount: items.length,
-              onPageChanged: (i) {
-                setState(() => _index = i);
-                _video.onPageChanged(i);
-                _onCardSettled(items[i]);
-              },
-              itemBuilder: (context, i) => Padding(
-                padding: m.copyWith(bottom: FeedCardGeometry.gap),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(FeedCardGeometry.radius),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Tap pauses and resumes; vertical drags still belong to the pager.
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          ArulHaptics.tap();
-                          _video.toggleHeldByUser();
-                        },
-                        child: ReelMedia(
-                          controller: _video,
-                          index: i,
-                          builder: (context, slot) =>
-                              StatusMedia(status: items[i], slot: slot),
+                controller: _pagerFor(geo, geo.pagerHeight(h)),
+                scrollDirection: Axis.vertical,
+                padEnds: false,
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: items.length,
+                onPageChanged: (i) {
+                  setState(() => _index = i);
+                  _video.onPageChanged(i);
+                  _onCardSettled(items[i]);
+                },
+                itemBuilder: (context, i) => Padding(
+                  padding: m.copyWith(bottom: FeedCardGeometry.gap),
+                  // The card is the clip's own shape inside the slot (Shubh's rule): a 2:3 clip is
+                  // shorter, a tall clip narrower, each centred under the chips with the slot's top.
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: SizedBox.fromSize(
+                      size: FeedCardGeometry.contain(geo.size, items[i].aspect),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          FeedCardGeometry.radius,
                         ),
-                      ),
-                      IgnorePointer(
-                        child: _HeldMark(controller: _video, index: i),
-                      ),
-                      ReelCardChrome(
-                        actions: ReelActionBar(
-                          busy: busy,
-                          primary: ReelAction(
-                            icon: Icons.send_rounded,
-                            image: const AssetImage(
-                              'assets/images/whatsapp.webp',
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // Tap pauses and resumes; vertical drags still belong to the pager.
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                ArulHaptics.tap();
+                                _video.toggleHeldByUser();
+                              },
+                              child: ReelMedia(
+                                controller: _video,
+                                index: i,
+                                builder: (context, slot) =>
+                                    StatusMedia(status: items[i], slot: slot),
+                              ),
                             ),
-                            label: l10n.statusWhatsapp,
-                            semanticsId: 'arul_status_whatsapp',
-                            onTap: () => _onAction(StatusVerb.share, items[i]),
-                          ),
-                          secondary: ReelAction(
-                            icon: Icons.file_download_outlined,
-                            label: l10n.statusSave,
-                            semanticsId: 'arul_status_save',
-                            onTap: () => _onAction(StatusVerb.save, items[i]),
-                          ),
+                            IgnorePointer(
+                              child: _HeldMark(controller: _video, index: i),
+                            ),
+                            ReelCardChrome(
+                              actions: ReelActionBar(
+                                busy: busy,
+                                primary: ReelAction(
+                                  icon: Icons.send_rounded,
+                                  image: const AssetImage(
+                                    'assets/images/whatsapp.webp',
+                                  ),
+                                  label: l10n.statusWhatsapp,
+                                  semanticsId: 'arul_status_whatsapp',
+                                  onTap: () =>
+                                      _onAction(StatusVerb.share, items[i]),
+                                ),
+                                secondary: ReelAction(
+                                  icon: Icons.file_download_outlined,
+                                  label: l10n.statusSave,
+                                  semanticsId: 'arul_status_save',
+                                  onTap: () =>
+                                      _onAction(StatusVerb.save, items[i]),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
             ),
           ),
         ),
@@ -586,29 +594,6 @@ class StatusMedia extends StatelessWidget {
   final StatusVideo status;
   final LiveVideoSlot? slot;
 
-  /// The blurred fill the encode leaves above and below every clip's picture, as a share of its
-  /// height: the most a card may trim from either end (docs/status-clips.md).
-  static const fillShare = 0.075;
-
-  /// The clip's laid-out size in [card]: cover while the trim stays inside [fillShare], else the
-  /// picture at the card's full height with its own blur at the sides — text is never cut.
-  @visibleForTesting
-  static Size frameIn(Size card) {
-    if (card.width <= 0 || card.height <= 0) return card;
-    const aspect = FeedCardGeometry.clipAspect;
-    final height = math.min(
-      card.width * aspect,
-      card.height / (1 - 2 * fillShare),
-    );
-    return Size(height / aspect, height);
-  }
-
-  // Decoded this narrow and stretched over the card, the poster blurs itself for free -> the sides
-  // read as the clip's own blurred fill, with no ImageFilter pass over a playing texture.
-  static const _blurDecodeWidth = 24;
-
-  static const _blurDim = Color(0x29000000);
-
   @override
   Widget build(BuildContext context) {
     final slot = this.slot;
@@ -616,71 +601,17 @@ class StatusMedia extends StatelessWidget {
         (MediaQuery.sizeOf(context).width *
                 MediaQuery.devicePixelRatioOf(context))
             .round();
-    final poster = status.posterUrl(AppConfig.cdnBaseUrl);
+    // The card IS the clip's shape (FeedCardGeometry.contain) -> fill is lossless: the whole
+    // picture, edge to edge, nothing trimmed and nothing of ours beside it.
     return ColoredBox(
       color: ArulColors.ink,
-      child: LayoutBuilder(
-        builder: (context, box) {
-          final frame = frameIn(box.biggest);
-          final clip = _StatusFrame(
-            frame: frame,
-            poster: poster,
-            decodeWidth: width,
-            slot: slot,
-          );
-          if (frame.width >= box.maxWidth - 0.5) return clip;
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: poster,
-                fit: BoxFit.cover,
-                memCacheWidth: _blurDecodeWidth,
-                filterQuality: FilterQuality.medium,
-                color: _blurDim,
-                colorBlendMode: BlendMode.srcATop,
-                fadeInDuration: Duration.zero,
-                placeholder: (_, _) => const SizedBox.shrink(),
-                errorWidget: (_, _, _) => const SizedBox.shrink(),
-              ),
-              clip,
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// The clip at [frame], centred and overflowing on purpose: the card's own ClipRRect does the trim.
-class _StatusFrame extends StatelessWidget {
-  const _StatusFrame({
-    required this.frame,
-    required this.poster,
-    required this.decodeWidth,
-    required this.slot,
-  });
-
-  final Size frame;
-  final String poster;
-  final int decodeWidth;
-  final LiveVideoSlot? slot;
-
-  @override
-  Widget build(BuildContext context) {
-    final slot = this.slot;
-    return OverflowBox(
-      minWidth: frame.width,
-      maxWidth: frame.width,
-      minHeight: frame.height,
-      maxHeight: frame.height,
       child: Stack(
         fit: StackFit.expand,
         children: [
           CachedNetworkImage(
-            imageUrl: poster,
+            imageUrl: status.posterUrl(AppConfig.cdnBaseUrl),
             fit: BoxFit.fill,
-            memCacheWidth: decodeWidth,
+            memCacheWidth: width,
             fadeInDuration: Duration.zero,
             // The loading card's sweep until the poster lands -> the card never reads as a void
             // with two buttons floating in it (ink on the ink frame is invisible).

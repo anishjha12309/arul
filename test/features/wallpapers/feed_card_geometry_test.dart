@@ -249,6 +249,22 @@ void main() {
       );
     });
 
+    test('contain: a clip takes the slot\'s width when tall enough, else its height', () {
+      const slot = Size(328, 447); // a 360x720 phone's slot with the chips up
+      final tall = FeedCardGeometry.contain(slot, 1824 / 1024);
+      expect(tall.height, closeTo(447, 1e-9));
+      expect(tall.width, closeTo(447 / (1824 / 1024), 1e-9));
+      final twoThree = FeedCardGeometry.contain(slot, 1536 / 1024);
+      expect(twoThree.height, closeTo(447, 1e-9));
+      expect(twoThree.width, closeTo(298, 1));
+      final square = FeedCardGeometry.contain(slot, 1);
+      expect(square, const Size(328, 328));
+      final roomy = FeedCardGeometry.contain(const Size(328, 584), 1536 / 1024);
+      expect(roomy.width, 328);
+      expect(roomy.height, closeTo(492, 1));
+      expect(FeedCardGeometry.contain(Size.zero, 1.5), Size.zero);
+    });
+
     test('the wallpaper card still asks for 1:1.86', () {
       final geo = FeedCardGeometry.solve(
         screen: const Size(392.7, 872.7),

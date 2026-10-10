@@ -189,11 +189,6 @@ class AppLocalizationsKn extends AppLocalizations {
   }
 
   @override
-  String statusShareCaption(String link) {
-    return 'ಇಂತಹ ಇನ್ನಷ್ಟು ಭಕ್ತಿ ಸ್ಟೇಟಸ್ ವೀಡಿಯೊಗಳು Arul ನಲ್ಲಿ:\n$link';
-  }
-
-  @override
   String referShareMessage(String link) {
     return 'ದಕ್ಷಿಣ ಭಾರತೀಯ ಭಕ್ತಿ ವಾಲ್‌ಪೇಪರ್‌ಗಳಿಗಾಗಿ ನಾನು Arul ಬಳಸುತ್ತಿದ್ದೇನೆ — ಅಮ್ಮನ್, ಮುರುಗನ್, ಪೆರುಮಾಳ್, ಶಿವ, ಮತ್ತು ನಿಜವಾಗಿ ಚಲಿಸುವ ಲೈವ್ ವಾಲ್‌ಪೇಪರ್‌ಗಳೂ ಇವೆ. ನಿಮಗೂ ಇಷ್ಟವಾಗಬಹುದು ಅನಿಸಿತು.\n\n$link';
   }

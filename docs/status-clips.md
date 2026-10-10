@@ -3,8 +3,11 @@
 Read before encoding, uploading or re-validating a status clip (`statuses/<category>/<uuid>.mp4`). The
 shared video rule and the paywall loudness recipe this builds on: [media-conventions.md](media-conventions.md).
 
-The media-verify `status` role (Worker and CMS copies identical) rejects anything but H.264 at
-**exactly 1024×1824** (the video rule) with ≥1 audio track, ≤30 s, ≤10 MB. Encode to H.264 High,
+The media-verify `status` role (Worker and CMS copies identical) rejects anything but H.264 **on the
+video rule at the source's own shape** (1024 wide, height a multiple of 32: a 2:3 source is 1024×1536,
+a 9:16 one 1024×1824) with ≥1 audio track, ≤30 s, ≤10 MB. Never pad to one canvas: the blurred fill
+put a blur band above every title, and the card shows each clip at its own shape (owner, after Shubh).
+The catalog carries `width`/`height` so the card is sized before the first frame. Encode to H.264 High,
 limited `yuv420p`, `+faststart`, ~2 Mbps (1.5 Mbps when 2 overshoots), AAC-LC 128k stereo 48 kHz at
 **−14 LUFS** with the paywall's two-pass `loudnorm` + limiter, so clips match each other. WhatsApp's
 Status composer documents only 720p/1080p: probe one clip through it on a real phone before encoding a
@@ -27,15 +30,14 @@ that at ~30.1 s and QC refuses it.
 ```bash
 ffmpeg -t 29.8 -i in.mp4 -vn -af loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json -f null -   # pass 1
 LN="loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=…:measured_TP=…:measured_LRA=…:measured_thresh=…:offset=…:linear=true"
-BG="[0:v]split=2[bg][fg];[bg]scale=1024:1824:force_original_aspect_ratio=increase,crop=1024:1824,gblur=sigma=30,eq=brightness=-0.06[bgb]"
-FG="[fg]scale=1024:1824:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,unsharp=5:5:0.6:3:3:0.3[fgs]"
-V="[bgb][fgs]overlay=(W-w)/2:(H-h)/2,scale=1024:1824:out_range=tv,setsar=1,format=yuv420p[v]"
-ffmpeg -t 29.8 -i in.mp4 -filter_complex "$BG;$FG;$V;[0:a:0]$LN,aresample=48000,alimiter=limit=0.84:level=false[a]" \
+ffmpeg -t 29.8 -i in.mp4 -filter_complex "[0:v]scale=1024:1536:force_original_aspect_ratio=increase:flags=lanczos:out_range=tv,crop=1024:1536,unsharp=5:5:0.6:3:3:0.3,setsar=1,format=yuv420p[v];[0:a:0]$LN,aresample=48000,alimiter=limit=0.84:level=false[a]" \
   -map "[v]" -map "[a]" -sn -dn -map_metadata -1 -c:v libx264 -profile:v high -preset medium -g 60 \
   -pix_fmt yuv420p -color_range tv -colorspace bt709 -color_primaries bt709 -color_trc bt709 -b:v 2000k -maxrate 2400k -bufsize 4000k \
-  -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2 -movflags +faststart out/<uuid>.mp4
+  -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2 -movflags +faststart out/<uuid>.mp4   # 1536 = the 2:3 source's height snapped to 32
 ffmpeg -ss 1 -i out/<uuid>.mp4 -frames:v 1 -vf scale=640:-2 -q:v 3 poster/<uuid>.jpg
 ```
-The blurred fill keeps a non-9:16 source whole instead of cropping it. **The app's card trims up to 7.5%
-of that fill off each end** ([status.md](status.md) §Player), so a source must be 2:3 or squarer — a
-true 9:16 source has no fill, and its title would be the first thing cut.
+`tools/lib/status-media.mjs` (`frameFor`, `transcode`, `validate`) is that recipe for any source shape.
+**The first library (Oct 2026) was padded to 1024×1824 with a blurred fill**; `node tools/status-reencode.mjs`
+(dry run; `--write` for the live run) cuts the bands off every padded clip, copies its levelled audio,
+and re-keys the row to `<uuid>-v2.mp4` + poster — same id, counts and `/s/` link; media keys are
+immutable-cached, so a new key, never an overwrite. The old objects fall to the canonical sweep.

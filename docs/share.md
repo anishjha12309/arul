@@ -59,8 +59,8 @@ AND bring someone back; these rules were paid for by getting the second half wro
       = picker) and no `via`: a row without `via` carries the old meaning. `via` and `has_whatsapp` stay
       out of GA4 reports until registered as custom dimensions ([analytics-ops.md](analytics-ops.md)).
 - [ ] **The status surfaces carry NO link** — they take no text; the owner-accepted exception to one link
-      per share. The picker and the sheet carry `statusShareCaption` (status videos, never wallpapers)
-      with exactly one `/s/<id>?ilang=`, pinned per locale in `status_action_test.dart`.
+      per share. The picker and the sheet carry the `/s/<id>?ilang=` link ALONE, no sentence (owner, Oct
+      2026: the recipient is already watching the clip), pinned in `status_action_test.dart`.
 - [ ] A pick closes the sheet FIRST, then fires; the sheet takes ONE pick — a second tap during its exit
       popped the screen under it in the sister app. A closed sheet or Back on the card shares nothing and
       tracks nothing.

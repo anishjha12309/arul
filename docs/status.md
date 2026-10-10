@@ -60,14 +60,15 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
 
 ## Player and prefetch
 
-- **A card trims only the blurred fill, never the picture** (owner). Every live clip carries ≥7.7%
-  blurred fill above and below its picture (90 clips measured, Oct 2026), and the title sits right under
-  the top one. `StatusMedia.frameIn` covers the card while the trim stays inside `fillShare` (7.5%);
-  past that the picture keeps the card's full height over its own poster, decoded 24 px wide and stretched
-  (the upscale is the blur; no `ImageFilter` over a playing texture) — never a black bar. Plain cover
-  on the squarer cards of short phones cut up to 15% off each end — the title first.
-- **The card asks for the clip's shape** (`askAspect: clipAspect`), never the wallpapers' 1:1.86, and
-  **a forward swipe folds the chip row away** so the card takes its ~60 dp; back, or card 0, brings it.
+- **A card is its clip's own shape, whole** (owner, after Shubh): the catalog carries each clip's
+  `width`/`height` (`StatusVideo.aspect`; a row without them is the old 1024×1824), the slot asks for
+  the tallest shape (`clipAspect`) and `FeedCardGeometry.contain` fits each card inside it — a 2:3
+  clip is shorter, a 9:16 clip narrower, top-centred under the chips. `BoxFit.fill` is then lossless.
+  Never cover (it cut the title first on short phones) and never a blur or a bar beside the picture
+  (a stretched-poster blur read as a blurred clip). The old library's baked fill bands show until
+  `tools/status-reencode.mjs` cuts them ([status-clips.md](status-clips.md)).
+- **The slot asks for the clip shape** (`askAspect: clipAspect`), never the wallpapers' 1:1.86, and
+  **a forward swipe folds the chip row away** so the slot takes its ~60 dp; back, or card 0, brings it.
   It folds on settle, never mid-drag: resizing the reel swaps the pager and would drop the finger.
 - Text in a clip's bottom line can sit under the WhatsApp/Save row: an overlay, not a trim.
 

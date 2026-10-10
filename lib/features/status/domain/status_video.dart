@@ -12,6 +12,8 @@ class StatusVideo implements ReelItem {
     required this.category,
     required this.key,
     this.durationMs,
+    this.width,
+    this.height,
     this.feedRank,
     this.publishedAt,
   });
@@ -23,6 +25,8 @@ class StatusVideo implements ReelItem {
     category: (json['category'] as String?) ?? 'other',
     key: json['full_key'] as String,
     durationMs: (json['duration_ms'] as num?)?.toInt(),
+    width: (json['width'] as num?)?.toInt(),
+    height: (json['height'] as num?)?.toInt(),
     feedRank: (json['feed_rank'] as num?)?.toInt(),
     publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
   );
@@ -35,6 +39,21 @@ class StatusVideo implements ReelItem {
   /// R2 object key, `statuses/<category>/<stem>.mp4` — public by design; browse is free.
   final String key;
   final int? durationMs;
+
+  /// The clip's own pixel size, from the catalog — a status keeps its source's shape.
+  final int? width;
+  final int? height;
+
+  /// What every clip was before the catalog carried a shape (Oct 2026): 1024×1824.
+  static const legacyAspect = 1824 / 1024;
+
+  /// Height ÷ width, the shape the card takes before a byte of video lands.
+  double get aspect {
+    final w = width;
+    final h = height;
+    if (w == null || h == null || w <= 0 || h <= 0) return legacyAspect;
+    return h / w;
+  }
 
   /// Position from build-catalog's ORDER BY; null only on a row the Worker could not number.
   final int? feedRank;

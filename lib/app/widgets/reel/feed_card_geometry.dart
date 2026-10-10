@@ -78,8 +78,17 @@ class FeedCardGeometry {
   /// Never take it to zero: the sliver of the next wallpaper is why the reel reads as scrollable.
   static const minPeek = 25.0;
 
-  /// A status clip's height ÷ width (1024×1824).
+  /// The tallest shape a status clip takes (9:16, 1024×1824) — what the Status SLOT asks for.
+  /// Each clip then sits inside that slot at its own shape ([contain]).
   static const clipAspect = 1824 / 1024;
+
+  /// The largest box of [aspect] (height ÷ width) inside [slot]: full width when the slot is tall
+  /// enough, else full height and narrower. A status card, which keeps its clip's own shape.
+  static Size contain(Size slot, double aspect) {
+    if (slot.width <= 0 || slot.height <= 0 || aspect <= 0) return Size.zero;
+    final width = math.min(slot.width, slot.height / aspect);
+    return Size(width, width * aspect);
+  }
 
   /// The extent of one page — the card plus the gap that follows it.
   /// With `padEnds: false` the pager's `viewportFraction` resolves to this.

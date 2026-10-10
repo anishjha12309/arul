@@ -195,13 +195,17 @@ describe("buildScope", () => {
         "duration_ms",
         "feed_rank",
         "full_key",
+        "height",
         "id",
         "is_published",
         "published_at",
         "renewed_at",
         "title",
+        "width",
       ].sort(),
     );
+    // The card is sized from the clip's own shape before its first frame -> the page carries it
+    expect(items[0]).toMatchObject({ width: 1024, height: 1824 });
     expect(items[0]!["feed_rank"]).toBeLessThan(items[1]!["feed_rank"] as number);
   });
 
