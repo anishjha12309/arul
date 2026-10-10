@@ -102,11 +102,27 @@ export async function handleSignedUrl(c: Context<{ Bindings: Env }>): Promise<Re
     // A failed write is logged and swallowed -> a sort key must never cost someone their wallpaper
     // ONE counter, ONE increment -> the lifetime total the CMS shows and the feed's ORDER BY reads
     if (countCol !== null) {
-      tail = sql`
-        UPDATE ${sql(table)}
-        SET ${sql(countCol)} = ${sql(countCol)} + 1
-        WHERE id = ${id}
-      `.catch((err: unknown) => {
+      // A status grant bumps the counter AND appends its `status_actions` row in ONE statement -> never one alone
+      // No counter-only fallback: a missing table must fail loudly -> 34_status_actions.sql lands BEFORE deploy
+      // The action word comes from the column, never the body -> the two can never disagree
+      const write =
+        kind === "status"
+          ? sql`
+              WITH bump AS (
+                UPDATE statuses
+                SET ${sql(countCol)} = ${sql(countCol)} + 1
+                WHERE id = ${id}
+                RETURNING id
+              )
+              INSERT INTO status_actions (status_id, user_id, action)
+              SELECT id, ${sub}, ${countCol === "share_count" ? "share" : "download"} FROM bump
+            `
+          : sql`
+              UPDATE ${sql(table)}
+              SET ${sql(countCol)} = ${sql(countCol)} + 1
+              WHERE id = ${id}
+            `;
+      tail = write.catch((err: unknown) => {
         console.error(`[media/signed-url] ${countCol} increment failed:`, err);
       });
     }

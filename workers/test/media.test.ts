@@ -206,7 +206,13 @@ describe("POST /media/signed-url", () => {
       expect(text).toContain("full_key");
     });
 
-    it("a SHARE bumps share_count only", async () => {
+    // The template calls that touch status_actions -> the counter and the event must be ONE of them
+    const eventWrites = (capturedArgs: unknown[][]) =>
+      capturedArgs.filter(
+        (a) => Array.isArray(a[0]) && (a[0] as string[]).join("?").includes("status_actions"),
+      );
+
+    it("a SHARE bumps share_count and appends a share row for this user, in ONE statement", async () => {
       const { env, capturedArgs } = envWithSql([statusRow]);
       await handleSignedUrl(
         makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "share" } }),
@@ -215,9 +221,24 @@ describe("POST /media/signed-url", () => {
       expect(text).toContain("UPDATE");
       expect(text).toContain("share_count");
       expect(text).not.toContain("download_count");
+
+      const writes = eventWrites(capturedArgs);
+      expect(writes).toHaveLength(1);
+      const [strings, ...bound] = writes[0]!;
+      const stmt = (strings as string[]).join("?");
+      expect(stmt).toContain("UPDATE statuses");
+      expect(stmt).toContain("INSERT INTO status_actions");
+      expect(bound).toContain("share");
+      expect(bound).toContain(USER_ID);
+      expect(bound).toContain("s1");
+      // No second, counter-only UPDATE beside it -> a missing table must stop the bump, not hide
+      const updates = capturedArgs.filter(
+        (a) => Array.isArray(a[0]) && (a[0] as string[]).join("?").includes("UPDATE"),
+      );
+      expect(updates).toHaveLength(1);
     });
 
-    it("a DOWNLOAD bumps download_count only", async () => {
+    it("a DOWNLOAD bumps download_count and appends a download row for this user, in ONE statement", async () => {
       const { env, capturedArgs } = envWithSql([statusRow]);
       await handleSignedUrl(
         makeCtx({ env, token: await token(), jsonBody: { id: "s1", kind: "status", action: "download" } }),
@@ -226,6 +247,14 @@ describe("POST /media/signed-url", () => {
       expect(text).toContain("UPDATE");
       expect(text).toContain("download_count");
       expect(text).not.toContain("share_count");
+
+      const writes = eventWrites(capturedArgs);
+      expect(writes).toHaveLength(1);
+      const [strings, ...bound] = writes[0]!;
+      expect((strings as string[]).join("?")).toContain("INSERT INTO status_actions");
+      expect(bound).toContain("download");
+      expect(bound).not.toContain("share");
+      expect(bound).toContain(USER_ID);
     });
 
     it("no action, or an unknown one, bumps nothing", async () => {
@@ -236,6 +265,7 @@ describe("POST /media/signed-url", () => {
         );
         expect(res.status).toBe(200);
         expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+        expect(sqlText(capturedArgs)).not.toContain("status_actions");
       }
     });
 
@@ -247,6 +277,8 @@ describe("POST /media/signed-url", () => {
       expect(res.status).toBe(403);
       expect(((await res.json()) as { error: { code: string } }).error.code).toBe("premium_required");
       expect(sqlText(capturedArgs)).not.toContain("UPDATE");
+      expect(sqlText(capturedArgs)).not.toContain("status_actions");
+      expect(sqlText(capturedArgs)).not.toContain("INSERT");
     });
 
     it("wallpaper and ringtone grants never touch a status counter", async () => {
@@ -262,6 +294,8 @@ describe("POST /media/signed-url", () => {
         expect(text).not.toContain("statuses");
         expect(text).not.toContain("share_count");
         expect(text).not.toContain("download_count");
+        expect(text).not.toContain("status_actions");
+        expect(text).not.toContain("INSERT");
       }
     });
   });

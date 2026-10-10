@@ -84,7 +84,8 @@ shared `catalog/version.json` (the pointer the app reads first, then `?v=<versio
 - `/media/signed-url` bumps ONE popularity counter per grant, chosen by `kind` + `action`: wallpaper
   `apply` → `apply_count`, every ringtone grant → `set_count`, status `share` → `share_count` and
   `download` → `download_count`; anything else (a wallpaper share, no `action` from an old build) bumps
-  nothing, so a column keeps meaning what it says.
+  nothing, so a column keeps meaning what it says. A status bump also appends its `status_actions` row in
+  the same statement ([data-model.md](data-model.md) §Popularity counters).
 
 ## Schema
 

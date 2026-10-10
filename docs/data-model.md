@@ -18,7 +18,7 @@ parameterized query to the verified `sub`; the app never reaches the DB.
   stopped, but a pending `referrals` row still rewards on the friend's first paid debit, once; a later
   cancellation never claws it back.
 - **`users.is_internal` is set BY HAND and read only for reporting and test sends** (the CMS
-  subscriptions page; campaign push's test audience and counts — [push.md](push.md)). No entitlement,
+  subscriptions and status insights pages; campaign push's test audience and counts — [push.md](push.md)). No entitlement,
   payment or catalog path reads it. **Enumerate exact addresses — never match by email substring**:
   `%anish%` hits real paying users. The one safe pattern is `%@cloudtestlabaccounts.com` (Google's Test
   Lab robots).
@@ -100,6 +100,13 @@ the file**: a blocked user never reaches the route, the OS chooser can still be 
 SHARES are excluded via the request's `action` — a request with no `action` counts for nothing, so old
 builds cannot pollute it. Every ringtone grant counts. A status keeps `share_count` (`action: share`) and
 `download_count` (`action: download`) apart; its feed orders on their sum. No index: `build-catalog` full-scans hourly.
+
+A status grant also appends a `status_actions` row (user, `share`|`download`, `at`) in the SAME statement
+as its bump (one CTE), so the CMS can rank clips by distinct people over a window; the counters are
+lifetime taps and predate the rows. Append-only, read by the CMS alone. Both FKs cascade, or the CMS's
+status delete and account deletion fail with 23503. **Apply `34_status_actions.sql` before deploying the
+Worker that writes it**: without the table the CTE fails and the status counters stop too — there is
+deliberately no counter-only fallback to hide a missed migration.
 
 ## Paths
 

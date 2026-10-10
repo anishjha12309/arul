@@ -40,7 +40,7 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   `status_share`/`status_save`, then straight to `/premium?source=status_share|status_save`. A server
   403 `premium_required` routes to the paywall too and is never a crash record.
 - **Every Share and Save calls `/media/signed-url`** (`kind: status`, `action: share|download` — the
-  counters the order sums). A cached or prefetched clip skips only the download; offline with the
+  counters the order sums, plus one `status_actions` row per grant for the CMS's per-person ranking). A cached or prefetched clip skips only the download; offline with the
   bytes held is the one pass-through.
 
 ## Save
