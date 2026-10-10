@@ -31,18 +31,22 @@ class ReelMedia extends StatelessWidget {
   }
 }
 
-/// A pooled player's texture, cover-fitted and faded in on its own first frame.
+/// A pooled player's texture, fitted like its poster and faded in on its own first frame.
 class ReelLiveTexture extends StatelessWidget {
   const ReelLiveTexture({
     super.key,
     required this.slot,
     required this.alignment,
+    this.fit = BoxFit.cover,
   });
 
   final LiveVideoSlot slot;
 
   /// The crop of the poster underneath -> a texture cropped differently jumps on first frame.
   final Alignment alignment;
+
+  /// The poster's fit, for the same reason as [alignment].
+  final BoxFit fit;
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +77,7 @@ class ReelLiveTexture extends StatelessWidget {
             // FittedBox(cover) over a SizedBox at the video's intrinsic size.
             return ClipRect(
               child: FittedBox(
-                fit: BoxFit.cover,
+                fit: fit,
                 alignment: alignment,
                 clipBehavior: Clip.hardEdge,
                 child: SizedBox(

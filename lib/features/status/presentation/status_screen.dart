@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +53,8 @@ class StatusScreen extends ConsumerStatefulWidget {
   ConsumerState<StatusScreen> createState() => _StatusScreenState();
 }
 
-class _StatusScreenState extends ConsumerState<StatusScreen> {
+class _StatusScreenState extends ConsumerState<StatusScreen>
+    with SingleTickerProviderStateMixin {
   /// `viewportFraction` is final on PageController and needs the reel's measured height, exactly
   /// as the feed's pager -> built lazily in [_pagerFor].
   PageController? _pager;
@@ -62,6 +64,14 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   late final VideoPreloadController<StatusVideo> _video;
 
   int _index = 0;
+
+  // A forward swipe folds the chips away so the card takes their height; back, or the first card,
+  // brings them back. Decided on settle: a reel resized mid-drag would drop the drag.
+  late final AnimationController _chipsReveal = AnimationController(
+    vsync: this,
+    value: 1,
+  );
+  int _settledIndex = 0;
   List<StatusVideo>? _served;
   int? _pendingIndex;
 
@@ -90,6 +100,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     _dwellTimer?.cancel();
     ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     _pager?.dispose();
+    _chipsReveal.dispose();
     _video.detach();
     super.dispose();
   }
@@ -106,6 +117,21 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
     }
     return _pager!;
+  }
+
+  void _onReelSettled() {
+    final from = _settledIndex;
+    _settledIndex = _index;
+    if (_index == from && _index != 0) return;
+    final reveal = _index == 0 || _index < from;
+    final duration = context.reduceMotion ? Duration.zero : Motion.settle;
+    unawaited(
+      _chipsReveal.animateTo(
+        reveal ? 1 : 0,
+        duration: duration,
+        curve: Motion.settleCurve,
+      ),
+    );
   }
 
   void _onCardSettled(StatusVideo status) {
@@ -354,6 +380,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
             children: [
               ArulBrowseHeader(
                 title: l10n.statusTitle,
+                chipsReveal: _chipsReveal,
                 actions: [
                   ArulIconTap.glyph(
                     glyph: ArulLineGlyph.settings,
@@ -382,9 +409,11 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                       )
                     : LayoutBuilder(
                         builder: (context, constraints) {
+                          // A card taller than the clip would only add bands -> ask for its shape.
                           final geo = FeedCardGeometry.resolve(
                             context,
                             reelHeight: constraints.maxHeight,
+                            askAspect: FeedCardGeometry.clipAspect,
                           );
                           return switch (feed) {
                             AsyncValue(:final value?) when value.isEmpty =>
@@ -470,7 +499,12 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
             },
             color: ArulTokens.gold,
             backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
-            child: PageView.builder(
+            child: NotificationListener<ScrollEndNotification>(
+              onNotification: (n) {
+                if (n.depth == 0) _onReelSettled();
+                return false;
+              },
+              child: PageView.builder(
               controller: _pagerFor(geo, geo.pagerHeight(h)),
               scrollDirection: Axis.vertical,
               padEnds: false,
@@ -530,6 +564,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                 ),
               ),
             ),
+            ),
           ),
         ),
         if (_fetchingBehind)
@@ -551,9 +586,28 @@ class StatusMedia extends StatelessWidget {
   final StatusVideo status;
   final LiveVideoSlot? slot;
 
-  /// Centre, not the wallpapers' top-weighted crop: a status is composed around its middle line of
-  /// text, and the top bias showed a fill band above the clip while cutting its lower words.
-  static const _statusCrop = Alignment.center;
+  /// The blurred fill the encode leaves above and below every clip's picture, as a share of its
+  /// height: the most a card may trim from either end (docs/status-clips.md).
+  static const fillShare = 0.075;
+
+  /// The clip's laid-out size in [card]: cover while the trim stays inside [fillShare], else the
+  /// picture at the card's full height with its own blur at the sides — text is never cut.
+  @visibleForTesting
+  static Size frameIn(Size card) {
+    if (card.width <= 0 || card.height <= 0) return card;
+    const aspect = FeedCardGeometry.clipAspect;
+    final height = math.min(
+      card.width * aspect,
+      card.height / (1 - 2 * fillShare),
+    );
+    return Size(height / aspect, height);
+  }
+
+  // Decoded this narrow and stretched over the card, the poster blurs itself for free -> the sides
+  // read as the clip's own blurred fill, with no ImageFilter pass over a playing texture.
+  static const _blurDecodeWidth = 24;
+
+  static const _blurDim = Color(0x29000000);
 
   @override
   Widget build(BuildContext context) {
@@ -562,23 +616,83 @@ class StatusMedia extends StatelessWidget {
         (MediaQuery.sizeOf(context).width *
                 MediaQuery.devicePixelRatioOf(context))
             .round();
+    final poster = status.posterUrl(AppConfig.cdnBaseUrl);
     return ColoredBox(
       color: ArulColors.ink,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final frame = frameIn(box.biggest);
+          final clip = _StatusFrame(
+            frame: frame,
+            poster: poster,
+            decodeWidth: width,
+            slot: slot,
+          );
+          if (frame.width >= box.maxWidth - 0.5) return clip;
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: poster,
+                fit: BoxFit.cover,
+                memCacheWidth: _blurDecodeWidth,
+                filterQuality: FilterQuality.medium,
+                color: _blurDim,
+                colorBlendMode: BlendMode.srcATop,
+                fadeInDuration: Duration.zero,
+                placeholder: (_, _) => const SizedBox.shrink(),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
+              ),
+              clip,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The clip at [frame], centred and overflowing on purpose: the card's own ClipRRect does the trim.
+class _StatusFrame extends StatelessWidget {
+  const _StatusFrame({
+    required this.frame,
+    required this.poster,
+    required this.decodeWidth,
+    required this.slot,
+  });
+
+  final Size frame;
+  final String poster;
+  final int decodeWidth;
+  final LiveVideoSlot? slot;
+
+  @override
+  Widget build(BuildContext context) {
+    final slot = this.slot;
+    return OverflowBox(
+      minWidth: frame.width,
+      maxWidth: frame.width,
+      minHeight: frame.height,
+      maxHeight: frame.height,
       child: Stack(
         fit: StackFit.expand,
         children: [
           CachedNetworkImage(
-            imageUrl: status.posterUrl(AppConfig.cdnBaseUrl),
-            fit: BoxFit.cover,
-            alignment: _statusCrop,
-            memCacheWidth: width,
+            imageUrl: poster,
+            fit: BoxFit.fill,
+            memCacheWidth: decodeWidth,
             fadeInDuration: Duration.zero,
             // The loading card's sweep until the poster lands -> the card never reads as a void
             // with two buttons floating in it (ink on the ink frame is invisible).
             placeholder: (_, _) => const ReelPosterPlaceholder(),
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
-          if (slot != null) ReelLiveTexture(slot: slot, alignment: _statusCrop),
+          if (slot != null)
+            ReelLiveTexture(
+              slot: slot,
+              alignment: Alignment.center,
+              fit: BoxFit.fill,
+            ),
         ],
       ),
     );

@@ -36,4 +36,6 @@ ffmpeg -t 29.8 -i in.mp4 -filter_complex "$BG;$FG;$V;[0:a:0]$LN,aresample=48000,
   -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2 -movflags +faststart out/<uuid>.mp4
 ffmpeg -ss 1 -i out/<uuid>.mp4 -frames:v 1 -vf scale=640:-2 -q:v 3 poster/<uuid>.jpg
 ```
-The blurred fill keeps a non-9:16 source whole instead of cropping it.
+The blurred fill keeps a non-9:16 source whole instead of cropping it. **The app's card trims up to 7.5%
+of that fill off each end** ([status.md](status.md) §Player), so a source must be 2:3 or squarer — a
+true 9:16 source has no fill, and its title would be the first thing cut.

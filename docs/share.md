@@ -41,7 +41,8 @@ AND bring someone back; these rules were paid for by getting the second half wro
 - [ ] Then the Arul sheet: **Groups · WhatsApp · Status · More** (owner's labels and order). Groups and
       WhatsApp fire the SAME targeted `ACTION_SEND` — WhatsApp's own picker lists chats AND groups, and no
       public intent opens a groups-only one — so they differ only in `status_shared.channel`
-      (`groups`|`chat`|`status`|`sheet` = More or no WhatsApp). More = the system sheet.
+      (`groups`|`chat`|`status`|`sheet` = More or no WhatsApp). More = the system sheet. The three
+      WhatsApp cells all wear its logo (Groups and Status badged), since people find WhatsApp by it.
       Neither WhatsApp package resolves a `video/mp4` send → no Arul sheet, straight to the system sheet.
 - [ ] **Status tries WhatsApp's documented composer, then an undocumented action, then the picker.**
       The composer is faq.whatsapp.com/669870872481343: `ACTION_VIEW https://wa.me/status`,

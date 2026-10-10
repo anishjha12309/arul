@@ -78,6 +78,9 @@ class FeedCardGeometry {
   /// Never take it to zero: the sliver of the next wallpaper is why the reel reads as scrollable.
   static const minPeek = 25.0;
 
+  /// A status clip's height ÷ width (1024×1824).
+  static const clipAspect = 1824 / 1024;
+
   /// The extent of one page — the card plus the gap that follows it.
   /// With `padEnds: false` the pager's `viewportFraction` resolves to this.
   /// So snap, drag and fling geometry stay a stock PageView's.
@@ -87,19 +90,26 @@ class FeedCardGeometry {
   /// `card + gap + peek` fills exactly this.
   double pagerHeight(double reelHeight) => math.max(0.0, reelHeight - floor);
 
+  /// [askAspect] replaces [cardAspect] as the shape the card asks for; the width never changes.
   static FeedCardGeometry resolve(
     BuildContext context, {
     required double reelHeight,
-  }) => solve(screen: MediaQuery.sizeOf(context), reelHeight: reelHeight);
+    double askAspect = cardAspect,
+  }) => solve(
+    screen: MediaQuery.sizeOf(context),
+    reelHeight: reelHeight,
+    askAspect: askAspect,
+  );
 
   /// The pure form of [resolve] — no BuildContext, so it tests against a table of real devices.
   @visibleForTesting
   static FeedCardGeometry solve({
     required Size screen,
     required double reelHeight,
+    double askAspect = cardAspect,
   }) {
     final width = math.max(0.0, screen.width - gutter * 2);
-    var height = width * cardAspect;
+    var height = width * askAspect;
     var peek = targetPeek;
 
     var floor = reelHeight - height - gap - peek;

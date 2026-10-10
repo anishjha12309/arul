@@ -20,6 +20,7 @@ import 'package:arul/features/status/presentation/status_screen.dart';
 import 'package:arul/features/status/providers/status_action_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/wallpapers/data/feed_video_player.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -392,6 +393,19 @@ void main() {
       expect(xs, orderedEquals([...xs]..sort()));
       expect(find.text('Groups'), findsOneWidget);
       expect(find.text('More'), findsOneWidget);
+      const logo = AssetImage('assets/images/whatsapp.webp');
+      for (final n in ['groups', 'chat', 'status']) {
+        expect(
+          find.descendant(of: cell(n), matching: find.image(logo)),
+          findsOneWidget,
+          reason: '$n opens WhatsApp, so it wears the logo',
+        );
+      }
+      expect(
+        find.descendant(of: cell('more'), matching: find.image(logo)),
+        findsNothing,
+        reason: 'More is the system sheet, not WhatsApp',
+      );
     });
 
     testWidgets('under reduced motion the bar lands without a layout assert', (
@@ -564,5 +578,110 @@ void main() {
       expect(find.text('Saved to your gallery'), findsOneWidget);
       expect(actions.saves, 1);
     });
+  });
+
+  group('a card never trims into the picture, only the blurred fill around it', () {
+    const clip = Size(1024, 1824);
+    const fill = StatusMedia.fillShare;
+
+    testWidgets('a forward swipe folds the chips away and the card grows; back brings them', (
+      tester,
+    ) async {
+      await pump(tester, reduceMotion: true);
+      final before = tester.getSize(find.byType(StatusMedia).first).height;
+      final chipsBefore = tester.getRect(find.byType(StatusChips));
+      expect(chipsBefore.height, greaterThan(0));
+
+      await tester.fling(find.byType(PageView), const Offset(0, -300), 1500);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final reveal = tester.widget<SizeTransition>(
+        find.ancestor(
+          of: find.byType(StatusChips),
+          matching: find.byType(SizeTransition),
+        ),
+      );
+      expect(reveal.sizeFactor.value, 0);
+      final after = tester.getSize(find.byType(StatusMedia).last).height;
+      expect(after, greaterThan(before), reason: 'the card takes the chips\' height');
+
+      await tester.fling(find.byType(PageView), const Offset(0, 300), 1500);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(reveal.sizeFactor.value, 1);
+    });
+
+    // Cards the solver hands real screens (squarer on short phones, the clip's own shape on tall
+    // ones) and a few beyond them: the picture between the fills always lies inside the card.
+    for (final card in const [
+      Size(328, 361),
+      Size(288, 373),
+      Size(328, 455),
+      Size(328, 525),
+      Size(361, 598),
+      Size(328, 584),
+      Size(328, 640),
+    ]) {
+      testWidgets('on a ${card.width.round()}x${card.height.round()} card', (
+        tester,
+      ) async {
+        final slot = LiveVideoSlot(
+          index: 0,
+          playerId: 1,
+          textureId: 7,
+          videoSize: ValueNotifier(clip),
+          ready: ValueNotifier(true),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Center(
+              child: SizedBox.fromSize(
+                size: card,
+                child: StatusMedia(status: _clips.first, slot: slot),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        final box = tester.getRect(find.byType(StatusMedia));
+        final frame = tester.getRect(find.byType(Texture));
+        expect(frame.width / frame.height, closeTo(clip.aspectRatio, 0.002));
+        expect(frame.center.dx, closeTo(box.center.dx, 0.5));
+        expect(frame.center.dy, closeTo(box.center.dy, 0.5));
+        expect(frame.width, lessThanOrEqualTo(box.width + 0.01), reason: 'the sides are picture, never trimmed');
+        final picture = Rect.fromLTRB(
+          frame.left,
+          frame.top + frame.height * fill,
+          frame.right,
+          frame.bottom - frame.height * fill,
+        );
+        expect(picture.top, greaterThanOrEqualTo(box.top - 0.01));
+        expect(picture.bottom, lessThanOrEqualTo(box.bottom + 0.01));
+        if (card.height / card.width >= (clip.height / clip.width) * (1 - 2 * fill)) {
+          expect(frame.width, closeTo(box.width, 0.01), reason: 'room enough -> edge to edge');
+        }
+
+        // The poster under the texture must fit the same way, or the first frame jumps.
+        final poster = tester.getRect(
+          find.byWidgetPredicate(
+            (w) => w is CachedNetworkImage && w.fit == BoxFit.fill,
+          ),
+        );
+        expect(poster, frame);
+
+        // Any room beside the picture is its own blur, never a black bar.
+        final backdrop = find.byWidgetPredicate(
+          (w) => w is CachedNetworkImage && w.fit == BoxFit.cover,
+        );
+        if (frame.width < box.width - 0.5) {
+          expect(tester.getRect(backdrop), box);
+        } else {
+          expect(backdrop, findsNothing, reason: 'edge to edge needs no backdrop');
+        }
+      });
+    }
   });
 }

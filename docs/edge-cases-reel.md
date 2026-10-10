@@ -36,3 +36,6 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Loading, empty, error and offline faces say status videos, never wallpapers; empty offers Browse all
 - [ ] A pull on the first card refreshes and the clips stay on screen through it
 - [ ] A cold `/s/` link opens on its clip — card 0 is never opened or staged first
+- [ ] A card never cuts a clip's text — the trim stays in the blurred fill, on a 320 dp phone too
+- [ ] A forward swipe folds the status chips away, back or card 0 brings them; never mid-drag
+- [ ] Groups, WhatsApp and Status in the status share sheet all wear the WhatsApp logo

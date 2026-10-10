@@ -14,6 +14,8 @@ paths:
 - **Save never asks a permission on API 29+**; Android ≤9 asks `WRITE_EXTERNAL_STORAGE` on the first
   save under its own request code (5002), never at launch. Never request `READ_MEDIA_*`.
 - **Status clips go out clean** (owner): Share and Save never touch `ShareWatermarkService`.
+- **A card trims only the clip's blurred fill** (owner): `StatusMedia.frameIn`, ≤`fillShare` per end,
+  else the picture at full height over its own stretched-poster blur — never cover, never black bars.
 - Share = preparing card → Groups · WhatsApp · Status · More (owner's labels and order); no WhatsApp →
   the system sheet. The status surfaces (composer, `SEND_TO_STATUS`) carry no link; the picker and
   the sheet carry exactly one `/s/` link. A closed sheet tracks nothing.

@@ -60,6 +60,17 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
 
 ## Player and prefetch
 
+- **A card trims only the blurred fill, never the picture** (owner). Every live clip carries ≥7.7%
+  blurred fill above and below its picture (90 clips measured, Oct 2026), and the title sits right under
+  the top one. `StatusMedia.frameIn` covers the card while the trim stays inside `fillShare` (7.5%);
+  past that the picture keeps the card's full height over its own poster, decoded 24 px wide and stretched
+  (the upscale is the blur; no `ImageFilter` over a playing texture) — never a black bar. Plain cover
+  on the squarer cards of short phones cut up to 15% off each end — the title first.
+- **The card asks for the clip's shape** (`askAspect: clipAspect`), never the wallpapers' 1:1.86, and
+  **a forward swipe folds the chip row away** so the card takes its ~60 dp; back, or card 0, brings it.
+  It folds on settle, never mid-drag: resizing the reel swaps the pager and would drop the finger.
+- Text in a clip's bottom line can sit under the WhatsApp/Save row: an overlay, not a trim.
+
 The status reel is its own pool of 2 (current + next), audible, hidden until the shell shows it; a tap
 pauses or resumes, and is the only way out of a focus loss ([video-feed.md](video-feed.md) §Two reels).
 Prefetch has its own store (`arulStatuses`, 20 objects, 2 ahead, 1 before the first paint, nothing under

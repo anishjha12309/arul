@@ -214,4 +214,47 @@ void main() {
       );
     });
   });
+
+  group('a status card asks for the clip\'s shape, at full width', () {
+    const aspect = FeedCardGeometry.clipAspect;
+
+    test('a reel tall enough grants exactly the clip\'s shape', () {
+      final geo = FeedCardGeometry.solve(
+        screen: const Size(392.7, 872.7),
+        reelHeight: 2000,
+        askAspect: aspect,
+      );
+      expect(geo.size.width, closeTo(360.7, 0.5));
+      expect(geo.size.height, closeTo(geo.size.width * aspect, 1e-9));
+    });
+
+    test('a short reel clamps the height and keeps the gutters', () {
+      const screen = Size(360, 730);
+      final reel = reelHeightFor(
+        screenHeight: screen.height,
+        statusBar: 24,
+        bottomInset: 16,
+      );
+      final geo = FeedCardGeometry.solve(
+        screen: screen,
+        reelHeight: reel,
+        askAspect: aspect,
+      );
+      expect(geo.margin, const EdgeInsets.symmetric(horizontal: 16));
+      expect(geo.size.width, 328);
+      expect(geo.size.height, lessThan(328 * aspect));
+      expect(
+        geo.size.height + FeedCardGeometry.gap + geo.peek + geo.floor,
+        closeTo(reel, 0.01),
+      );
+    });
+
+    test('the wallpaper card still asks for 1:1.86', () {
+      final geo = FeedCardGeometry.solve(
+        screen: const Size(392.7, 872.7),
+        reelHeight: 2000,
+      );
+      expect(geo.size.height, closeTo(geo.size.width * FeedCardGeometry.cardAspect, 1e-9));
+    });
+  });
 }

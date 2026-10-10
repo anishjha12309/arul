@@ -42,27 +42,23 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    // The brand mark the pill already carries: a person finds WhatsApp by its logo first. All
+    // three cells open WhatsApp, so each wears the logo and a badge tells Groups and Status apart.
     final targets = <(StatusShareTarget, String, Widget)>[
       (
         StatusShareTarget.groups,
         l10n.statusShareGroups,
-        Icon(Icons.groups_rounded, size: _markSize, color: accent),
+        const _WhatsAppMark(badge: Icons.groups_rounded),
       ),
       (
         StatusShareTarget.chat,
         l10n.statusShareChat,
-        // The brand mark the pill already carries: a person finds WhatsApp by its logo first.
-        const Image(
-          image: AssetImage('assets/images/whatsapp.webp'),
-          width: _markSize,
-          height: _markSize,
-          filterQuality: FilterQuality.medium,
-        ),
+        const _WhatsAppMark(),
       ),
       (
         StatusShareTarget.status,
         l10n.statusShareStatus,
-        Icon(Icons.motion_photos_on_rounded, size: _markSize, color: accent),
+        const _WhatsAppMark(badge: Icons.motion_photos_on_rounded),
       ),
       (
         StatusShareTarget.more,
@@ -162,6 +158,60 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
     }
     if (widest <= width) return base;
     return base.copyWith(fontSize: base.fontSize! * width / widest);
+  }
+}
+
+class _WhatsAppMark extends StatelessWidget {
+  const _WhatsAppMark({this.badge});
+
+  final IconData? badge;
+
+  static const double _badgeSize = 16;
+
+  @override
+  Widget build(BuildContext context) {
+    const logo = Image(
+      image: AssetImage('assets/images/whatsapp.webp'),
+      width: _StatusShareSheetBodyState._markSize,
+      height: _StatusShareSheetBodyState._markSize,
+      filterQuality: FilterQuality.medium,
+    );
+    final badge = this.badge;
+    if (badge == null) return logo;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SizedBox.square(
+      dimension: _StatusShareSheetBodyState._markSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          logo,
+          Positioned(
+            right: -6,
+            bottom: -4,
+            child: Container(
+              width: _badgeSize,
+              height: _badgeSize,
+              decoration: BoxDecoration(
+                color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+                shape: BoxShape.circle,
+                // The sheet's own surface as a ring -> the badge reads as ON the logo, not a blot.
+                border: Border.all(
+                  color: isDark
+                      ? ArulTokens.darkSheetSurface
+                      : ArulTokens.cardBgLight,
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                badge,
+                size: 10,
+                color: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
