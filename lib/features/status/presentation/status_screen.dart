@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/theme/motion.dart';
 import '../../../app/theme/tokens.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_chip.dart';
@@ -52,25 +51,16 @@ class StatusScreen extends ConsumerStatefulWidget {
   ConsumerState<StatusScreen> createState() => _StatusScreenState();
 }
 
-class _StatusScreenState extends ConsumerState<StatusScreen>
-    with SingleTickerProviderStateMixin {
+class _StatusScreenState extends ConsumerState<StatusScreen> {
   /// `viewportFraction` is final on PageController and needs the reel's measured height, exactly
   /// as the feed's pager -> built lazily in [_pagerFor].
   PageController? _pager;
-  double? _pagerFraction;
 
   /// Captured in initState -> `ref` is unusable from dispose(), where the pool is detached.
   late final VideoPreloadController<StatusVideo> _video;
 
   int _index = 0;
 
-  // A forward swipe folds the chips away so the card takes their height; back, or the first card,
-  // brings them back. Decided on settle: a reel resized mid-drag would drop the drag.
-  late final AnimationController _chipsReveal = AnimationController(
-    vsync: this,
-    value: 1,
-  );
-  int _settledIndex = 0;
   List<StatusVideo>? _served;
   int? _pendingIndex;
 
@@ -99,39 +89,11 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
     _dwellTimer?.cancel();
     ArulDeepLink.changes.removeListener(_onDeepLinkChanged);
     _pager?.dispose();
-    _chipsReveal.dispose();
     _video.detach();
     super.dispose();
   }
 
-  PageController _pagerFor(FeedCardGeometry geo, double height) {
-    final fraction = height <= 0
-        ? 1.0
-        : (geo.pageExtent / height).clamp(0.2, 1.0);
-    if (_pager != null && _pagerFraction == fraction) return _pager!;
-    final previous = _pager;
-    _pagerFraction = fraction;
-    _pager = PageController(initialPage: _index, viewportFraction: fraction);
-    if (previous != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => previous.dispose());
-    }
-    return _pager!;
-  }
-
-  void _onReelSettled() {
-    final from = _settledIndex;
-    _settledIndex = _index;
-    if (_index == from && _index != 0) return;
-    final reveal = _index == 0 || _index < from;
-    final duration = context.reduceMotion ? Duration.zero : Motion.settle;
-    unawaited(
-      _chipsReveal.animateTo(
-        reveal ? 1 : 0,
-        duration: duration,
-        curve: Motion.settleCurve,
-      ),
-    );
-  }
+  PageController _pagerFor() => _pager ??= PageController(initialPage: _index);
 
   void _onCardSettled(StatusVideo status) {
     _dwellTimer?.cancel();
@@ -375,7 +337,6 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
             children: [
               ArulBrowseHeader(
                 title: l10n.statusTitle,
-                chipsReveal: _chipsReveal,
                 actions: [
                   ArulIconTap.glyph(
                     glyph: ArulLineGlyph.settings,
@@ -404,13 +365,6 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
                       )
                     : LayoutBuilder(
                         builder: (context, constraints) {
-                          // The SLOT asks for the tallest clip shape; each card then sits in it at
-                          // its own clip's shape, whole — never cut, never padded.
-                          final geo = FeedCardGeometry.resolve(
-                            context,
-                            reelHeight: constraints.maxHeight,
-                            askAspect: FeedCardGeometry.clipAspect,
-                          );
                           return switch (feed) {
                             AsyncValue(:final value?) when value.isEmpty =>
                               FeedEmpty(
@@ -423,8 +377,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
                               ),
                             AsyncValue(:final value?) => _buildReel(
                               value,
-                              geo,
-                              constraints.maxHeight,
+                              constraints.biggest,
                               l10n,
                             ),
                             AsyncError() => FeedError(
@@ -437,7 +390,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
                               ),
                             ),
                             _ => FeedLoading(
-                              margin: geo.margin,
+                              margin: _pageMargin,
                               radius: FeedCardGeometry.radius,
                               body: l10n.statusLoadingBody,
                             ),
@@ -452,123 +405,88 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
     );
   }
 
-  Widget _buildReel(
-    List<StatusVideo> items,
-    FeedCardGeometry geo,
-    double h,
-    AppLocalizations l10n,
-  ) {
+  /// Shubh's page: 12 dp either side, 4 dp above and below the clip's box.
+  static const _pageMargin = EdgeInsets.symmetric(horizontal: 12);
+  static const _pageInset = EdgeInsets.symmetric(horizontal: 12, vertical: 4);
+
+  Widget _buildReel(List<StatusVideo> items, Size reel, AppLocalizations l10n) {
     _sync(items);
     final busy = ref.watch(
       statusActionProvider.select((s) => s is! StatusActionIdle),
     );
-    final m = geo.margin;
-    final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // One status per page, the whole reel (Shubh's status view): the clip's box is the largest of
+    // its own shape inside the page, centred — no peek of the next clip, nothing beside the picture.
+    final box = _pageInset.deflateSize(reel);
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Behind the pager, in the slot the next card's peek fills -> seen only on the last card.
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: cardBottom,
-          child: IgnorePointer(
-            child: AnimatedOpacity(
-              opacity: _index == items.length - 1 ? 1 : 0,
-              duration: context.reduceMotion ? Duration.zero : Motion.breathe,
-              curve: Motion.settleCurve,
-              child: Center(child: ReelEndMark(isDark: isDark)),
-            ),
-          ),
-        ),
-        Padding(
-          padding: EdgeInsets.only(top: geo.headroom, bottom: geo.underhang),
-          // A pull on the first card re-reads the catalog, exactly as the wallpaper reel's does;
-          // on a later card the pull only pages back.
-          child: RefreshIndicator(
-            onRefresh: () {
-              ArulHaptics.firm();
-              return ref.read(statusCatalogProvider.notifier).refresh();
+        // A pull on the first card re-reads the catalog, exactly as the wallpaper reel's does;
+        // on a later card the pull only pages back.
+        RefreshIndicator(
+          onRefresh: () {
+            ArulHaptics.firm();
+            return ref.read(statusCatalogProvider.notifier).refresh();
+          },
+          color: ArulTokens.gold,
+          backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
+          child: PageView.builder(
+            controller: _pagerFor(),
+            scrollDirection: Axis.vertical,
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: items.length,
+            onPageChanged: (i) {
+              setState(() => _index = i);
+              _video.onPageChanged(i);
+              _onCardSettled(items[i]);
             },
-            color: ArulTokens.gold,
-            backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
-            child: NotificationListener<ScrollEndNotification>(
-              onNotification: (n) {
-                if (n.depth == 0) _onReelSettled();
-                return false;
-              },
-              child: PageView.builder(
-                controller: _pagerFor(geo, geo.pagerHeight(h)),
-                scrollDirection: Axis.vertical,
-                padEnds: false,
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: items.length,
-                onPageChanged: (i) {
-                  setState(() => _index = i);
-                  _video.onPageChanged(i);
-                  _onCardSettled(items[i]);
-                },
-                itemBuilder: (context, i) => Padding(
-                  padding: m.copyWith(bottom: FeedCardGeometry.gap),
-                  // The card is the clip's own shape inside the slot (Shubh's rule): a 2:3 clip is
-                  // shorter, a tall clip narrower, each centred under the chips with the slot's top.
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox.fromSize(
-                      size: FeedCardGeometry.contain(geo.size, items[i].aspect),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                          FeedCardGeometry.radius,
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            // Tap pauses and resumes; vertical drags still belong to the pager.
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {
-                                ArulHaptics.tap();
-                                _video.toggleHeldByUser();
-                              },
-                              child: ReelMedia(
-                                controller: _video,
-                                index: i,
-                                builder: (context, slot) =>
-                                    StatusMedia(status: items[i], slot: slot),
-                              ),
-                            ),
-                            IgnorePointer(
-                              child: _HeldMark(controller: _video, index: i),
-                            ),
-                            ReelCardChrome(
-                              actions: ReelActionBar(
-                                busy: busy,
-                                primary: ReelAction(
-                                  icon: Icons.send_rounded,
-                                  image: const AssetImage(
-                                    'assets/images/whatsapp.webp',
-                                  ),
-                                  label: l10n.statusWhatsapp,
-                                  semanticsId: 'arul_status_whatsapp',
-                                  onTap: () =>
-                                      _onAction(StatusVerb.share, items[i]),
-                                ),
-                                secondary: ReelAction(
-                                  icon: Icons.file_download_outlined,
-                                  label: l10n.statusSave,
-                                  semanticsId: 'arul_status_save',
-                                  onTap: () =>
-                                      _onAction(StatusVerb.save, items[i]),
-                                ),
-                              ),
-                            ),
-                          ],
+            itemBuilder: (context, i) => Center(
+              child: SizedBox.fromSize(
+                size: FeedCardGeometry.contain(box, items[i].aspect),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(FeedCardGeometry.radius),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Tap pauses and resumes; vertical drags still belong to the pager.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          ArulHaptics.tap();
+                          _video.toggleHeldByUser();
+                        },
+                        child: ReelMedia(
+                          controller: _video,
+                          index: i,
+                          builder: (context, slot) =>
+                              StatusMedia(status: items[i], slot: slot),
                         ),
                       ),
-                    ),
+                      IgnorePointer(
+                        child: _HeldMark(controller: _video, index: i),
+                      ),
+                      ReelCardChrome(
+                        actions: ReelActionBar(
+                          busy: busy,
+                          primary: ReelAction(
+                            icon: Icons.send_rounded,
+                            image: const AssetImage(
+                              'assets/images/whatsapp.webp',
+                            ),
+                            label: l10n.statusWhatsapp,
+                            semanticsId: 'arul_status_whatsapp',
+                            onTap: () => _onAction(StatusVerb.share, items[i]),
+                          ),
+                          secondary: ReelAction(
+                            icon: Icons.file_download_outlined,
+                            label: l10n.statusSave,
+                            semanticsId: 'arul_status_save',
+                            onTap: () => _onAction(StatusVerb.save, items[i]),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -578,8 +496,8 @@ class _StatusScreenState extends ConsumerState<StatusScreen>
         if (_fetchingBehind)
           Positioned(
             top: 0,
-            left: m.left,
-            right: m.right,
+            left: _pageMargin.left,
+            right: _pageMargin.right,
             child: const _StatusTransferProgress(),
           ),
       ],

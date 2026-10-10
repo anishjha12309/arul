@@ -22,8 +22,8 @@ moving a knob.
 - **1.78 (9:16) is a BOUNDARY, not a dial.** Above it the crop is horizontal and cheap; below it it
   flips to top/bottom, costing crowns and feet on devotional art. `ViewerMedia.cropAlignment` biases
   the window UP for that case and is LIVE on the phones this ships to — do not delete it as unused.
-  The Status SLOT asks for 1:1.78 and each card is `contain`ed in it at its clip's own shape — the
-  one place a card is not the slot ([status.md](status.md)).
+  The Status tab uses none of this: one clip per page, `contain`ed at its own shape
+  ([status.md](status.md)).
 - Skeleton and reel must read the SAME geometry, or the card resizes when the first page lands.
 - Rejected shapes, do not revisit: device-aspect 1:2.22 · 1:1.63 · short-and-wide 1:1.40.
 

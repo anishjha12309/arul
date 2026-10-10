@@ -60,16 +60,16 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
 
 ## Player and prefetch
 
-- **A card is its clip's own shape, whole** (owner, after Shubh): the catalog carries each clip's
-  `width`/`height` (`StatusVideo.aspect`; a row without them is the old 1024×1824), the slot asks for
-  the tallest shape (`clipAspect`) and `FeedCardGeometry.contain` fits each card inside it — a 2:3
-  clip is shorter, a 9:16 clip narrower, top-centred under the chips. `BoxFit.fill` is then lossless.
-  Never cover (it cut the title first on short phones) and never a blur or a bar beside the picture
-  (a stretched-poster blur read as a blurred clip). The old library's baked fill bands show until
-  `tools/status-reencode.mjs` cuts them ([status-clips.md](status-clips.md)).
-- **The slot asks for the clip shape** (`askAspect: clipAspect`), never the wallpapers' 1:1.86, and
-  **a forward swipe folds the chip row away** so the slot takes its ~60 dp; back, or card 0, brings it.
-  It folds on settle, never mid-drag: resizing the reel swaps the pager and would drop the finger.
+- **One status per page, at its clip's own shape, whole** (owner, after Shubh's status view). The
+  catalog carries each clip's `width`/`height` (`StatusVideo.aspect`; a row without them is the old
+  1024×1824); the page is the whole reel, 12 dp either side and 4 dp above and below, and
+  `FeedCardGeometry.contain` fits the clip's box inside it, centred — a 2:3 clip is shorter, a 9:16
+  clip narrower. `BoxFit.fill` is then lossless. No peek of the next clip, no card geometry, no end
+  mark. Never cover (it cut the title first on short phones) and never a blur or a bar beside the
+  picture (a stretched-poster blur read as a blurred clip). `tools/status-reencode.mjs` cut the first
+  library's baked fill bands ([status-clips.md](status-clips.md)).
+- **The chip row stays through every swipe** (owner): a fold that gave the page its ~60 dp read as
+  the categories vanishing. The page is what is left under the chips.
 - Text in a clip's bottom line can sit under the WhatsApp/Save row: an overlay, not a trim.
 
 The status reel is its own pool of 2 (current + next), audible, hidden until the shell shows it; a tap

@@ -583,33 +583,14 @@ void main() {
   });
 
   group('a card is its clip\'s own shape, whole — never cut, never padded', () {
-    testWidgets('a forward swipe folds the chips away and the card grows; back brings them', (
-      tester,
-    ) async {
+    testWidgets('the chips stay through every swipe', (tester) async {
       await pump(tester, reduceMotion: true);
-      final before = tester.getSize(find.byType(StatusMedia).first).height;
-      final chipsBefore = tester.getRect(find.byType(StatusChips));
-      expect(chipsBefore.height, greaterThan(0));
-
+      final before = tester.getRect(find.byType(StatusChips));
       await tester.fling(find.byType(PageView), const Offset(0, -300), 1500);
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      final reveal = tester.widget<SizeTransition>(
-        find.ancestor(
-          of: find.byType(StatusChips),
-          matching: find.byType(SizeTransition),
-        ),
-      );
-      expect(reveal.sizeFactor.value, 0);
-      final after = tester.getSize(find.byType(StatusMedia).last).height;
-      expect(after, greaterThan(before), reason: 'the card takes the chips\' height');
-
-      await tester.fling(find.byType(PageView), const Offset(0, 300), 1500);
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      expect(reveal.sizeFactor.value, 1);
+      expect(tester.getRect(find.byType(StatusChips)), before);
     });
 
     testWidgets('a 2:3 clip and a 9:16 clip each get a card of their shape inside the slot', (
@@ -620,7 +601,8 @@ void main() {
       final first = tester.getRect(find.byType(StatusMedia).first);
       expect(first.height / first.width, closeTo(1536 / 1024, 0.01));
       expect(first.center.dx, closeTo(page.center.dx, 0.5));
-      expect(first.width, lessThanOrEqualTo(page.width - 32 + 0.01));
+      expect(first.width, lessThanOrEqualTo(page.width - 24 + 0.01));
+      expect(first.center.dy, closeTo(page.center.dy, 0.5), reason: 'one page, centred');
 
       await tester.fling(find.byType(PageView), const Offset(0, -300), 1500);
       for (var i = 0; i < 10; i++) {

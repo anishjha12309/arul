@@ -14,8 +14,9 @@ paths:
 - **Save never asks a permission on API 29+**; Android ≤9 asks `WRITE_EXTERNAL_STORAGE` on the first
   save under its own request code (5002), never at launch. Never request `READ_MEDIA_*`.
 - **Status clips go out clean** (owner): Share and Save never touch `ShareWatermarkService`.
-- **A card is its clip's own shape, whole** (owner): `FeedCardGeometry.contain(slot, status.aspect)`,
-  then `BoxFit.fill` — never cover, never bars, never a blur beside the clip.
+- **One status per page, its clip's own shape, whole** (owner, after Shubh): the page is the reel,
+  `FeedCardGeometry.contain(page, status.aspect)` centred, then `BoxFit.fill` — no peek, never cover,
+  never bars, never a blur beside the clip.
 - Share = preparing card → Groups · WhatsApp · Status · More (owner's labels and order); no WhatsApp →
   the system sheet. The status surfaces (composer, `SEND_TO_STATUS`) carry no link; the picker and
   the sheet carry the `/s/` link ALONE, never a sentence. A closed sheet tracks nothing.

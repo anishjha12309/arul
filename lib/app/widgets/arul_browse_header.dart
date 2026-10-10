@@ -14,7 +14,6 @@ class ArulBrowseHeader extends StatelessWidget {
     this.titleStyle,
     this.titleDrop = 0,
     this.actions = const [],
-    this.chipsReveal,
   });
 
   final String title;
@@ -29,20 +28,8 @@ class ArulBrowseHeader extends StatelessWidget {
 
   final List<Widget> actions;
 
-  /// Folds the chip row and the air above it away at 0 -> the tab below gets that height.
-  final Animation<double>? chipsReveal;
-
   @override
   Widget build(BuildContext context) {
-    final row = Column(
-      children: [
-        // 8 above the chip row against 33 below left it riding high in its own band, on both tabs.
-        // [ArulTokens.chipsTopGap] tops the 8 up to the bottom's number -> the row sits in EQUAL air.
-        const SizedBox(height: ArulTokens.chipsTopGap),
-        chips,
-      ],
-    );
-    final reveal = chipsReveal;
     return Column(
       children: [
         ArulScreenHeader(
@@ -51,14 +38,10 @@ class ArulBrowseHeader extends StatelessWidget {
           titleDrop: titleDrop,
           actions: actions,
         ),
-        if (reveal == null)
-          row
-        else
-          SizeTransition(
-            sizeFactor: reveal,
-            alignment: Alignment.topCenter,
-            child: FadeTransition(opacity: reveal, child: row),
-          ),
+        // 8 above the chip row against 33 below left it riding high in its own band, on both tabs.
+        // [ArulTokens.chipsTopGap] tops the 8 up to the bottom's number -> the row sits in EQUAL air.
+        const SizedBox(height: ArulTokens.chipsTopGap),
+        chips,
         const SizedBox(height: ArulTokens.chipsBottomGap),
       ],
     );
