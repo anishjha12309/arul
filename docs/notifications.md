@@ -7,7 +7,7 @@ Read before touching `lib/features/notifications/**`. Campaign pushes (FCM, the 
 ## Two channels, created at launch
 
 `arul_updates_v1` (`defaultImportance`: the local posts, and campaigns on older builds) and
-`arul_campaigns_v1` (campaigns, heads-up), both in `NotificationService.initialize()` on EVERY launch —
+`arul_campaigns_v2` (campaigns, heads-up, the temple bell), both in `NotificationService.initialize()` on EVERY launch —
 not at opt-in, for three reasons: FCM falls back to the manifest's `default_notification_channel_id`
 when a payload's channel was never created; on Android 8–12 the **channel is** the user's only control;
 and a phone upgrading to 13 is pre-granted only if a channel already exists.
@@ -17,12 +17,18 @@ creation** (NotificationManager reference) — so heads-up took a NEW id. Never 
 settings show a count of deleted channels as a spam signal. NAMES are mutable, which is how
 `pushChannelNameProvider` localizes both.
 
-**The campaign channel copies the person's choice on `arul_updates_v1`, ONCE**
-(`campaignImportanceFor`, stored as `arul_campaign_channel_importance`): blocked → never created, so
-campaigns keep posting to the blocked channel; LOW/MIN → created at that level; otherwise HIGH with the
-system default sound. Only Dart creates it: `ArulMessagingService` falls back to `arul_updates_v1` and
-the manifest default stays there, so a phone that blocked campaigns never gets a fresh, unblocked one. A
-custom sound needs audio Arul owns BEFORE the build that first creates the channel.
+**The campaign channel copies the person's choice ONCE** (stored as `arul_campaign_bell_importance`):
+from `arul_campaigns_v1` where the phone has it (`bellImportanceFor`: the exact level; blocked → never
+created and v1 is KEPT, so it stays blocked), else from `arul_updates_v1` (`campaignImportanceFor`:
+blocked → never; LOW/MIN → that level; otherwise HIGH). A v1 the old pref says was skipped stays
+skipped. Only Dart creates it: `ArulMessagingService` maps the Worker's `arul_campaigns_v1` to v2, else
+v1, else `arul_updates_v1`, and the manifest default stays there, so a blocked phone never gets a fresh,
+unblocked channel. v1 is deleted once v2 exists — one "category deleted" line in settings, accepted.
+
+**The bell is `res/raw/arul_bell.mp3`** — Shubh's `bell.mp3`, cut a flat 4.3 dB to −14 LUFS (the source
+peaked +1.3 dBTP and crackled). `keep.xml` must list it: the plugin resolves the sound by NAME, and a
+stripped one creates the channel SILENT for good. Android 7 has no channels: the service sets it on the
+builder. Local posts stay on `arul_updates_v1` with the default sound — that id is never deleted.
 
 ## Permission — once, after sign-in, on the feed
 

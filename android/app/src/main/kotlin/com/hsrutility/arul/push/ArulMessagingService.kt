@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
@@ -37,8 +38,11 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         private const val FALLBACK_CHANNEL_ID = "arul_updates_v1"
         private const val FALLBACK_CHANNEL_NAME = "Updates from Arul"
 
-        /** Mirrors NotificationService.campaignChannelId. Only Dart creates it, at the user's level. */
+        /** The id the Worker names (NotificationService.legacyCampaignChannelId). */
         private const val CAMPAIGN_CHANNEL_ID = "arul_campaigns_v1"
+
+        /** Mirrors NotificationService.campaignChannelId, the bell. Only Dart creates it. */
+        private const val BELL_CHANNEL_ID = "arul_campaigns_v2"
 
         /** The same text colour the CMS preview picks, so the composer and the phone agree. */
         private const val DARK_TEXT = 0xFF1B1B1F.toInt()
@@ -70,7 +74,7 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
         val campaignId = data["campaign_id"].orEmpty()
         val tag = data["tag"] ?: campaignId
         val channelId = channelFor(data["channel_id"])
-        val headsUp = channelId == CAMPAIGN_CHANNEL_ID
+        val headsUp = channelId == BELL_CHANNEL_ID || channelId == CAMPAIGN_CHANNEL_ID
         val title = data["title"].orEmpty()
         val body = data["body"].orEmpty()
         val background = parseColor(data["color"])
@@ -92,7 +96,7 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(tapIntent(message, data, campaignId))
         if (headsUp && Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            builder.setDefaults(NotificationCompat.DEFAULT_SOUND)
+            builder.setSound(Uri.parse("android.resource://$packageName/${R.raw.arul_bell}"))
         }
         if (data["visibility"] == "public") {
             builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -182,18 +186,25 @@ class ArulMessagingService : FlutterFirebaseMessagingService() {
      * The campaign channel only where Dart created it, else the first channel: a phone that blocked
      * campaigns before the split must never be handed a fresh, unblocked channel from here.
      */
+    // The Worker names v1 for every heads-up build -> the bell channel answers for it once Dart has
+    // made it; a person who blocked v1 never gets v2, so v1 still posts to nowhere.
     private fun channelFor(requested: String?): String {
-        if (requested != CAMPAIGN_CHANNEL_ID) return requested ?: FALLBACK_CHANNEL_ID
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return CAMPAIGN_CHANNEL_ID
+        if (requested != CAMPAIGN_CHANNEL_ID && requested != BELL_CHANNEL_ID) {
+            return requested ?: FALLBACK_CHANNEL_ID
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return BELL_CHANNEL_ID
         val manager = getSystemService(NotificationManager::class.java)
-        val exists = manager?.getNotificationChannel(CAMPAIGN_CHANNEL_ID) != null
-        return if (exists) CAMPAIGN_CHANNEL_ID else FALLBACK_CHANNEL_ID
+        return when {
+            manager?.getNotificationChannel(BELL_CHANNEL_ID) != null -> BELL_CHANNEL_ID
+            manager?.getNotificationChannel(CAMPAIGN_CHANNEL_ID) != null -> CAMPAIGN_CHANNEL_ID
+            else -> FALLBACK_CHANNEL_ID
+        }
     }
 
     /** Dart creates the channel at every launch; this covers only a phone where that never finished. */
     private fun ensureChannel(channelId: String) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        if (channelId == CAMPAIGN_CHANNEL_ID) return
+        if (channelId == CAMPAIGN_CHANNEL_ID || channelId == BELL_CHANNEL_ID) return
         val manager = getSystemService(NotificationManager::class.java) ?: return
         if (manager.getNotificationChannel(channelId) != null) return
         manager.createNotificationChannel(

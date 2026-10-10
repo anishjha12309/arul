@@ -1,5 +1,6 @@
 // The campaign channel is decided ONCE from the user's level on the channel campaigns used before:
-// blocked stays blocked, quietened stays quiet, anything else pops up. Local posts never move.
+// blocked stays blocked, quietened stays quiet, anything else pops up — with the bell. Local posts
+// never move.
 
 import 'package:arul/features/notifications/data/notification_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -13,6 +14,7 @@ class _FakeAndroid implements AndroidFlutterLocalNotificationsPlugin {
   /// What the phone already holds, as `getNotificationChannels` would report it.
   final List<AndroidNotificationChannel> channels;
   final created = <AndroidNotificationChannel>[];
+  final deleted = <String>[];
   int reads = 0;
 
   @override
@@ -27,7 +29,8 @@ class _FakeAndroid implements AndroidFlutterLocalNotificationsPlugin {
   }
 
   @override
-  Future<void> deleteNotificationChannel({required String channelId}) async {}
+  Future<void> deleteNotificationChannel({required String channelId}) async =>
+      deleted.add(channelId);
 
   @override
   Future<bool?> areNotificationsEnabled() async => true;
@@ -78,6 +81,13 @@ class _FakePlugin implements FlutterLocalNotificationsPlugin {
     '${invocation.memberName} is not part of this test',
   );
 }
+
+AndroidNotificationChannel _legacyCampaigns(Importance importance) =>
+    AndroidNotificationChannel(
+      NotificationService.legacyCampaignChannelId,
+      'New wallpapers and offers',
+      importance: importance,
+    );
 
 AndroidNotificationChannel _updates(Importance importance) =>
     AndroidNotificationChannel(
@@ -174,7 +184,7 @@ void main() {
   );
 
   test(
-    'otherwise the campaign channel pops up, with the default sound',
+    'otherwise the campaign channel pops up, ringing the bell',
     () async {
       final (_, plugin, prefs) = await _boot([
         _updates(Importance.defaultImportance),
@@ -182,7 +192,8 @@ void main() {
       final created = _campaignCreates(plugin).single;
       expect(created.importance, Importance.high);
       expect(created.playSound, isTrue);
-      expect(created.sound, isNull);
+      expect(created.sound, isA<RawResourceAndroidNotificationSound>());
+      expect(created.sound?.sound, 'arul_bell');
       expect(
         prefs.getInt(NotificationService.campaignChannelPrefKey),
         Importance.high.value,
@@ -233,5 +244,70 @@ void main() {
     for (final d in plugin.scheduled) {
       expect(d.android?.channelId, NotificationService.updatesChannelId);
     }
+  });
+
+  group('the bell channel takes over from the silent one', () {
+    test('the level rule: blocked stays out, any lowered level carries over, else high', () {
+      expect(NotificationService.bellImportanceFor(Importance.none), isNull);
+      for (final level in [
+        Importance.min,
+        Importance.low,
+        Importance.defaultImportance,
+      ]) {
+        expect(NotificationService.bellImportanceFor(level), level);
+      }
+      for (final level in [Importance.high, Importance.max, null]) {
+        expect(NotificationService.bellImportanceFor(level), Importance.high);
+      }
+    });
+
+    test('a heads-up v1 becomes a heads-up bell channel, and v1 goes', () async {
+      final (_, plugin, prefs) = await _boot([
+        _updates(Importance.defaultImportance),
+        _legacyCampaigns(Importance.high),
+      ]);
+      final created = _campaignCreates(plugin).single;
+      expect(created.importance, Importance.high);
+      expect(created.sound?.sound, 'arul_bell');
+      expect(
+        plugin.android.deleted,
+        contains(NotificationService.legacyCampaignChannelId),
+      );
+      expect(
+        prefs.getInt(NotificationService.campaignChannelPrefKey),
+        Importance.high.value,
+      );
+    });
+
+    test('a v1 the person lowered keeps that level', () async {
+      final (_, plugin, _) = await _boot([
+        _updates(Importance.defaultImportance),
+        _legacyCampaigns(Importance.low),
+      ]);
+      expect(_campaignCreates(plugin).single.importance, Importance.low);
+    });
+
+    test('a blocked v1 is never replaced and never deleted', () async {
+      final (_, plugin, prefs) = await _boot([
+        _updates(Importance.defaultImportance),
+        _legacyCampaigns(Importance.none),
+      ]);
+      expect(_campaignCreates(plugin), isEmpty);
+      expect(plugin.android.deleted, isNot(contains(NotificationService.legacyCampaignChannelId)));
+      expect(
+        prefs.getInt(NotificationService.campaignChannelPrefKey),
+        Importance.none.value,
+      );
+    });
+
+    test('v1 skipped for a blocked updates channel stays skipped, even if unblocked since', () async {
+      final (_, plugin, _) = await _boot(
+        [_updates(Importance.defaultImportance)],
+        prefs: {
+          NotificationService.legacyCampaignPrefKey: Importance.none.value,
+        },
+      );
+      expect(_campaignCreates(plugin), isEmpty);
+    });
   });
 }

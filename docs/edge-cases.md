@@ -82,6 +82,7 @@ each heading's docs.
 ## Push — [push.md](push.md), [push-registry.md](push-registry.md), [notifications.md](notifications.md)
 - [ ] Two channels, created at launch; campaigns only through the CMS; retired reminders cleared
 - [ ] The campaign channel copies a blocked or lowered `arul_updates_v1` once, and is never created natively
+- [ ] Campaigns ring the bell (`_v2`) at v1's level; a blocked v1 stays
 - [ ] Every campaign to a build >= `HEADSUP_MIN_BUILD` is data-only; a premium campaign stays PRIVATE on the lock screen
 - [ ] An Android 13+ phone that never signed in is in no audience; the count and `left_out` say how many
 - [ ] A campaign's `push_campaign_langs` rows sum to its sent/failed/gone; a replayed tap adds no open
@@ -89,7 +90,7 @@ each heading's docs.
 - [ ] No Dart background handler; an unreadable payload opens the app
 - [ ] BOTH tap paths deliver: killed and backgrounded
 - [ ] A tap lands even under `/premium`; a cold tap waits for the splash's auth decision (`PushTapRouter`)
-- [ ] `keep.xml` stops R8 stripping the notification icons (release builds only)
+- [ ] `keep.xml` stops R8 stripping the notification icons and bell (release only)
 
 ## Share — [share.md](share.md)
 - [ ] EXACTLY ONE link per share, owned by the caption, trailing; it carries `ilang=`, never `lang=`

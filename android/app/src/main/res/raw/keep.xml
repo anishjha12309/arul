@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- flutter_local_notifications resolves these by NAME, never as R.* -> R8 shrinking strips them. -->
 <!-- Stripped names throw `invalid_icon` -> only release builds break, so this file is not optional. -->
+<!-- The bell is the campaign channel's sound: stripped, the channel is created SILENT for good. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_notification,@drawable/ic_notification_large" />
+    tools:keep="@drawable/ic_notification,@drawable/ic_notification_large,@raw/arul_bell" />

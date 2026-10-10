@@ -47,8 +47,16 @@ class NotificationService {
 
   String _updatesChannelName = _defaultUpdatesChannelName;
 
-  /// The heads-up channel campaigns post to (ArulMessagingService), when this phone has it.
-  static const campaignChannelId = 'arul_campaigns_v1';
+  /// The heads-up channel campaigns post to (ArulMessagingService), when this phone has it. It rings
+  /// the temple bell — a sound is fixed at creation, so the bell took a new id.
+  static const campaignChannelId = 'arul_campaigns_v2';
+
+  /// The silent-default campaign channel before the bell: read once for the person's level, then
+  /// deleted once [campaignChannelId] replaces it. A blocked one is kept, so it stays blocked.
+  static const legacyCampaignChannelId = 'arul_campaigns_v1';
+
+  /// `res/raw/arul_bell.mp3`, kept from resource shrinking by `res/raw/keep.xml`.
+  static const _bell = RawResourceAndroidNotificationSound('arul_bell');
 
   static const _defaultCampaignChannelName = 'New wallpapers and offers';
 
@@ -56,7 +64,10 @@ class NotificationService {
 
   /// The importance [campaignChannelId] was created at, or `Importance.none` when it never will be.
   /// Absent until decided — a failed read retries next launch.
-  static const campaignChannelPrefKey = 'arul_campaign_channel_importance';
+  static const campaignChannelPrefKey = 'arul_campaign_bell_importance';
+
+  /// [legacyCampaignChannelId]'s decision; `Importance.none` there means it was never created.
+  static const legacyCampaignPrefKey = 'arul_campaign_channel_importance';
 
   /// Null until [initialize] settles it; `Importance.none` means the channel was never created.
   Importance? _campaignImportance;
@@ -131,33 +142,54 @@ class NotificationService {
         _ => Importance.high,
       };
 
+  /// What [campaignChannelId] is created at, given the person's level on [legacyCampaignChannelId]:
+  /// exactly that level, so a lowered or blocked choice carries over to the bell channel.
+  @visibleForTesting
+  static Importance? bellImportanceFor(Importance? legacy) => switch (legacy) {
+    Importance.none => null,
+    Importance.min || Importance.low || Importance.defaultImportance => legacy,
+    _ => Importance.high,
+  };
+
   /// Decides the campaign channel ONCE, then re-creates it at that level on every launch like
   /// [updatesChannelId], which only refreshes its name: Android never raises an existing channel.
   Future<void> _settleCampaignChannel(
     AndroidFlutterLocalNotificationsPlugin android,
   ) async {
     try {
-      var importance = _storedCampaignImportance();
+      var importance = _storedCampaignImportance(campaignChannelPrefKey);
       if (importance == null) {
         final channels = await android.getNotificationChannels() ?? const [];
-        final updates = channels
-            .where((c) => c.id == updatesChannelId)
-            .firstOrNull
-            ?.importance;
-        importance = campaignImportanceFor(updates) ?? Importance.none;
+        Importance? levelOf(String id) =>
+            channels.where((c) => c.id == id).firstOrNull?.importance;
+        final legacy = levelOf(legacyCampaignChannelId);
+        if (legacy != null) {
+          importance = bellImportanceFor(legacy) ?? Importance.none;
+        } else if (_storedCampaignImportance(legacyCampaignPrefKey) ==
+            Importance.none) {
+          // The legacy channel was skipped for a blocked updates channel: still skipped.
+          importance = Importance.none;
+        } else {
+          importance =
+              campaignImportanceFor(levelOf(updatesChannelId)) ??
+              Importance.none;
+        }
         await _prefs.setInt(campaignChannelPrefKey, importance.value);
       }
       _campaignImportance = importance;
       if (importance != Importance.none) {
         await android.createNotificationChannel(_campaignChannel(importance));
+        await android.deleteNotificationChannel(
+          channelId: legacyCampaignChannelId,
+        );
       }
     } on PlatformException catch (e) {
       debugPrint('[NotificationService] campaign channel not settled: $e');
     }
   }
 
-  Importance? _storedCampaignImportance() {
-    final stored = _prefs.getInt(campaignChannelPrefKey);
+  Importance? _storedCampaignImportance(String key) {
+    final stored = _prefs.getInt(key);
     if (stored == null) return null;
     return Importance.values.firstWhere(
       (i) => i.value == stored,
@@ -183,13 +215,13 @@ class NotificationService {
     importance: Importance.defaultImportance,
   );
 
-  /// The system default sound: a channel's sound is fixed the moment it is created.
   AndroidNotificationChannel _campaignChannel(Importance importance) =>
       AndroidNotificationChannel(
         campaignChannelId,
         _campaignChannelName,
         description: 'New wallpapers, ringtones and offers',
         importance: importance,
+        sound: _bell,
       );
 
   /// Rename the campaign channel into the user's language, and on every later language change.

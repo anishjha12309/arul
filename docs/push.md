@@ -47,7 +47,8 @@ build): texts, picture, colour, channel, tag and `visibility` in `data`, `androi
 campaign id. This path is only as reliable as `ArulMessagingService`'s short `onMessageReceived` window.
 
 - **Build >= `HEADSUP_MIN_BUILD`: every campaign**, with `channel_id: arul_campaigns_v1`; the service
-  posts there only if Dart created it, else on `arul_updates_v1` ([notifications.md](notifications.md)).
+  posts it on the bell channel `arul_campaigns_v2` when Dart made it, else v1, else `arul_updates_v1`
+  ([notifications.md](notifications.md)) — so the bell needed no Worker change.
   Plain = BigPicture (FCM's thumbnail-then-picture, which the CMS preview draws) or BigText.
 - **`COLOR_MIN_BUILD` to below it: coloured campaigns only**; older or unknown builds get plain messages.
 - **`HEADSUP_MIN_BUILD` = the versionCode of the release that ships the channel.** Set lower, a plain

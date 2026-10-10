@@ -19,8 +19,8 @@ Campaign invariants ([docs/push.md](../../docs/push.md)):
 - **Both channels are created at LAUNCH, not at opt-in**, and an id is immutable once a device has
   seen it. FCM falls back to the manifest default when the channel does not exist yet, and on
   Android 8–12 the channel IS the user's only control. NAMES are mutable and are localized.
-- **`arul_campaigns_v1` is created by Dart only, once, at the person's level on `arul_updates_v1`** —
-  blocked stays blocked. Never natively, never raised; the manifest default stays `arul_updates_v1`.
+- **`arul_campaigns_v2` (the bell) is created by Dart only, once, at the person's level on v1, else
+  on `arul_updates_v1`** — blocked stays blocked (v1 kept). Never natively, never raised.
 - **The permission prompt fires once per install**, on the first feed frame AFTER sign-in, never on
   the wall or during the Google flow — a stacked dialog costs sign-ins. Denied is final.
 - **Data-only campaigns are drawn natively** (`ArulMessagingService`), never in Dart. **Registering no
@@ -33,8 +33,8 @@ Campaign invariants ([docs/push.md](../../docs/push.md)):
 
 Traps:
 
-- **`keep.xml` is not optional.** The notification icons are resolved by NAME, R8 strips them, and
-  ONLY release builds throw.
+- **`keep.xml` is not optional.** The notification icons and `raw/arul_bell` are resolved by NAME, R8
+  strips them, and ONLY release builds break (a stripped bell leaves the channel silent for good).
 - **The plugin re-creates a missing channel when it posts** — retiring a channel means cancelling
   its pending alarms too, never deleting the channel alone.
 
