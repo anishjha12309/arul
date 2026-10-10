@@ -326,17 +326,18 @@ abstract final class ArulTokens {
     letterSpacing: 0.3,
   );
 
-  /// The title in a top-level tab's header band. 26px Marcellus, ls `.04em` (26 × .04 = 1.04).
+  /// The title in a top-level tab's header band: 24px Marcellus, untracked.
   ///
   /// ONE size for every tab — they cross-fade, so a resizing title read as the screen jumping.
   /// Never tune it per screen: change it here and every tab moves together.
-  /// 26 × 1.15 is 29.9, which still clears the 34 band -> the header did not grow with the type.
-  /// That headroom runs out around 29 — past there the band grows, and a bigger band resizes the reel.
+  /// No tracking: `.04em` on lowercase pulled "Ringtones" apart into loose letters, and at 26 the
+  /// title nearly matched the 28px wordmark — a page label passing for a second brand mark.
+  /// 24 × 1.15 = 27.6 clears the 34 band; past ~29 the band grows, and a bigger band resizes the reel.
   static const TextStyle screenHeaderTitle = TextStyle(
     fontFamily: serif,
-    fontSize: 26,
+    fontSize: 24,
     height: 1.15,
-    letterSpacing: 1.04,
+    letterSpacing: 0,
   );
 
   /// The WORDMARK in the feed's header band — "Arul", 28px Marcellus, ls `.04em` (28 × .04 = 1.12).

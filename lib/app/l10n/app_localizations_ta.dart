@@ -221,6 +221,33 @@ class AppLocalizationsTa extends AppLocalizations {
       'சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
 
   @override
+  String get statusPrepFetching => 'வீடியோ வருகிறது…';
+
+  @override
+  String get statusPrepSharing => 'பகிர தயார் செய்கிறோம்…';
+
+  @override
+  String get statusPrepSaving => 'கேலரியில் சேமிக்கிறோம்…';
+
+  @override
+  String get statusShareTitle => 'இந்த வீடியோவைப் பகிர்';
+
+  @override
+  String get statusShareGroups => 'குழுக்கள்';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'ஸ்டேட்டஸ்';
+
+  @override
+  String get statusShareMore => 'மேலும்';
+
+  @override
+  String get statusShareClose => 'மூடு';
+
+  @override
   String get statusPermissionDenied =>
       'வீடியோக்களைச் சேமிக்க ஸ்டோரேஜ் அனுமதி தேவை.';
 
@@ -229,6 +256,13 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get statusError => 'ஸ்டேட்டஸ் வீடியோக்களை ஏற்ற முடியவில்லை';
+
+  @override
+  String get statusLoadingBody => 'உங்கள் ஸ்டேட்டஸ் வீடியோக்கள் வருகின்றன…';
+
+  @override
+  String get offlineStatusBody =>
+      'ஸ்டேட்டஸ் வீடியோக்களைப் பார்க்க இணையத்தை இயக்கவும்.';
 
   @override
   String get ringtoneSet => 'அமை';

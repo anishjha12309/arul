@@ -221,6 +221,33 @@ class AppLocalizationsMl extends AppLocalizations {
   String get statusSaveFailed => 'സേവ് ആയില്ല. വീണ്ടും ശ്രമിക്കൂ.';
 
   @override
+  String get statusPrepFetching => 'വീഡിയോ വരുന്നു…';
+
+  @override
+  String get statusPrepSharing => 'പങ്കിടാൻ ഒരുക്കുന്നു…';
+
+  @override
+  String get statusPrepSaving => 'ഗാലറിയിൽ സേവ് ചെയ്യുന്നു…';
+
+  @override
+  String get statusShareTitle => 'ഈ വീഡിയോ പങ്കിടുക';
+
+  @override
+  String get statusShareGroups => 'ഗ്രൂപ്പുകൾ';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'സ്റ്റാറ്റസ്';
+
+  @override
+  String get statusShareMore => 'കൂടുതൽ';
+
+  @override
+  String get statusShareClose => 'അടയ്ക്കുക';
+
+  @override
   String get statusPermissionDenied =>
       'വീഡിയോ സേവ് ചെയ്യാൻ സ്റ്റോറേജ് അനുമതി നൽകൂ.';
 
@@ -229,6 +256,13 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get statusError => 'സ്റ്റാറ്റസ് വീഡിയോ ലോഡ് ആയില്ല';
+
+  @override
+  String get statusLoadingBody => 'നിങ്ങളുടെ സ്റ്റാറ്റസ് വീഡിയോകൾ വരുന്നു…';
+
+  @override
+  String get offlineStatusBody =>
+      'സ്റ്റാറ്റസ് വീഡിയോകൾ കാണാൻ ഇന്റർനെറ്റ് ഓണാക്കുക.';
 
   @override
   String get ringtoneSet => 'സെറ്റ്';

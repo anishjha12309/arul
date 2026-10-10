@@ -60,6 +60,42 @@ class DirectShareService {
     }
   }
 
+  /// Undocumented `SEND_TO_STATUS`, tried after [shareToStatus]; no caption, NEVER throws.
+  Future<bool> sendToStatus({
+    required String filePath,
+    required String mimeType,
+  }) async {
+    try {
+      final ok = await _channel.invokeMethod<bool>('sendToStatus', {
+        'filePath': filePath,
+        'mimeType': mimeType,
+      });
+      return ok ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Whether either WhatsApp would take a [mimeType] file, without opening anything. NEVER throws.
+  Future<bool> hasWhatsApp({required String mimeType}) async {
+    for (final package in _whatsAppPackages) {
+      try {
+        final ok = await _channel.invokeMethod<bool>('canShareToPackage', {
+          'package': package,
+          'mimeType': mimeType,
+        });
+        if (ok ?? false) return true;
+      } on PlatformException {
+        // bad_input — try the next package.
+      } on MissingPluginException {
+        return false;
+      }
+    }
+    return false;
+  }
+
   /// Hands [text] alone to WhatsApp; returns whether it opened. NEVER throws.
   ///
   /// A targeted `ACTION_SEND` keeps WhatsApp's picker in Arul's task, so one Back comes home; the

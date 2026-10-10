@@ -189,6 +189,15 @@ class _FakeDirectShare implements DirectShareService {
   Future<bool> shareToStatus({required String filePath}) async => false;
 
   @override
+  Future<bool> sendToStatus({
+    required String filePath,
+    required String mimeType,
+  }) async => false;
+
+  @override
+  Future<bool> hasWhatsApp({required String mimeType}) async => installed;
+
+  @override
   Future<bool> shareToWhatsApp({
     required String filePath,
     required String mimeType,

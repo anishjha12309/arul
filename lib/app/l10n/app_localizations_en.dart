@@ -219,6 +219,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusSaveFailed => 'Couldn\'t save. Try again.';
 
   @override
+  String get statusPrepFetching => 'Getting the video…';
+
+  @override
+  String get statusPrepSharing => 'Getting it ready to share…';
+
+  @override
+  String get statusPrepSaving => 'Saving to your gallery…';
+
+  @override
+  String get statusShareTitle => 'Share this video';
+
+  @override
+  String get statusShareGroups => 'Groups';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'Status';
+
+  @override
+  String get statusShareMore => 'More';
+
+  @override
+  String get statusShareClose => 'Close';
+
+  @override
   String get statusPermissionDenied => 'Allow storage access to save videos.';
 
   @override
@@ -226,6 +253,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusError => 'Couldn\'t load status videos';
+
+  @override
+  String get statusLoadingBody => 'Bringing your status videos…';
+
+  @override
+  String get offlineStatusBody => 'Turn on the internet to see status videos.';
 
   @override
   String get ringtoneSet => 'Set';

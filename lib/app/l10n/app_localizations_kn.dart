@@ -220,6 +220,33 @@ class AppLocalizationsKn extends AppLocalizations {
   String get statusSaveFailed => 'ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
 
   @override
+  String get statusPrepFetching => 'ವೀಡಿಯೊ ಬರುತ್ತಿದೆ…';
+
+  @override
+  String get statusPrepSharing => 'ಹಂಚಿಕೊಳ್ಳಲು ಸಿದ್ಧಪಡಿಸುತ್ತಿದ್ದೇವೆ…';
+
+  @override
+  String get statusPrepSaving => 'ಗ್ಯಾಲರಿಗೆ ಉಳಿಸುತ್ತಿದ್ದೇವೆ…';
+
+  @override
+  String get statusShareTitle => 'ಈ ವೀಡಿಯೊ ಹಂಚಿಕೊಳ್ಳಿ';
+
+  @override
+  String get statusShareGroups => 'ಗುಂಪುಗಳು';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'ಸ್ಟೇಟಸ್';
+
+  @override
+  String get statusShareMore => 'ಇನ್ನಷ್ಟು';
+
+  @override
+  String get statusShareClose => 'ಮುಚ್ಚಿ';
+
+  @override
   String get statusPermissionDenied => 'ವೀಡಿಯೊ ಉಳಿಸಲು ಸ್ಟೋರೇಜ್ ಅನುಮತಿ ನೀಡಿ.';
 
   @override
@@ -227,6 +254,13 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get statusError => 'ಸ್ಟೇಟಸ್ ವೀಡಿಯೊ ಲೋಡ್ ಆಗಲಿಲ್ಲ';
+
+  @override
+  String get statusLoadingBody => 'ನಿಮ್ಮ ಸ್ಟೇಟಸ್ ವೀಡಿಯೊಗಳು ಬರುತ್ತಿವೆ…';
+
+  @override
+  String get offlineStatusBody =>
+      'ಸ್ಟೇಟಸ್ ವೀಡಿಯೊಗಳನ್ನು ನೋಡಲು ಇಂಟರ್ನೆಟ್ ಆನ್ ಮಾಡಿ.';
 
   @override
   String get ringtoneSet => 'ಸೆಟ್';

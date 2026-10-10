@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.FileProvider
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -19,6 +20,8 @@ class DirectShareChannel(private val activity: Activity) :
         // result, so MainActivity drops this code before the plugin chain sees it.
         const val STATUS_REQUEST_CODE = 5101
         private const val WHATSAPP = "com.whatsapp"
+        private const val SEND_TO_STATUS = "com.whatsapp.intent.action.SEND_TO_STATUS"
+        private const val TAG = "DirectShare"
     }
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -26,8 +29,27 @@ class DirectShareChannel(private val activity: Activity) :
             "shareToPackage" -> shareToPackage(call, result)
             "shareTextToPackage" -> shareTextToPackage(call, result)
             "shareToStatus" -> shareToStatus(call, result)
+            "sendToStatus" -> sendToStatus(call, result)
+            "canShareToPackage" -> canShareToPackage(call, result)
             else -> result.notImplemented()
         }
+    }
+
+    // Resolved, never started: the status screen must know before the tap whether its WhatsApp
+    // sheet has anything to offer, or it goes straight to the system sheet.
+    private fun canShareToPackage(call: MethodCall, result: MethodChannel.Result) {
+        val targetPackage = call.argument<String>("package")
+        val mimeType = call.argument<String>("mimeType") ?: "*/*"
+        if (targetPackage.isNullOrEmpty()) {
+            result.error("bad_input", "package is required", null)
+            return
+        }
+        val intent =
+            Intent(Intent.ACTION_SEND).apply {
+                setPackage(targetPackage)
+                type = mimeType
+            }
+        result.success(intent.resolveActivity(activity.packageManager) != null)
     }
 
     private fun shareToPackage(call: MethodCall, result: MethodChannel.Result) {
@@ -147,6 +169,7 @@ class DirectShareChannel(private val activity: Activity) :
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         if (intent.resolveActivity(activity.packageManager) == null) {
+            Log.i(TAG, "status composer (wa.me/status) did not resolve")
             result.success(false)
             return
         }
@@ -154,6 +177,54 @@ class DirectShareChannel(private val activity: Activity) :
             activity.grantUriPermission(WHATSAPP, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             @Suppress("DEPRECATION")
             activity.startActivityForResult(intent, STATUS_REQUEST_CODE)
+            Log.i(TAG, "status via composer (wa.me/status)")
+            result.success(true)
+        } catch (e: ActivityNotFoundException) {
+            result.success(false)
+        } catch (e: SecurityException) {
+            result.success(false)
+        }
+    }
+
+    // The second status surface, undocumented: WhatsApp's own SEND_TO_STATUS action. A custom
+    // action's EXTRA_STREAM is not migrated to ClipData either, so the read grant is explicit.
+    // No caption: like the composer, it is a status, and a status takes no text.
+    private fun sendToStatus(call: MethodCall, result: MethodChannel.Result) {
+        val filePath = call.argument<String>("filePath")
+        val mimeType = call.argument<String>("mimeType") ?: "video/*"
+        if (filePath.isNullOrEmpty()) {
+            result.error("bad_input", "filePath is required", null)
+            return
+        }
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) {
+            result.error("bad_input", "file not found: $filePath", null)
+            return
+        }
+        val uri: Uri =
+            try {
+                FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
+            } catch (e: IllegalArgumentException) {
+                result.success(false)
+                return
+            }
+
+        val intent =
+            Intent(SEND_TO_STATUS).apply {
+                setPackage(WHATSAPP)
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        if (intent.resolveActivity(activity.packageManager) == null) {
+            Log.i(TAG, "status action (SEND_TO_STATUS) did not resolve")
+            result.success(false)
+            return
+        }
+        try {
+            activity.grantUriPermission(WHATSAPP, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            activity.startActivity(intent)
+            Log.i(TAG, "status via SEND_TO_STATUS")
             result.success(true)
         } catch (e: ActivityNotFoundException) {
             result.success(false)

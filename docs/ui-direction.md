@@ -46,6 +46,12 @@ serif is confined to display/headline plus the Latin wordmark. It reaches ONE lo
 header title — safely: **Marcellus has no Indic glyphs**, so those titles resolve per glyph through Noto
 at the same size and tracking. Never add a second header style to "fix" it; watch for ascender clipping.
 
+- **The header title is 24 px Marcellus, UNTRACKED** — a step under the 28 px wordmark. `.04em` on
+  lowercase spread "Ringtones" into loose letters, and at 26 the title passed for a second brand mark.
+  Tracking belongs to the wordmark (one short word) and to caps, never to a lowercase title.
+- `ArulScreenHeader`'s per-script drop is in ems of the title, so it follows a size change; after one,
+  re-measure each script's ink centre against the wordmark's on device (±0.75 dp held at 24).
+
 **`/premium` is the ONE screen off this stack**: Cinzel/Lora/Gelasio, bundled, instanced and subset by
 `tools/build-fonts.py`, styled from the `paywall*` tokens. **No bundled serif carries U+20B9 ₹ except
 Gelasio**, so every paywall Lora style names Gelasio in `fontFamilyFallback`, or a bare ₹ drops to Roboto

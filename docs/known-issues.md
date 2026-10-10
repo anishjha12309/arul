@@ -80,8 +80,9 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   `ExoPlayerAssetLoader.Factory` holds unguarded `LogSessionId` (API 31) references, so
   `Transformer.start()` throws `NoClassDefFoundError` on Android 9–11 (androidx/media#2535). No version
   bump or ProGuard rule fixes it. `NoClassDefFoundError` is an `Error`, so `ShareWatermarkChannel`
-  catches **`Throwable`** — never narrow it. Consequence: live shares AND status shares and saves below API 31 go
-  out unwatermarked ([share.md](share.md)). Fixing it means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
+  catches **`Throwable`** — never narrow it. Consequence: live wallpaper shares below API 31 go out
+  unwatermarked ([share.md](share.md)); status clips carry no watermark on any version. Fixing it
+  means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
 - **Never pass a `--dart-define` containing `&` on the command line.** On Windows `flutter` is a `.bat`
   and cmd.exe treats an unquoted `&` as a command separator, so the define arrives cut and the rest
   fails silently. Use `--dart-define-from-file`.

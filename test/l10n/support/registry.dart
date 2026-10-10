@@ -9,6 +9,8 @@
 /// That is what keeps sign-in from auto-launching `authenticate()` and the entitlement provider off Neon.
 library;
 
+import 'dart:async';
+
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
@@ -42,7 +44,10 @@ import 'package:arul/features/settings/presentation/settings_screen.dart';
 import 'package:arul/features/settings/presentation/theme_sheet.dart';
 import 'package:arul/features/share/share_moment_sheet.dart';
 import 'package:arul/features/status/domain/status_video.dart';
+import 'package:arul/features/status/presentation/status_preparing_card.dart';
 import 'package:arul/features/status/presentation/status_screen.dart';
+import 'package:arul/features/status/presentation/status_share_sheet.dart';
+import 'package:arul/features/status/providers/status_action_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/upload/presentation/upload_screen.dart';
 import 'package:arul/features/wallpapers/presentation/apply_sheet.dart';
@@ -113,6 +118,16 @@ List<Override> get kBaseOverrides => [
 Future<void> initRegistry() async {
   SharedPreferences.setMockInitialValues(<String, Object>{});
   _prefs = await SharedPreferences.getInstance();
+}
+
+/// The preparing card parked at one stage, mid-transfer.
+class _PreparingAt extends StatusActionNotifier {
+  _PreparingAt(this.stage);
+
+  final StatusActionStage stage;
+
+  @override
+  StatusActionState build() => StatusActionBusy(stage: stage, progress: 0.4);
 }
 
 /// Opens a modal on the first frame -> a sheet or dialog can be a registry entry without the matrix driving taps.
@@ -411,6 +426,21 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       ),
     ),
   ),
+
+  ScreenEntry(
+    id: 'status.share_sheet',
+    build: () => SheetHost(open: StatusShareSheet.show),
+  ),
+  // Every stage's line with the transfer bar drawn -> the longest line meets the narrowest card.
+  for (final stage in StatusActionStage.values)
+    ScreenEntry(
+      id: 'status.preparing.${stage.name}',
+      build: () => SheetHost(
+        open: (context) =>
+            StatusPreparingCard.show(context, until: Completer<void>().future),
+      ),
+      overrides: [statusActionProvider.overrideWith(() => _PreparingAt(stage))],
+    ),
 
   ScreenEntry(id: 'settings.screen', build: () => const SettingsScreen()),
   ScreenEntry(

@@ -10,10 +10,8 @@ import '../../../core/crash/crash_provider.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/error/app_exception.dart';
 import '../../../core/providers/locale_provider.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../wallpapers/data/direct_share_service.dart';
-import '../../wallpapers/data/share_watermark_service.dart';
 import '../../wallpapers/providers/wallpaper_share_provider.dart';
 import '../data/status_media_service.dart';
 import '../domain/status_video.dart';
@@ -27,10 +25,60 @@ final class StatusActionIdle extends StatusActionState {
   const StatusActionIdle();
 }
 
+// [progress] is the real download, null while none runs -> the card draws no bar for a clip on disk.
 final class StatusActionBusy extends StatusActionState {
-  const StatusActionBusy({this.progress});
+  const StatusActionBusy({
+    this.stage = StatusActionStage.fetching,
+    this.progress,
+  });
 
+  final StatusActionStage stage;
   final double? progress;
+}
+
+// The clip is on disk and the sheet is up: still not idle, so a second tap waits.
+final class StatusActionChoosing extends StatusActionState {
+  const StatusActionChoosing(this._status, this._file, this._whatsApp);
+
+  final StatusVideo _status;
+  final File _file;
+  final bool _whatsApp;
+}
+
+// WhatsApp is opening: the sheet ignores taps on its way out, so a fast second tap reaches the reel.
+final class StatusActionSending extends StatusActionState {
+  const StatusActionSending();
+}
+
+enum StatusActionStage { fetching, preparing, saving }
+
+// Groups and WhatsApp open the same picker (no public intent opens a groups-only one); [channel]
+// keeps them apart so the owner can see which label earns taps.
+enum StatusShareTarget {
+  groups('groups'),
+  chat('chat'),
+  status('status'),
+  more('sheet');
+
+  const StatusShareTarget(this.channel);
+
+  final String channel;
+}
+
+sealed class StatusSharePrep {
+  const StatusSharePrep();
+}
+
+final class StatusShareReady extends StatusSharePrep {
+  const StatusShareReady({required this.whatsApp});
+
+  final bool whatsApp;
+}
+
+final class StatusShareSettled extends StatusSharePrep {
+  const StatusShareSettled(this.outcome);
+
+  final StatusActionOutcome outcome;
 }
 
 /// What the screen tells the user once an action settles; the hand-off itself is never a success
@@ -52,73 +100,120 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
   @override
   StatusActionState build() => const StatusActionIdle();
 
-  /// WhatsApp's status composer first, a WhatsApp chat next, the system sheet last.
-  /// [buildCaption] wraps the ONE `/s/` link for the chat and sheet paths; the composer takes none.
-  /// Null when another action is already running.
-  Future<StatusActionOutcome?> shareToWhatsApp(
-    StatusVideo status, {
+  // Fetch before the pick (owner's order: card, then sheet). Null when another action runs.
+  Future<StatusSharePrep?> prepareShare(StatusVideo status) async {
+    if (state is! StatusActionIdle) return null;
+    state = const StatusActionBusy();
+    final direct = ref.read(directShareServiceProvider);
+    try {
+      final file = await _source(status, StatusMediaAction.share);
+      if (!ref.mounted) return null;
+      state = const StatusActionBusy(stage: StatusActionStage.preparing);
+      final whatsApp = await direct.hasWhatsApp(mimeType: _mime);
+      if (!ref.mounted) return null;
+      state = StatusActionChoosing(status, file, whatsApp);
+      return StatusShareReady(whatsApp: whatsApp);
+    } catch (e, st) {
+      return StatusShareSettled(_fail(e, st, reason: 'status share failed'));
+    }
+  }
+
+  // A false from a targeted intent is routine and falls to the next; the fallback chain and the
+  // one-link caption rule live in docs/share.md §Status clips. Null when nothing was prepared.
+  Future<StatusActionOutcome?> shareVia(
+    StatusShareTarget target, {
     required String Function(String link) buildCaption,
   }) async {
-    if (state is StatusActionBusy) return null;
-    state = const StatusActionBusy();
-    try {
-      final source = await _source(status, StatusMediaAction.share);
-      final (file, watermarked) = await _watermarked(status, source);
-      // The sheet's future resolves only when it CLOSES -> go idle before the hand-off.
-      state = const StatusActionIdle();
-
+    if (state case StatusActionChoosing(
+      _status: final status,
+      _file: final file,
+      _whatsApp: final whatsApp,
+    )) {
+      state = const StatusActionSending();
       final direct = ref.read(directShareServiceProvider);
-      var channel = 'status';
-      var result = ShareResultStatus.unavailable;
-      if (!await direct.shareToStatus(filePath: file.path)) {
-        final caption = buildCaption(_link(status));
-        channel = 'chat';
-        if (!await direct.shareToWhatsApp(
-          filePath: file.path,
-          mimeType: 'video/mp4',
-          text: caption,
-        )) {
-          channel = 'sheet';
-          final shared = await ref.read(shareSheetLauncherProvider)(
+      final launchSheet = ref.read(shareSheetLauncherProvider);
+      final analytics = ref.read(analyticsServiceProvider);
+      final caption = buildCaption(_link(status));
+      try {
+        String? via;
+        if (target == StatusShareTarget.status) {
+          if (await direct.shareToStatus(filePath: file.path)) {
+            via = 'composer';
+          } else if (await direct.sendToStatus(
+            filePath: file.path,
+            mimeType: _mime,
+          )) {
+            via = 'send_to_status';
+          }
+        }
+        if (via == null &&
+            target != StatusShareTarget.more &&
+            await direct.shareToWhatsApp(
+              filePath: file.path,
+              mimeType: _mime,
+              text: caption,
+            )) {
+          via = 'picker';
+        }
+        var result = ShareResultStatus.unavailable;
+        if (via == null) {
+          via = 'sheet';
+          // The system sheet's future resolves only when it CLOSES -> go idle before the hand-off.
+          _idle();
+          final shared = await launchSheet(
             ShareParams(
-              files: [XFile(file.path, mimeType: 'video/mp4')],
+              files: [XFile(file.path, mimeType: _mime)],
               fileNameOverrides: [_recipientFilename(status)],
               text: caption,
             ),
           );
           result = shared.status;
         }
+        analytics.track(
+          'status_shared',
+          properties: {
+            'status_id': status.id,
+            'category': status.category,
+            'result': result.name,
+            // Status clips go out clean (owner); kept so the dashboards' column stays filled.
+            'watermarked': false,
+            'channel': target.channel,
+            'via': via,
+            // More and "no WhatsApp at all" both read channel=sheet; this tells them apart.
+            'has_whatsapp': whatsApp,
+          },
+        );
+        return StatusActionOutcome.done;
+      } catch (e, st) {
+        return _fail(e, st, reason: 'status share failed');
+      } finally {
+        if (state is StatusActionSending) _idle();
       }
-      ref
-          .read(analyticsServiceProvider)
-          .track(
-            'status_shared',
-            properties: {
-              'status_id': status.id,
-              'category': status.category,
-              'result': result.name,
-              'watermarked': watermarked,
-              'channel': channel,
-            },
-          );
-      return StatusActionOutcome.done;
-    } catch (e, st) {
-      return _fail(e, st, reason: 'status share failed');
     }
+    return null;
   }
 
-  /// Saves the watermarked clip into the phone's Movies/Arul. Null when another action is running.
+  // The sheet closed with no pick -> nothing left, so nothing is tracked.
+  void dismissShare() {
+    if (state is StatusActionChoosing) _idle();
+  }
+
+  // Byte for byte: the gallery file is the fetched clip. Null when another action is running.
   Future<StatusActionOutcome?> save(StatusVideo status) async {
-    if (state is StatusActionBusy) return null;
+    if (state is! StatusActionIdle) return null;
     state = const StatusActionBusy();
     final analytics = ref.read(analyticsServiceProvider);
+    final media = ref.read(statusMediaServiceProvider);
     try {
-      final source = await _source(status, StatusMediaAction.download);
-      final (file, watermarked) = await _watermarked(status, source);
-      final saved = await ref
-          .read(statusMediaServiceProvider)
-          .saveToGallery(file.path, _recipientFilename(status, unique: true));
-      state = const StatusActionIdle();
+      final file = await _source(status, StatusMediaAction.download);
+      if (ref.mounted) {
+        state = const StatusActionBusy(stage: StatusActionStage.saving);
+      }
+      final saved = await media.saveToGallery(
+        file.path,
+        _recipientFilename(status, unique: true),
+      );
+      _idle();
       switch (saved.outcome) {
         case StatusSaveOutcome.saved:
           analytics.track(
@@ -126,7 +221,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
             properties: {
               'status_id': status.id,
               'category': status.category,
-              'watermarked': watermarked,
+              'watermarked': false,
             },
           );
           return StatusActionOutcome.done;
@@ -163,8 +258,13 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     }
   }
 
+  void _idle() {
+    if (ref.mounted) state = const StatusActionIdle();
+  }
+
   StatusActionOutcome _fail(Object e, StackTrace st, {required String reason}) {
-    state = const StatusActionIdle();
+    _idle();
+    if (!ref.mounted) return StatusActionOutcome.failed;
     if (e is StatusMediaException && e.premiumRequired) {
       // An expected business condition -> no crash record; refresh the snapshot the paywall reads.
       ref.invalidate(entitlementDetailProvider);
@@ -181,6 +281,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     final media = ref.read(statusMediaServiceProvider);
     final tmp = await ref.read(statusTempDirProvider.future);
     final cached = File('${tmp.path}/status-${status.id}.mp4');
+    _cleanStaleCopies(tmp.path, keep: cached.path);
 
     File? file;
     if (await cached.exists() && await cached.length() > 0) {
@@ -215,42 +316,8 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     });
   }
 
-  /// The traced copy, or the clean original where video cannot be watermarked (below API 31).
-  /// On a capable device a failure fails the action, exactly as a wallpaper share does.
-  Future<(File, bool)> _watermarked(StatusVideo status, File src) async {
-    try {
-      return (await _watermarkWithRetry(status, src), true);
-    } on ShareWatermarkUnsupportedException {
-      return (src, false);
-    }
-  }
-
-  /// One retry: the exporter answers `busy` while another export runs.
-  Future<File> _watermarkWithRetry(StatusVideo status, File src) async {
-    try {
-      return await _watermark(status, src);
-    } on ShareWatermarkUnsupportedException {
-      rethrow;
-    } on Object {
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      return _watermark(status, src);
-    }
-  }
-
-  Future<File> _watermark(StatusVideo status, File src) async {
-    final wm = ref.read(shareWatermarkServiceProvider);
-    final spec = wm.plan(wallpaperId: status.id, userId: _userIdOrNull());
-    final dir = src.parent.path;
-    _cleanStaleCopies(dir, keep: src.path);
-    return wm.watermarkVideo(
-      src,
-      spec,
-      outPath: '$dir/status-${status.id}-wm-${spec.code}.mp4',
-    );
-  }
-
-  /// Every output is unique, so they only accumulate -> sweep status copies over a day old.
-  /// The ~8 MB source copies too, one per clip ever acted on; never [keep], which is about to be read.
+  /// The ~8 MB source copies accumulate, one per clip ever acted on -> sweep status copies over a
+  /// day old (older builds' watermarked ones included); never [keep], which is about to be read.
   void _cleanStaleCopies(String dir, {required String keep}) {
     final cutoff = DateTime.now().subtract(const Duration(days: 1));
     Future(() async {
@@ -271,14 +338,6 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     }).catchError((_) {});
   }
 
-  String? _userIdOrNull() {
-    try {
-      return ref.read(authStateStreamProvider).value?.userId;
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// The share caption's ONE link, in the sharer's language for a fresh install only.
   String _link(StatusVideo status) => InstallReferrerService.buildStatusLink(
     status.id,
@@ -295,6 +354,8 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     final suffix = unique ? '-${DateTime.now().millisecondsSinceEpoch}' : '';
     return 'arul-$slug$suffix.mp4';
   }
+
+  static const _mime = 'video/mp4';
 
   static String _clip(String s) => s.length <= 100 ? s : s.substring(0, 100);
 }

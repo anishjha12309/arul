@@ -49,11 +49,22 @@ class StatusCatalogNotifier extends AsyncNotifier<List<StatusVideo>> {
   @override
   Future<List<StatusVideo>> build() => _fetch();
 
-  /// Retry from the error card -> re-reads the version pointer so a fresh publish lands.
+  int _fetchSeq = 0;
+
+  /// Retry from the error card, or a pull on the first card -> re-reads the version pointer so a
+  /// fresh publish lands. With clips on screen they stay there while the fetch runs and after a
+  /// failure, exactly as the wallpaper feed's refresh does; the loading card only ever replaces nothing.
   Future<void> refresh() async {
     invalidateCatalogVersion();
-    state = const AsyncLoading();
-    state = await AsyncValue.guard(_fetch);
+    final seq = ++_fetchSeq;
+    if (!state.hasValue) state = const AsyncLoading();
+    try {
+      final fresh = await _fetch();
+      if (ref.mounted && seq == _fetchSeq) state = AsyncData(fresh);
+    } catch (e, st) {
+      if (!ref.mounted || seq != _fetchSeq || state.hasValue) return;
+      state = AsyncError(e, st);
+    }
   }
 
   Future<List<StatusVideo>> _fetch() async {

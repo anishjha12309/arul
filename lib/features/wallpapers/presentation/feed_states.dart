@@ -106,10 +106,18 @@ class FeedChipsSkeleton extends StatelessWidget {
 /// Feed loading fill — the sliding-gradient card with a centred gopuram that pulses on opacity only.
 /// Renders in the same inset rounded card as the reel -> the loading → content swap never jumps.
 class FeedLoading extends StatelessWidget {
-  const FeedLoading({super.key, required this.margin, required this.radius});
+  const FeedLoading({
+    super.key,
+    required this.margin,
+    required this.radius,
+    this.body,
+  });
 
   final EdgeInsets margin;
   final double radius;
+
+  /// The line under the gopuram; each reel names what it is bringing, never the other's.
+  final String? body;
 
   @override
   Widget build(BuildContext context) {
@@ -155,7 +163,7 @@ class FeedLoading extends StatelessWidget {
                     const GopuramMark(size: 38, color: ArulTokens.gold),
                     const SizedBox(height: 12),
                     Text(
-                      AppLocalizations.of(context).feedLoadingBody,
+                      body ?? AppLocalizations.of(context).feedLoadingBody,
                       style: ArulTokens.body.copyWith(
                         color: ArulTokens.darkTextSecondary,
                       ),
@@ -167,6 +175,29 @@ class FeedLoading extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// What a reel card shows until its poster lands: the loading card's sweep with the same pulsing
+/// gopuram, so the hand-off from [FeedLoading] to a reel whose posters are still in flight moves
+/// nothing. A bare sweep was not enough: on the dark frame the card read as a void with two buttons
+/// floating in it for as long as a slow link took.
+class ReelPosterPlaceholder extends StatelessWidget {
+  const ReelPosterPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Stack(
+      fit: StackFit.expand,
+      children: [
+        SlidingSkeleton(),
+        Center(
+          child: _OpacityPulse(
+            child: GopuramMark(size: 38, color: ArulTokens.gold),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -258,9 +289,12 @@ class _OpacityPulseState extends State<_OpacityPulse>
 }
 
 class FeedEmpty extends StatelessWidget {
-  const FeedEmpty({super.key, required this.onBrowseAll});
+  const FeedEmpty({super.key, required this.onBrowseAll, this.title});
 
   final VoidCallback onBrowseAll;
+
+  /// A reel's own title; the body and the Browse-all pill are shared.
+  final String? title;
 
   @override
   Widget build(BuildContext context) {
@@ -281,7 +315,7 @@ class FeedEmpty extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            l10n.feedEmptyTitle,
+            title ?? l10n.feedEmptyTitle,
             textAlign: TextAlign.center,
             style: ArulTokens.screenTitle.copyWith(
               fontSize: 20,
@@ -380,18 +414,33 @@ class _OutlinedAccentPillState extends State<_OutlinedAccentPill> {
 ///   - [offline] false — the catalog fetch failed AND there is no cached copy;
 ///   - [offline] true — the device is offline, so the feed is gated shut regardless of cache.
 class FeedError extends StatelessWidget {
-  const FeedError({super.key, required this.onRetry, this.offline = false});
+  const FeedError({
+    super.key,
+    required this.onRetry,
+    this.offline = false,
+    this.title,
+    this.body,
+    this.retryIdentifier = 'arul_feed_retry',
+  });
 
   final VoidCallback onRetry;
 
   final bool offline;
 
+  /// A reel's own words for the load failure; offline copy is per reel too, so [body] covers both.
+  final String? title;
+  final String? body;
+  final String retryIdentifier;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final title = offline ? l10n.offlineTitle : l10n.feedErrorTitle;
-    final body = offline ? l10n.offlineFeedBody : l10n.feedErrorBody;
+    final title = offline
+        ? l10n.offlineTitle
+        : this.title ?? l10n.feedErrorTitle;
+    final body =
+        this.body ?? (offline ? l10n.offlineFeedBody : l10n.feedErrorBody);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Column(
@@ -425,7 +474,7 @@ class FeedError extends StatelessWidget {
             label: l10n.retry,
             icon: Icons.refresh_rounded,
             onPressed: onRetry,
-            identifier: 'arul_feed_retry',
+            identifier: retryIdentifier,
             height: ArulTokens.minHitTarget,
             fontSize: 14,
             expand: false,

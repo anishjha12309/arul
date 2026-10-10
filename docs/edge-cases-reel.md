@@ -12,6 +12,7 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Two reel pools never decode at once; ONE decoder budget per device, shared by both
 - [ ] The feed opens FILES, never a stream by plan; a network error never re-opens a painted card
 - [ ] Poster under the texture, revealed on `onRenderedFirstFrame`; one shared `cropAlignment`
+- [ ] The loading sweep until the poster lands; a reassigned player's stale frame cuts, never dissolves
 - [ ] Audio decided at CREATE; only the paywall's ONE shared player and the status pool are audible
 - [ ] Only the card on screen starts: a player whose `create()` or transfer outlived a jump (a `/s/`
       link, a swipe) parks idle or opens paused — the A001 played two status clips aloud at once
@@ -26,6 +27,12 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] The status catalog loads on the first open of the tab, never in the pre-first-paint drain
 - [ ] Status clips prefetch into their OWN cache store — they never evict live wallpapers
 - [ ] Share and Save re-read entitlement every time; a cached clip is never a licence
+- [ ] Share and Save send the clip byte for byte — no watermark, no Media3 export (owner)
+- [ ] No WhatsApp → no Arul sheet; Back on the preparing card or a closed sheet sends and tracks nothing;
+      one pick per sheet, and a second tap while an action runs is refused
 - [ ] Save is a fresh MediaStore entry, copied off the main thread; ≤Android 9 asks storage on the first
       save, never at launch; a denial is a localized message
 - [ ] Entering Status stops the ringtone preview
+- [ ] Loading, empty, error and offline faces say status videos, never wallpapers; empty offers Browse all
+- [ ] A pull on the first card refreshes and the clips stay on screen through it
+- [ ] A cold `/s/` link opens on its clip — card 0 is never opened or staged first

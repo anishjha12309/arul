@@ -219,6 +219,33 @@ class AppLocalizationsHi extends AppLocalizations {
   String get statusSaveFailed => 'सेव नहीं हो सका। फिर कोशिश करें।';
 
   @override
+  String get statusPrepFetching => 'वीडियो ला रहे हैं…';
+
+  @override
+  String get statusPrepSharing => 'शेयर के लिए तैयार कर रहे हैं…';
+
+  @override
+  String get statusPrepSaving => 'गैलरी में सेव कर रहे हैं…';
+
+  @override
+  String get statusShareTitle => 'यह वीडियो शेयर करें';
+
+  @override
+  String get statusShareGroups => 'ग्रुप';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'स्टेटस';
+
+  @override
+  String get statusShareMore => 'और';
+
+  @override
+  String get statusShareClose => 'बंद करें';
+
+  @override
   String get statusPermissionDenied =>
       'वीडियो सेव करने के लिए स्टोरेज की अनुमति दें।';
 
@@ -227,6 +254,13 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get statusError => 'स्टेटस वीडियो लोड नहीं हो सके';
+
+  @override
+  String get statusLoadingBody => 'आपके स्टेटस वीडियो आ रहे हैं…';
+
+  @override
+  String get offlineStatusBody =>
+      'स्टेटस वीडियो देखने के लिए इंटरनेट चालू करें।';
 
   @override
   String get ringtoneSet => 'सेट करें';

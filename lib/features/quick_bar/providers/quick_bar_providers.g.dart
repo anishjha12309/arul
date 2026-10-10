@@ -212,7 +212,7 @@ final class QuickBarKillSwitchProvider
 String _$quickBarKillSwitchHash() =>
     r'5197ec65bc7839308697ea890edb7e48fb648bd4';
 
-/// Mirrors the bar onto the phone: the choice, the kill switch, the Status tab and the labels in
+/// Mirrors the bar onto the phone: the choice, the kill switch and the labels in
 /// the app's language. Listened at the root (never watched: the resume below invalidates it, and a
 /// watch would rebuild the whole app twice per resume), so it runs on every launch and whenever one
 /// of those moves. A resume re-runs it, which is how a permission granted in system settings shows
@@ -221,7 +221,7 @@ String _$quickBarKillSwitchHash() =>
 @ProviderFor(quickBarSync)
 final quickBarSyncProvider = QuickBarSyncProvider._();
 
-/// Mirrors the bar onto the phone: the choice, the kill switch, the Status tab and the labels in
+/// Mirrors the bar onto the phone: the choice, the kill switch and the labels in
 /// the app's language. Listened at the root (never watched: the resume below invalidates it, and a
 /// watch would rebuild the whole app twice per resume), so it runs on every launch and whenever one
 /// of those moves. A resume re-runs it, which is how a permission granted in system settings shows
@@ -230,7 +230,7 @@ final quickBarSyncProvider = QuickBarSyncProvider._();
 final class QuickBarSyncProvider
     extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
     with $FutureModifier<void>, $FutureProvider<void> {
-  /// Mirrors the bar onto the phone: the choice, the kill switch, the Status tab and the labels in
+  /// Mirrors the bar onto the phone: the choice, the kill switch and the labels in
   /// the app's language. Listened at the root (never watched: the resume below invalidates it, and a
   /// watch would rebuild the whole app twice per resume), so it runs on every launch and whenever one
   /// of those moves. A resume re-runs it, which is how a permission granted in system settings shows
@@ -260,4 +260,4 @@ final class QuickBarSyncProvider
   }
 }
 
-String _$quickBarSyncHash() => r'122ea9a742f4dabd17efa74ef7fc57191ef598bf';
+String _$quickBarSyncHash() => r'c91c08155cac1b81739e5f0f70fc23a14524ad02';

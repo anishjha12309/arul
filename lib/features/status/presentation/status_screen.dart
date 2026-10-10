@@ -17,12 +17,13 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/reel/feed_card_geometry.dart';
 import '../../../app/widgets/reel/reel_card.dart';
 import '../../../app/widgets/reel/video_preload_controller.dart';
-import '../../../app/widgets/state_views.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
+import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
@@ -30,6 +31,8 @@ import '../../wallpapers/presentation/feed_states.dart';
 import '../domain/status_video.dart';
 import '../providers/status_action_provider.dart';
 import '../providers/status_providers.dart';
+import 'status_preparing_card.dart';
+import 'status_share_sheet.dart';
 
 /// The two premium verbs on a status clip; [source] names the gate and the paywall's `source=`.
 enum StatusVerb {
@@ -61,6 +64,8 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   int _index = 0;
   List<StatusVideo>? _served;
   int? _pendingIndex;
+
+  bool _fetchingBehind = false;
 
   /// A swipe passing through is not engagement -> `status_engaged` fires after a 2 s dwell.
   Timer? _dwellTimer;
@@ -171,6 +176,14 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     ref
         .read(analyticsServiceProvider)
         .track('deep_link_opened', properties: target.analyticsProperties);
+    // First data on All: the build that follows runs [_sync] -> the pager and the pool start ON the
+    // target. A detour through card 0 opened its clip and staged card 1 against the one the link
+    // asked for: three transfers for one card, 34-60 s on a slow 4G.
+    if (_served == null &&
+        ref.read(selectedStatusCategoryProvider) == allSlug) {
+      _pendingIndex = index;
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -220,12 +233,54 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     unawaited(context.push('/premium?source=${verb.source}'));
   }
 
+  // Card -> the Arul sheet (or the system sheet without WhatsApp) -> the pick. Back on the card
+  // or a closed sheet shares nothing and tracks nothing.
   Future<void> _doShare(StatusVideo status) async {
     final l10n = AppLocalizations.of(context);
-    final outcome = await ref
-        .read(statusActionProvider.notifier)
-        .shareToWhatsApp(status, buildCaption: l10n.statusShareCaption);
-    if (!mounted || outcome == null) return;
+    final actions = ref.read(statusActionProvider.notifier);
+    if (ref.read(statusActionProvider) is! StatusActionIdle) return;
+    final prepared = actions.prepareShare(status);
+    try {
+      final stayed = await _whilePreparing(prepared);
+      final prep = await prepared;
+      if (!stayed || !mounted || prep == null) return;
+      final StatusShareTarget? target;
+      switch (prep) {
+        case StatusShareSettled(:final outcome):
+          _reportShare(outcome, status);
+          return;
+        case StatusShareReady(whatsApp: false):
+          target = StatusShareTarget.more;
+        case StatusShareReady():
+          target = await StatusShareSheet.show(context);
+      }
+      if (target == null) return;
+      final outcome = await actions.shareVia(
+        target,
+        buildCaption: l10n.statusShareCaption,
+      );
+      if (mounted && outcome != null) _reportShare(outcome, status);
+    } finally {
+      // Every way out short of a pick — the card failing to open included — must not leave the
+      // prepared clip holding the pills.
+      await prepared;
+      actions.dismissShare();
+    }
+  }
+
+  // After Back the pills stay disabled until the fetch settles -> the reel's top hairline says why.
+  Future<bool> _whilePreparing(Future<Object?> work) async {
+    final stayed = await StatusPreparingCard.show(context, until: work);
+    if (!stayed && mounted) {
+      setState(() => _fetchingBehind = true);
+      await work;
+      if (mounted) setState(() => _fetchingBehind = false);
+    }
+    return stayed;
+  }
+
+  void _reportShare(StatusActionOutcome outcome, StatusVideo status) {
+    final l10n = AppLocalizations.of(context);
     switch (outcome) {
       case StatusActionOutcome.done:
         break;
@@ -241,7 +296,11 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
 
   Future<void> _doSave(StatusVideo status) async {
     final l10n = AppLocalizations.of(context);
-    final outcome = await ref.read(statusActionProvider.notifier).save(status);
+    if (ref.read(statusActionProvider) is! StatusActionIdle) return;
+    final saving = ref.read(statusActionProvider.notifier).save(status);
+    // Back only hides the card: the save carries on and its toast still lands.
+    await _whilePreparing(saving);
+    final outcome = await saving;
     if (!mounted || outcome == null) return;
     switch (outcome) {
       case StatusActionOutcome.done:
@@ -273,6 +332,10 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     final feed = ref.watch(statusFeedProvider);
     // Kept warm so a gated tap reads a resolved value instead of a fresh /me round trip.
     ref.watch(entitlementProvider);
+    // Offline with nothing loaded is the offline card, never a generic failure. With clips already
+    // in hand the reel stays: cached clips still play, and a Share or Save says offline itself.
+    final offline =
+        !feed.hasValue && ref.watch(isOnlineProvider).value == false;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
@@ -299,43 +362,63 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                     onTap: () => context.push('/settings'),
                   ),
                 ],
-                chips: feed is AsyncLoading
-                    ? const FeedChipsSkeleton()
-                    : const StatusChips(),
+                chips: feed.hasValue
+                    ? const StatusChips()
+                    : const FeedChipsSkeleton(),
               ),
               Expanded(
                 // One LayoutBuilder for loading AND reel -> the skeleton and the card share a rect.
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final geo = FeedCardGeometry.resolve(
-                      context,
-                      reelHeight: constraints.maxHeight,
-                    );
-                    return switch (feed) {
-                      AsyncLoading() => FeedLoading(
-                        margin: geo.margin,
-                        radius: FeedCardGeometry.radius,
+                child: offline
+                    ? FeedError(
+                        offline: true,
+                        body: l10n.offlineStatusBody,
+                        retryIdentifier: 'arul_status_retry',
+                        onRetry: () {
+                          ref.invalidate(isOnlineProvider);
+                          unawaited(
+                            ref.read(statusCatalogProvider.notifier).refresh(),
+                          );
+                        },
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final geo = FeedCardGeometry.resolve(
+                            context,
+                            reelHeight: constraints.maxHeight,
+                          );
+                          return switch (feed) {
+                            AsyncValue(:final value?) when value.isEmpty =>
+                              FeedEmpty(
+                                title: l10n.statusEmpty,
+                                onBrowseAll: () => ref
+                                    .read(
+                                      selectedStatusCategoryProvider.notifier,
+                                    )
+                                    .select(WallpaperCategory.allSlug),
+                              ),
+                            AsyncValue(:final value?) => _buildReel(
+                              value,
+                              geo,
+                              constraints.maxHeight,
+                              l10n,
+                            ),
+                            AsyncError() => FeedError(
+                              title: l10n.statusError,
+                              retryIdentifier: 'arul_status_retry',
+                              onRetry: () => unawaited(
+                                ref
+                                    .read(statusCatalogProvider.notifier)
+                                    .refresh(),
+                              ),
+                            ),
+                            _ => FeedLoading(
+                              margin: geo.margin,
+                              radius: FeedCardGeometry.radius,
+                              body: l10n.statusLoadingBody,
+                            ),
+                          };
+                        },
                       ),
-                      AsyncData(:final value) when value.isEmpty =>
-                        StateView.empty(title: l10n.statusEmpty),
-                      AsyncData(:final value) => _buildReel(
-                        value,
-                        geo,
-                        constraints.maxHeight,
-                        l10n,
-                      ),
-                      AsyncError() => StateView.error(
-                        title: l10n.statusError,
-                        message: l10n.feedErrorBody,
-                        actionLabel: l10n.retry,
-                        actionIdentifier: 'arul_status_retry',
-                        onAction: () => unawaited(
-                          ref.read(statusCatalogProvider.notifier).refresh(),
-                        ),
-                      ),
-                    };
-                  },
-                ),
               ),
             ],
           ),
@@ -352,7 +435,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   ) {
     _sync(items);
     final busy = ref.watch(
-      statusActionProvider.select((s) => s is StatusActionBusy),
+      statusActionProvider.select((s) => s is! StatusActionIdle),
     );
     final m = geo.margin;
     final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
@@ -378,64 +461,78 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
         ),
         Padding(
           padding: EdgeInsets.only(top: geo.headroom, bottom: geo.underhang),
-          child: PageView.builder(
-            controller: _pagerFor(geo, geo.pagerHeight(h)),
-            scrollDirection: Axis.vertical,
-            padEnds: false,
-            itemCount: items.length,
-            onPageChanged: (i) {
-              setState(() => _index = i);
-              _video.onPageChanged(i);
-              _onCardSettled(items[i]);
+          // A pull on the first card re-reads the catalog, exactly as the wallpaper reel's does;
+          // on a later card the pull only pages back.
+          child: RefreshIndicator(
+            onRefresh: () {
+              ArulHaptics.firm();
+              return ref.read(statusCatalogProvider.notifier).refresh();
             },
-            itemBuilder: (context, i) => Padding(
-              padding: m.copyWith(bottom: FeedCardGeometry.gap),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(FeedCardGeometry.radius),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Tap pauses and resumes; vertical drags still belong to the pager.
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: _video.toggleHeldByUser,
-                      child: ReelMedia(
-                        controller: _video,
-                        index: i,
-                        builder: (context, slot) =>
-                            StatusMedia(status: items[i], slot: slot),
+            color: ArulTokens.gold,
+            backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
+            child: PageView.builder(
+              controller: _pagerFor(geo, geo.pagerHeight(h)),
+              scrollDirection: Axis.vertical,
+              padEnds: false,
+              physics: const AlwaysScrollableScrollPhysics(),
+              itemCount: items.length,
+              onPageChanged: (i) {
+                setState(() => _index = i);
+                _video.onPageChanged(i);
+                _onCardSettled(items[i]);
+              },
+              itemBuilder: (context, i) => Padding(
+                padding: m.copyWith(bottom: FeedCardGeometry.gap),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(FeedCardGeometry.radius),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Tap pauses and resumes; vertical drags still belong to the pager.
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          ArulHaptics.tap();
+                          _video.toggleHeldByUser();
+                        },
+                        child: ReelMedia(
+                          controller: _video,
+                          index: i,
+                          builder: (context, slot) =>
+                              StatusMedia(status: items[i], slot: slot),
+                        ),
                       ),
-                    ),
-                    IgnorePointer(
-                      child: _HeldMark(controller: _video, index: i),
-                    ),
-                    ReelCardChrome(
-                      actions: ReelActionBar(
-                        busy: busy,
-                        primary: ReelAction(
-                          icon: Icons.send_rounded,
-                          image: const AssetImage(
-                            'assets/images/whatsapp.webp',
+                      IgnorePointer(
+                        child: _HeldMark(controller: _video, index: i),
+                      ),
+                      ReelCardChrome(
+                        actions: ReelActionBar(
+                          busy: busy,
+                          primary: ReelAction(
+                            icon: Icons.send_rounded,
+                            image: const AssetImage(
+                              'assets/images/whatsapp.webp',
+                            ),
+                            label: l10n.statusWhatsapp,
+                            semanticsId: 'arul_status_whatsapp',
+                            onTap: () => _onAction(StatusVerb.share, items[i]),
                           ),
-                          label: l10n.statusWhatsapp,
-                          semanticsId: 'arul_status_whatsapp',
-                          onTap: () => _onAction(StatusVerb.share, items[i]),
-                        ),
-                        secondary: ReelAction(
-                          icon: Icons.file_download_outlined,
-                          label: l10n.statusSave,
-                          semanticsId: 'arul_status_save',
-                          onTap: () => _onAction(StatusVerb.save, items[i]),
+                          secondary: ReelAction(
+                            icon: Icons.file_download_outlined,
+                            label: l10n.statusSave,
+                            semanticsId: 'arul_status_save',
+                            onTap: () => _onAction(StatusVerb.save, items[i]),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-        if (busy)
+        if (_fetchingBehind)
           Positioned(
             top: 0,
             left: m.left,
@@ -476,6 +573,9 @@ class StatusMedia extends StatelessWidget {
             alignment: _statusCrop,
             memCacheWidth: width,
             fadeInDuration: Duration.zero,
+            // The loading card's sweep until the poster lands -> the card never reads as a void
+            // with two buttons floating in it (ink on the ink frame is invisible).
+            placeholder: (_, _) => const ReelPosterPlaceholder(),
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
           if (slot != null) ReelLiveTexture(slot: slot, alignment: _statusCrop),

@@ -56,8 +56,11 @@ class ReelLiveTexture extends StatelessWidget {
         valueListenable: slot.ready,
         builder: (context, ready, child) => AnimatedOpacity(
           opacity: ready ? 1 : 0,
-          // The reveal lands in one frame instead of fading over the poster.
-          duration: context.reduceMotion ? Duration.zero : Motion.imageFade,
+          // The reveal fades in over the poster; a reassigned player's stale frame CUTS out. Fading
+          // it dissolved the last clip into the next card's poster on every chip switch.
+          duration: ready && !context.reduceMotion
+              ? Motion.imageFade
+              : Duration.zero,
           child: child,
         ),
         child: ValueListenableBuilder<Size?>(

@@ -13,7 +13,10 @@ paths:
   never a licence. Blocked → `status_{share,save}_blocked_premium` + `noteGate` → `/premium?source=`.
 - **Save never asks a permission on API 29+**; Android ≤9 asks `WRITE_EXTERNAL_STORAGE` on the first
   save under its own request code (5002), never at launch. Never request `READ_MEDIA_*`.
-- The WhatsApp status composer carries no link; its fallbacks carry exactly one `/s/` link.
+- **Status clips go out clean** (owner): Share and Save never touch `ShareWatermarkService`.
+- Share = preparing card → Groups · WhatsApp · Status · More (owner's labels and order); no WhatsApp →
+  the system sheet. The status surfaces (composer, `SEND_TO_STATUS`) carry no link; the picker and
+  the sheet carry exactly one `/s/` link. A closed sheet tracks nothing.
 
 Read [docs/status.md](../../docs/status.md); reel and audio rules are
 [docs/video-feed.md](../../docs/video-feed.md).

@@ -135,6 +135,42 @@
   "@statusSaveFailed": {
     "description": "Toast when saving a status clip failed."
   },
+  "statusPrepFetching": "Getting the video…",
+  "@statusPrepFetching": {
+    "description": "One line on the small card shown after the WhatsApp or Save tap on a status clip, while the clip itself is fetched (often under a second). Short — the card is narrow. End with the single … character."
+  },
+  "statusPrepSharing": "Getting it ready to share…",
+  "@statusPrepSharing": {
+    "description": "The same card's line once the clip is in hand, just before the share choices open. Short. End with the single … character."
+  },
+  "statusPrepSaving": "Saving to your gallery…",
+  "@statusPrepSaving": {
+    "description": "The same card's line while a status clip is written into the phone's gallery (Movies/Arul). Short. End with the single … character."
+  },
+  "statusShareTitle": "Share this video",
+  "@statusShareTitle": {
+    "description": "Title of the sheet that asks where a status clip goes (Groups · WhatsApp · Status · More). Short."
+  },
+  "statusShareGroups": "Groups",
+  "@statusShareGroups": {
+    "description": "Share-sheet choice that opens WhatsApp's chat picker to send the clip to a group. Use the word WhatsApp itself uses for Groups in this language. ONE word: the cell is about 70 dp wide."
+  },
+  "statusShareChat": "WhatsApp",
+  "@statusShareChat": {
+    "description": "Share-sheet choice that opens WhatsApp's chat picker. The brand stays verbatim in Latin."
+  },
+  "statusShareStatus": "Status",
+  "@statusShareStatus": {
+    "description": "Share-sheet choice that posts the clip to the user's own WhatsApp Status. WhatsApp's own word for Status in this language (transliterated is right). ONE word."
+  },
+  "statusShareMore": "More",
+  "@statusShareMore": {
+    "description": "Share-sheet choice that opens the phone's own share menu for every other app. ONE short word."
+  },
+  "statusShareClose": "Close",
+  "@statusShareClose": {
+    "description": "Quiet text button under the share choices; closes the sheet and nothing is shared."
+  },
   "statusPermissionDenied": "Allow storage access to save videos.",
   "@statusPermissionDenied": {
     "description": "Toast on Android 9 and older when the user refused the storage permission that saving needs."
@@ -144,6 +180,14 @@
     "description": "Empty state of the Status tab when no clips are published in the chosen category."
   },
   "statusError": "Couldn't load status videos",
+  "statusLoadingBody": "Bringing your status videos…",
+  "@statusLoadingBody": {
+    "description": "One line under the gopuram while the status catalog loads, the Status tab's twin of feedLoadingBody. Short; on screen under a second on a good connection."
+  },
+  "offlineStatusBody": "Turn on the internet to see status videos.",
+  "@offlineStatusBody": {
+    "description": "Body of the offline card on the Status tab when no clips have loaded yet, the twin of offlineFeedBody."
+  },
   "@statusError": {
     "description": "Error-card title when the Status clips could not be loaded; the body and Retry pill are shared."
   },

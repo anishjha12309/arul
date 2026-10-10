@@ -29,19 +29,40 @@ AND bring someone back; these rules were paid for by getting the second half wro
       watermarked on every Android version — that path never touches Media3.
 - [ ] Share has a re-entrancy guard, like apply and set: a double tap must not run two flows.
 
-## Status clips — composer, then chat, then sheet
+## Status clips — a card, then the user picks
 
-- [ ] **WhatsApp's Share to Status composer first** (faq.whatsapp.com/669870872481343): `ACTION_VIEW
-      https://wa.me/status`, `setPackage("com.whatsapp")`, `share_type=SHARE_TO_STATUS`,
-      `EXTRA_STREAM` plus an EXPLICIT `grantUriPermission` — an ACTION_VIEW's stream is not migrated to
-      ClipData, so the flag alone grants nothing. Consumer WhatsApp only: `false` (absent, too old,
-      Business only) is routine and falls to the wallpaper path's targeted chat `ACTION_SEND`, then the
-      sheet. It is started for a result nobody reads (5101), which `MainActivity` keeps off the plugin chain.
-- [ ] **The composer carries NO link** — it takes no text; the owner-accepted exception to one link per
-      share. The chat and sheet fallbacks carry `statusShareCaption` (status videos, never wallpapers)
-      with exactly one `/s/<id>?ilang=`.
-- [ ] Share and Save use the same traced copy under the live-share watermark rule; below API 31 the clip
-      goes out clean as `watermarked: false` on the status event, not `share_watermark_skipped`.
+- [ ] **Status clips go out CLEAN on Share and Save, on every Android version** (owner). No Media3 export
+      on the status path: the re-encode was the long bare wait before every share. `watermarked` stays on
+      the status events, always false. The wallpaper rules above are untouched.
+- [ ] Tap → the preparing card (`StatusPreparingCard`, root navigator, the sheet's own scrim): one
+      localized line per REAL stage and the download's real progress — never a timer, never a percentage.
+      Back hides it and abandons the hand-off, but the action guard holds until the fetch settles, so a
+      second tap never races the first write into `status-<id>.mp4`.
+- [ ] Then the Arul sheet: **Groups · WhatsApp · Status · More** (owner's labels and order). Groups and
+      WhatsApp fire the SAME targeted `ACTION_SEND` — WhatsApp's own picker lists chats AND groups, and no
+      public intent opens a groups-only one — so they differ only in `status_shared.channel`
+      (`groups`|`chat`|`status`|`sheet` = More or no WhatsApp). More = the system sheet.
+      Neither WhatsApp package resolves a `video/mp4` send → no Arul sheet, straight to the system sheet.
+- [ ] **Status tries WhatsApp's documented composer, then an undocumented action, then the picker.**
+      The composer is faq.whatsapp.com/669870872481343: `ACTION_VIEW https://wa.me/status`,
+      `share_type=SHARE_TO_STATUS`, explicit `grantUriPermission`, request 5101 that `MainActivity` drops.
+      Then `com.whatsapp.intent.action.SEND_TO_STATUS` (explicit grant too: a custom action's stream is
+      not migrated to ClipData either).
+- [ ] **`wa.me` is WhatsApp's click-to-chat host, so the composer RESOLVES on any consumer WhatsApp**,
+      status API or not, and logs `via=composer` either way. `SEND_TO_STATUS` therefore runs only when
+      consumer WhatsApp is absent, where it fails too (2.26.39.79 does not declare it): dead in practice.
+      The composer is consumer-only, so a Business-only phone's Status cell lands in Business's picker.
+- [ ] `status_shared.via` names what opened (`composer`|`send_to_status`|`picker`|`sheet`); only the
+      sheet reports a real `result`; `has_whatsapp` separates More from the no-WhatsApp route (both
+      `channel=sheet`). Builds before the sheet sent `channel` = what OPENED (`status` = composer, `chat`
+      = picker) and no `via`: a row without `via` carries the old meaning. `via` and `has_whatsapp` stay
+      out of GA4 reports until registered as custom dimensions ([analytics-ops.md](analytics-ops.md)).
+- [ ] **The status surfaces carry NO link** — they take no text; the owner-accepted exception to one link
+      per share. The picker and the sheet carry `statusShareCaption` (status videos, never wallpapers)
+      with exactly one `/s/<id>?ilang=`, pinned per locale in `status_action_test.dart`.
+- [ ] A pick closes the sheet FIRST, then fires; the sheet takes ONE pick — a second tap during its exit
+      popped the screen under it in the sister app. A closed sheet or Back on the card shares nothing and
+      tracks nothing.
 
 ## Attribution
 

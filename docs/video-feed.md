@@ -105,10 +105,12 @@ look-ahead and the return clip's speculative warm do not. Data Saver on Wi-Fi re
 ## The reveal — why an undecoded live card looks static
 
 Every card paints the `thumbs/` poster FIRST and keeps it mounted UNDER the texture; the texture
-fades in only on `onRenderedFirstFrame`. There is no shimmer and no spinner on either layer, so a
-live card that has not decoded yet is pixel-identical to a static one. That is deliberate: it means
-"nothing is moving" is normally cold-cache latency, not a broken pipeline — **check the pool, not the
-catalog.**
+fades in only on `onRenderedFirstFrame`, and a reassigned player's stale frame CUTS out (a fade
+dissolved the last clip into the next card's poster on a chip switch). Until the poster lands the
+card shows the loading card's sweep — ink on the ink frame left two buttons floating in a void — and
+nothing else: no spinner on either layer, so a live card that has not decoded yet is pixel-identical
+to a static one. "Nothing is moving" is cold-cache latency, not a broken pipeline — **check the pool,
+not the catalog.**
 
 The one thing that does distinguish them is `LiveMark`, and it is static by design
 ([feed-card.md](feed-card.md)).

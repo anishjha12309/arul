@@ -1,8 +1,10 @@
-// The two premium verbs on a status clip, against fakes for every channel.
-// WhatsApp goes composer -> chat -> sheet, each only when the one before answered false.
+// Share prepares, then the user picks a target; each target falls through to the next only on false.
+// Status clips go out CLEAN: neither verb ever calls the watermark service.
 // The gate is read on EVERY action, cached bytes or not; a 403 routes to the paywall, never a crash.
+import 'dart:async';
 import 'dart:io';
 
+import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
@@ -37,7 +39,9 @@ class _FakeMedia implements StatusMediaService {
   final bool premiumRequired;
   final StatusSaveResult? save;
   final grants = <StatusMediaAction>[];
+  final downloads = <String>[];
   final saved = <String>[];
+  final savedFrom = <String>[];
 
   @override
   Future<String> signedUrl(StatusVideo status, StatusMediaAction action) async {
@@ -54,6 +58,7 @@ class _FakeMedia implements StatusMediaService {
     String outPath,
     void Function(double) onProgress,
   ) async {
+    downloads.add(url);
     onProgress(1);
     return File(outPath)..writeAsBytesSync(List.filled(32, 7));
   }
@@ -63,23 +68,46 @@ class _FakeMedia implements StatusMediaService {
     String filePath,
     String displayName,
   ) async {
+    savedFrom.add(filePath);
     saved.add(displayName);
     return save ?? (outcome: StatusSaveOutcome.saved, reason: null);
   }
 }
 
 class _FakeDirectShare implements DirectShareService {
-  _FakeDirectShare({this.composer = false, this.chat = false});
+  _FakeDirectShare({
+    this.installed = true,
+    this.composer = false,
+    this.sendToStatusAction = false,
+    this.picker = false,
+    this.hold,
+  });
 
+  // When set, the picker call parks on it -> a test can look at the state mid-hand-off.
+  final Future<void>? hold;
+  final bool installed;
   final bool composer;
-  final bool chat;
+  final bool sendToStatusAction;
+  final bool picker;
   final calls = <String>[];
   String? caption;
 
   @override
+  Future<bool> hasWhatsApp({required String mimeType}) async => installed;
+
+  @override
   Future<bool> shareToStatus({required String filePath}) async {
-    calls.add('status');
+    calls.add('composer');
     return composer;
+  }
+
+  @override
+  Future<bool> sendToStatus({
+    required String filePath,
+    required String mimeType,
+  }) async {
+    calls.add('send_to_status');
+    return sendToStatusAction;
   }
 
   @override
@@ -88,27 +116,31 @@ class _FakeDirectShare implements DirectShareService {
     required String mimeType,
     required String text,
   }) async {
-    calls.add('chat');
+    calls.add('picker');
     caption = text;
-    return chat;
+    if (hold != null) await hold;
+    return picker;
   }
 
   @override
   Future<bool> shareTextToWhatsApp(String text) async => false;
 }
 
+/// Status never watermarks -> every method here records, and the suite asserts it stayed empty.
 class _FakeWatermark implements ShareWatermarkService {
-  _FakeWatermark({this.unsupported = false});
-
-  final bool unsupported;
+  final calls = <String>[];
 
   @override
-  WatermarkSpec plan({required String wallpaperId, String? userId}) =>
-      const WatermarkSpec(logoCorner: 0, code: 'AR-TEST01');
+  WatermarkSpec plan({required String wallpaperId, String? userId}) {
+    calls.add('plan');
+    return const WatermarkSpec(logoCorner: 0, code: 'AR-TEST01');
+  }
 
   @override
-  Future<({bool supported, int sdkInt})> videoWatermarkSupport() async =>
-      (supported: !unsupported, sdkInt: unsupported ? 28 : 34);
+  Future<({bool supported, int sdkInt})> videoWatermarkSupport() async {
+    calls.add('support');
+    return (supported: true, sdkInt: 34);
+  }
 
   @override
   Future<File> watermarkVideo(
@@ -116,7 +148,7 @@ class _FakeWatermark implements ShareWatermarkService {
     WatermarkSpec spec, {
     required String outPath,
   }) async {
-    if (unsupported) throw ShareWatermarkUnsupportedException(28);
+    calls.add('video');
     return File(outPath)..writeAsBytesSync(List.filled(16, 9));
   }
 
@@ -125,14 +157,20 @@ class _FakeWatermark implements ShareWatermarkService {
     File src,
     WatermarkSpec spec, {
     required String outPath,
-  }) => throw UnimplementedError();
+  }) async {
+    calls.add('image');
+    return File(outPath);
+  }
 
   @override
   Future<Uint8List> renderOverlayPng(
     WatermarkSpec spec, {
     required int width,
     required int height,
-  }) async => Uint8List(0);
+  }) async {
+    calls.add('overlay');
+    return Uint8List(0);
+  }
 }
 
 /// A real CacheManager starts disk work in its constructor; nothing here ever calls it.
@@ -188,18 +226,23 @@ void main() {
   late Directory tmp;
   late _RecordingAnalytics analytics;
   late List<ShareParams> sheet;
+  late _FakeWatermark watermark;
+  late List<StatusActionState> stateAtSheet;
 
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('status_action_test');
     analytics = _RecordingAnalytics();
     sheet = [];
+    watermark = _FakeWatermark();
+    stateAtSheet = [];
     addTearDown(() => tmp.deleteSync(recursive: true));
   });
+
+  ProviderContainer? current;
 
   ProviderContainer container({
     required _FakeMedia media,
     _FakeDirectShare? direct,
-    _FakeWatermark? watermark,
   }) {
     final c = ProviderContainer(
       overrides: [
@@ -209,98 +252,80 @@ void main() {
         directShareServiceProvider.overrideWithValue(
           direct ?? _FakeDirectShare(),
         ),
-        shareWatermarkServiceProvider.overrideWithValue(
-          watermark ?? _FakeWatermark(),
-        ),
+        shareWatermarkServiceProvider.overrideWithValue(watermark),
         localeProvider.overrideWith(_FixedLocale.new),
         analyticsServiceProvider.overrideWithValue(analytics),
         authStateStreamProvider.overrideWith(
           (ref) => Stream.value(AuthUserState.unauthenticated()),
         ),
         shareSheetLauncherProvider.overrideWithValue((params) async {
+          stateAtSheet.add(current!.read(statusActionProvider));
           sheet.add(params);
           return const ShareResult('app', ShareResultStatus.success);
         }),
       ],
     );
     addTearDown(c.dispose);
-    return c;
+    return current = c;
   }
 
-  group('WhatsApp', () {
+  /// Prepare, then pick [target] — the screen's two calls with the sheet in between.
+  Future<StatusActionOutcome?> shareTo(
+    ProviderContainer c,
+    StatusShareTarget target, {
+    String Function(String link)? caption,
+  }) async {
+    final actions = c.read(statusActionProvider.notifier);
+    expect(await actions.prepareShare(_clip), isA<StatusShareReady>());
+    return actions.shareVia(
+      target,
+      buildCaption: caption ?? (link) => 'cap\n$link',
+    );
+  }
+
+  const link =
+      'https://arul.hsrutility.com/s/c0ffee00-1c2d-4f3a-9b8e-7d6c5a4b3e2f'
+      '?ilang=ta';
+
+  group('prepare', () {
     test(
-      'the status composer first: no caption, no link, channel=status',
+      'gates, fetches and asks; WhatsApp present -> ready for the sheet',
       () async {
         final media = _FakeMedia();
-        final direct = _FakeDirectShare(composer: true);
-        final c = container(media: media, direct: direct);
+        final c = container(media: media);
+        final stages = <StatusActionState>[];
+        c.listen(statusActionProvider, (_, s) => stages.add(s));
 
-        final outcome = await c
+        final prep = await c
             .read(statusActionProvider.notifier)
-            .shareToWhatsApp(_clip, buildCaption: (link) => 'cap $link');
+            .prepareShare(_clip);
 
-        expect(outcome, StatusActionOutcome.done);
+        expect(prep, isA<StatusShareReady>());
+        expect((prep! as StatusShareReady).whatsApp, isTrue);
         expect(media.grants, [StatusMediaAction.share]);
-        expect(direct.calls, ['status']);
-        expect(sheet, isEmpty);
-        expect(analytics.props['status_shared'], {
-          'status_id': _clip.id,
-          'category': 'murugan',
-          'result': 'unavailable',
-          'watermarked': true,
-          'channel': 'status',
-        });
-        expect(c.read(statusActionProvider), isA<StatusActionIdle>());
+        expect(c.read(statusActionProvider), isA<StatusActionChoosing>());
+        // The card's line follows the real stages: fetching (with the download's progress), then preparing.
+        final busy = stages.whereType<StatusActionBusy>().toList();
+        expect(busy.first.stage, StatusActionStage.fetching);
+        expect(busy.any((s) => s.progress == 1), isTrue);
+        expect(busy.last.stage, StatusActionStage.preparing);
+        expect(watermark.calls, isEmpty);
+        expect(analytics.events, isEmpty, reason: 'nothing has left yet');
       },
     );
 
-    test('no composer → a WhatsApp chat carrying ONE /s/ link', () async {
-      final direct = _FakeDirectShare(chat: true);
-      final c = container(media: _FakeMedia(), direct: direct);
-
-      await c
-          .read(statusActionProvider.notifier)
-          .shareToWhatsApp(_clip, buildCaption: (link) => 'cap\n$link');
-
-      expect(direct.calls, ['status', 'chat']);
-      expect(
-        direct.caption,
-        'cap\nhttps://arul.hsrutility.com/s/${_clip.id}?ilang=ta',
+    test('no WhatsApp at all -> ready, but not for the Arul sheet', () async {
+      final c = container(
+        media: _FakeMedia(),
+        direct: _FakeDirectShare(installed: false),
       );
-      expect(RegExp('https://').allMatches(direct.caption!), hasLength(1));
-      expect(analytics.props['status_shared']?['channel'], 'chat');
-    });
 
-    test('no WhatsApp at all → the system sheet', () async {
-      final direct = _FakeDirectShare();
-      final c = container(media: _FakeMedia(), direct: direct);
-
-      await c
+      final prep = await c
           .read(statusActionProvider.notifier)
-          .shareToWhatsApp(_clip, buildCaption: (link) => link);
+          .prepareShare(_clip);
 
-      expect(direct.calls, ['status', 'chat']);
-      expect(sheet.single.files?.single.mimeType, 'video/mp4');
-      expect(analytics.props['status_shared']?['channel'], 'sheet');
-      expect(analytics.props['status_shared']?['result'], 'success');
+      expect((prep! as StatusShareReady).whatsApp, isFalse);
     });
-
-    test(
-      'below API 31 the clean clip still goes, marked unwatermarked',
-      () async {
-        final c = container(
-          media: _FakeMedia(),
-          direct: _FakeDirectShare(composer: true),
-          watermark: _FakeWatermark(unsupported: true),
-        );
-
-        await c
-            .read(statusActionProvider.notifier)
-            .shareToWhatsApp(_clip, buildCaption: (link) => link);
-
-        expect(analytics.props['status_shared']?['watermarked'], false);
-      },
-    );
 
     test('a server 403 is a paywall outcome, and nothing leaves', () async {
       final direct = _FakeDirectShare(composer: true);
@@ -309,51 +334,314 @@ void main() {
         direct: direct,
       );
 
-      final outcome = await c
+      final prep = await c
           .read(statusActionProvider.notifier)
-          .shareToWhatsApp(_clip, buildCaption: (link) => link);
+          .prepareShare(_clip);
 
-      expect(outcome, StatusActionOutcome.premiumRequired);
+      expect(
+        (prep! as StatusShareSettled).outcome,
+        StatusActionOutcome.premiumRequired,
+      );
       expect(direct.calls, isEmpty);
       expect(analytics.events, isNot(contains('status_shared')));
+      expect(c.read(statusActionProvider), isA<StatusActionIdle>());
     });
 
     test('cached bytes skip the download but never the gate', () async {
       final media = _FakeMedia();
-      final c = container(
-        media: media,
-        direct: _FakeDirectShare(composer: true),
-      );
+      final c = container(media: media);
       File('${tmp.path}/status-${_clip.id}.mp4').writeAsBytesSync([1, 2, 3]);
 
-      await c
-          .read(statusActionProvider.notifier)
-          .shareToWhatsApp(_clip, buildCaption: (link) => link);
+      await c.read(statusActionProvider.notifier).prepareShare(_clip);
 
       expect(media.grants, [StatusMediaAction.share]);
+      expect(media.downloads, isEmpty);
     });
   });
 
-  group('Save', () {
+  group('targets', () {
+    test('Status: the composer first, no caption, no link', () async {
+      final direct = _FakeDirectShare(composer: true);
+      final c = container(media: _FakeMedia(), direct: direct);
+
+      final outcome = await shareTo(c, StatusShareTarget.status);
+
+      expect(outcome, StatusActionOutcome.done);
+      expect(direct.calls, ['composer']);
+      expect(direct.caption, isNull);
+      expect(sheet, isEmpty);
+      expect(analytics.props['status_shared'], {
+        'status_id': _clip.id,
+        'category': 'murugan',
+        'result': 'unavailable',
+        'watermarked': false,
+        'channel': 'status',
+        'via': 'composer',
+        'has_whatsapp': true,
+      });
+      expect(c.read(statusActionProvider), isA<StatusActionIdle>());
+    });
+
+    test('Status: no composer -> SEND_TO_STATUS, still no caption', () async {
+      final direct = _FakeDirectShare(sendToStatusAction: true);
+      final c = container(media: _FakeMedia(), direct: direct);
+
+      await shareTo(c, StatusShareTarget.status);
+
+      expect(direct.calls, ['composer', 'send_to_status']);
+      expect(direct.caption, isNull);
+      expect(analytics.props['status_shared']?['via'], 'send_to_status');
+      expect(analytics.props['status_shared']?['channel'], 'status');
+    });
+
+    test('Status: neither surface -> the picker, carrying ONE link', () async {
+      final direct = _FakeDirectShare(picker: true);
+      final c = container(media: _FakeMedia(), direct: direct);
+
+      await shareTo(c, StatusShareTarget.status);
+
+      expect(direct.calls, ['composer', 'send_to_status', 'picker']);
+      expect(direct.caption, 'cap\n$link');
+      expect(analytics.props['status_shared']?['via'], 'picker');
+    });
+
+    for (final (target, channel) in [
+      (StatusShareTarget.groups, 'groups'),
+      (StatusShareTarget.chat, 'chat'),
+    ]) {
+      test(
+        '${target.name}: the picker with ONE trailing link, channel=$channel',
+        () async {
+          final direct = _FakeDirectShare(picker: true);
+          final c = container(media: _FakeMedia(), direct: direct);
+
+          await shareTo(c, target);
+
+          expect(direct.calls, ['picker'], reason: 'never a status surface');
+          expect(direct.caption, 'cap\n$link');
+          expect(RegExp('https://').allMatches(direct.caption!), hasLength(1));
+          expect(sheet, isEmpty);
+          expect(analytics.props['status_shared']?['channel'], channel);
+          expect(analytics.props['status_shared']?['via'], 'picker');
+        },
+      );
+
+      test(
+        '${target.name}: a refused picker falls to the system sheet',
+        () async {
+          final direct = _FakeDirectShare();
+          final c = container(media: _FakeMedia(), direct: direct);
+
+          await shareTo(c, target);
+
+          expect(direct.calls, ['picker']);
+          expect(sheet.single.text, 'cap\n$link');
+          expect(analytics.props['status_shared']?['channel'], channel);
+          expect(analytics.props['status_shared']?['via'], 'sheet');
+          expect(analytics.props['status_shared']?['result'], 'success');
+        },
+      );
+    }
+
     test(
-      'saves the watermarked clip under a fresh name and reports it',
+      'Status all the way down: every surface refused -> the sheet',
       () async {
-        final media = _FakeMedia();
-        final c = container(media: media);
+        final direct = _FakeDirectShare();
+        final c = container(media: _FakeMedia(), direct: direct);
 
-        final outcome = await c.read(statusActionProvider.notifier).save(_clip);
+        await shareTo(c, StatusShareTarget.status);
 
-        expect(outcome, StatusActionOutcome.done);
-        expect(media.grants, [StatusMediaAction.download]);
-        expect(media.saved.single, startsWith('arul-murugan-vel-'));
-        expect(media.saved.single, endsWith('.mp4'));
-        expect(analytics.props['status_saved'], {
-          'status_id': _clip.id,
-          'category': 'murugan',
-          'watermarked': true,
-        });
+        expect(direct.calls, ['composer', 'send_to_status', 'picker']);
+        expect(sheet.single.text, 'cap\n$link');
+        expect(analytics.props['status_shared']?['via'], 'sheet');
       },
     );
+
+    test(
+      'More: the system sheet only, the clip plus ONE trailing link',
+      () async {
+        final direct = _FakeDirectShare(composer: true, picker: true);
+        final c = container(media: _FakeMedia(), direct: direct);
+
+        await shareTo(c, StatusShareTarget.more);
+
+        expect(direct.calls, isEmpty, reason: 'More never targets WhatsApp');
+        final params = sheet.single;
+        expect(params.files?.single.mimeType, 'video/mp4');
+        expect(params.fileNameOverrides, ['arul-murugan-vel.mp4']);
+        expect(params.text, 'cap\n$link');
+        expect(analytics.props['status_shared']?['channel'], 'sheet');
+        expect(analytics.props['status_shared']?['via'], 'sheet');
+      },
+    );
+
+    test(
+      'the shared file IS the fetched clip, never a re-encoded copy',
+      () async {
+        final c = container(media: _FakeMedia());
+
+        await shareTo(c, StatusShareTarget.more);
+
+        expect(
+          sheet.single.files?.single.path,
+          '${tmp.path}/status-${_clip.id}.mp4',
+        );
+        expect(watermark.calls, isEmpty);
+        expect(analytics.props['status_shared']?['watermarked'], false);
+      },
+    );
+  });
+
+  group('re-entrancy and dismissal', () {
+    test('a closed sheet shares nothing and tracks nothing', () async {
+      final direct = _FakeDirectShare(composer: true, picker: true);
+      final c = container(media: _FakeMedia(), direct: direct);
+      final actions = c.read(statusActionProvider.notifier);
+      await actions.prepareShare(_clip);
+
+      actions.dismissShare();
+
+      expect(c.read(statusActionProvider), isA<StatusActionIdle>());
+      expect(
+        await actions.shareVia(StatusShareTarget.chat, buildCaption: (l) => l),
+        isNull,
+        reason: 'nothing is prepared any more',
+      );
+      expect(direct.calls, isEmpty);
+      expect(sheet, isEmpty);
+      expect(analytics.events, isNot(contains('status_shared')));
+    });
+
+    test('a second tap while one action runs or waits is refused', () async {
+      final media = _FakeMedia();
+      final c = container(media: media);
+      final actions = c.read(statusActionProvider.notifier);
+
+      final first = actions.prepareShare(_clip);
+      expect(await actions.prepareShare(_clip), isNull, reason: 'fetching');
+      expect(await actions.save(_clip), isNull, reason: 'fetching');
+      await first;
+      expect(await actions.prepareShare(_clip), isNull, reason: 'choosing');
+      expect(await actions.save(_clip), isNull, reason: 'choosing');
+      expect(media.grants, [StatusMediaAction.share], reason: 'one gate read');
+    });
+
+    test('the guard holds while WhatsApp opens, and lifts after', () async {
+      final hold = Completer<void>();
+      final direct = _FakeDirectShare(picker: true, hold: hold.future);
+      final c = container(media: _FakeMedia(), direct: direct);
+      final actions = c.read(statusActionProvider.notifier);
+      await actions.prepareShare(_clip);
+
+      final sending = actions.shareVia(
+        StatusShareTarget.groups,
+        buildCaption: (l) => l,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(statusActionProvider), isA<StatusActionSending>());
+      expect(await actions.prepareShare(_clip), isNull);
+      expect(await actions.save(_clip), isNull);
+
+      hold.complete();
+      expect(await sending, StatusActionOutcome.done);
+      expect(c.read(statusActionProvider), isA<StatusActionIdle>());
+    });
+
+    test('the system sheet opens with the pills already live', () async {
+      final c = container(
+        media: _FakeMedia(),
+        direct: _FakeDirectShare(installed: false),
+      );
+
+      await shareTo(c, StatusShareTarget.more);
+
+      // share_plus resolves only when its sheet CLOSES -> idle must come first.
+      expect(stateAtSheet.single, isA<StatusActionIdle>());
+      expect(analytics.props['status_shared']?['has_whatsapp'], false);
+    });
+
+    test(
+      'a pick fires once: the second shareVia finds nothing prepared',
+      () async {
+        final direct = _FakeDirectShare(picker: true);
+        final c = container(media: _FakeMedia(), direct: direct);
+        final actions = c.read(statusActionProvider.notifier);
+        await actions.prepareShare(_clip);
+
+        final a = actions.shareVia(
+          StatusShareTarget.chat,
+          buildCaption: (l) => l,
+        );
+        final b = actions.shareVia(
+          StatusShareTarget.chat,
+          buildCaption: (l) => l,
+        );
+
+        expect(await a, StatusActionOutcome.done);
+        expect(await b, isNull);
+        expect(direct.calls, ['picker']);
+        expect(
+          analytics.events.where((e) => e == 'status_shared'),
+          hasLength(1),
+        );
+      },
+    );
+  });
+
+  group('the caption contract, in every shipped language', () {
+    for (final locale in AppLocalizations.supportedLocales) {
+      test(
+        '${locale.languageCode}: ONE link, alone on the last line',
+        () async {
+          final l10n = lookupAppLocalizations(locale);
+          final direct = _FakeDirectShare(picker: true);
+          final c = container(media: _FakeMedia(), direct: direct);
+
+          await shareTo(
+            c,
+            StatusShareTarget.groups,
+            caption: l10n.statusShareCaption,
+          );
+          await shareTo(
+            c,
+            StatusShareTarget.more,
+            caption: l10n.statusShareCaption,
+          );
+
+          for (final text in [direct.caption!, sheet.single.text!]) {
+            expect(RegExp('https?://').allMatches(text), hasLength(1));
+            expect(text.trimRight().split('\n').last, link);
+          }
+        },
+      );
+    }
+  });
+
+  group('Save', () {
+    test('saves the fetched clip byte for byte under a fresh name', () async {
+      final media = _FakeMedia();
+      final c = container(media: media);
+      final stages = <StatusActionState>[];
+      c.listen(statusActionProvider, (_, s) => stages.add(s));
+
+      final outcome = await c.read(statusActionProvider.notifier).save(_clip);
+
+      expect(outcome, StatusActionOutcome.done);
+      expect(media.grants, [StatusMediaAction.download]);
+      expect(media.savedFrom.single, '${tmp.path}/status-${_clip.id}.mp4');
+      expect(media.saved.single, startsWith('arul-murugan-vel-'));
+      expect(media.saved.single, endsWith('.mp4'));
+      expect(watermark.calls, isEmpty);
+      expect(
+        stages.whereType<StatusActionBusy>().last.stage,
+        StatusActionStage.saving,
+      );
+      expect(analytics.props['status_saved'], {
+        'status_id': _clip.id,
+        'category': 'murugan',
+        'watermarked': false,
+      });
+    });
 
     test('a refused storage prompt is its own outcome', () async {
       final c = container(

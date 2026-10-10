@@ -221,6 +221,33 @@ class AppLocalizationsTe extends AppLocalizations {
   String get statusSaveFailed => 'సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి.';
 
   @override
+  String get statusPrepFetching => 'వీడియో వస్తోంది…';
+
+  @override
+  String get statusPrepSharing => 'షేర్ చేయడానికి సిద్ధం చేస్తున్నాం…';
+
+  @override
+  String get statusPrepSaving => 'గ్యాలరీలో సేవ్ చేస్తున్నాం…';
+
+  @override
+  String get statusShareTitle => 'ఈ వీడియోను షేర్ చేయండి';
+
+  @override
+  String get statusShareGroups => 'గ్రూప్‌లు';
+
+  @override
+  String get statusShareChat => 'WhatsApp';
+
+  @override
+  String get statusShareStatus => 'స్టేటస్';
+
+  @override
+  String get statusShareMore => 'మరిన్ని';
+
+  @override
+  String get statusShareClose => 'మూసివేయి';
+
+  @override
   String get statusPermissionDenied =>
       'వీడియోలు సేవ్ చేయడానికి స్టోరేజ్ అనుమతి ఇవ్వండి.';
 
@@ -229,6 +256,13 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get statusError => 'స్టేటస్ వీడియోలను లోడ్ చేయలేకపోయాం';
+
+  @override
+  String get statusLoadingBody => 'మీ స్టేటస్ వీడియోలు వస్తున్నాయి…';
+
+  @override
+  String get offlineStatusBody =>
+      'స్టేటస్ వీడియోలను చూడటానికి ఇంటర్నెట్‌ను ఆన్ చేయండి.';
 
   @override
   String get ringtoneSet => 'సెట్ చేయి';

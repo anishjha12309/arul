@@ -7,6 +7,7 @@ import '../../../app/widgets/reel/reel_card.dart';
 import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
+import 'feed_states.dart';
 import 'wallpaper_tile.dart';
 
 /// The media layer of one page: poster below, full image or ExoPlayer texture faded in above.
@@ -58,8 +59,12 @@ class ViewerMedia extends StatelessWidget {
             alignment: cropAlignment,
             memCacheWidth: WallpaperTile.decodeWidthFor(context),
             fadeInDuration: Duration.zero,
+            // Until the poster lands the card is ink on an ink frame -> invisible, with the action
+            // row floating in the void. The loading card's sweep marks the card as arriving instead;
+            // it leaves the moment the poster paints, so the reveal rule below is untouched.
+            placeholder: (_, _) => const ReelPosterPlaceholder(),
             // The layer above covers a missing poster -> an error glyph would flash under a good
-            // full image -> no placeholder and no error widget here.
+            // full image -> no error widget here.
             errorWidget: (_, _, _) => const SizedBox.shrink(),
           ),
 

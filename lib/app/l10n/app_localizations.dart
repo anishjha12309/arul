@@ -502,6 +502,60 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save. Try again.'**
   String get statusSaveFailed;
 
+  /// One line on the small card shown after the WhatsApp or Save tap on a status clip, while the clip itself is fetched (often under a second). Short — the card is narrow. End with the single … character.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting the video…'**
+  String get statusPrepFetching;
+
+  /// The same card's line once the clip is in hand, just before the share choices open. Short. End with the single … character.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting it ready to share…'**
+  String get statusPrepSharing;
+
+  /// The same card's line while a status clip is written into the phone's gallery (Movies/Arul). Short. End with the single … character.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving to your gallery…'**
+  String get statusPrepSaving;
+
+  /// Title of the sheet that asks where a status clip goes (Groups · WhatsApp · Status · More). Short.
+  ///
+  /// In en, this message translates to:
+  /// **'Share this video'**
+  String get statusShareTitle;
+
+  /// Share-sheet choice that opens WhatsApp's chat picker to send the clip to a group. Use the word WhatsApp itself uses for Groups in this language. ONE word: the cell is about 70 dp wide.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get statusShareGroups;
+
+  /// Share-sheet choice that opens WhatsApp's chat picker. The brand stays verbatim in Latin.
+  ///
+  /// In en, this message translates to:
+  /// **'WhatsApp'**
+  String get statusShareChat;
+
+  /// Share-sheet choice that posts the clip to the user's own WhatsApp Status. WhatsApp's own word for Status in this language (transliterated is right). ONE word.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get statusShareStatus;
+
+  /// Share-sheet choice that opens the phone's own share menu for every other app. ONE short word.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get statusShareMore;
+
+  /// Quiet text button under the share choices; closes the sheet and nothing is shared.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get statusShareClose;
+
   /// Toast on Android 9 and older when the user refused the storage permission that saving needs.
   ///
   /// In en, this message translates to:
@@ -519,6 +573,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load status videos'**
   String get statusError;
+
+  /// One line under the gopuram while the status catalog loads, the Status tab's twin of feedLoadingBody. Short; on screen under a second on a good connection.
+  ///
+  /// In en, this message translates to:
+  /// **'Bringing your status videos…'**
+  String get statusLoadingBody;
+
+  /// Body of the offline card on the Status tab when no clips have loaded yet, the twin of offlineFeedBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on the internet to see status videos.'**
+  String get offlineStatusBody;
 
   /// The Set pill on every ringtone row, max 120 dp wide. ONE short verb; the transliterated "set" is fine where that is what people say.
   ///

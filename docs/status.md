@@ -23,6 +23,15 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   fault.
 - Chips derive from the items, ordered by `category_order.statuses`; row order is the catalog's
   `feed_rank` (pins, then shares + saves), never re-derived on the phone.
+- **The tab wears the feed's faces with its own words**: the loading card says status videos
+  (`statusLoadingBody`), never wallpapers; empty is `FeedEmpty` with Browse all; a failure is
+  `FeedError`; offline with NOTHING loaded is the offline card (`offlineStatusBody`), while clips
+  already in hand keep playing from cache and Share/Save report offline themselves.
+- A pull on the first card re-reads the catalog like the wallpaper reel's; `refresh()` keeps the
+  clips on screen through the fetch and after a failure — only a reel with nothing shows loading.
+- **A cold `/s/` link lands ON its clip.** On first data with All selected the screen seeds the pager
+  and the pool with the target index before the first sync; opening card 0 first staged card 0 + 1
+  against the linked clip (three transfers, 34–60 s on a slow 4G).
 
 ## The gate — same contract as the feed
 
@@ -36,6 +45,8 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
 
 ## Save
 
+- **Byte for byte** (owner): the gallery file is the fetched clip, never a watermarked re-encode — the
+  same preparing card as Share ([share.md](share.md) §Status clips), then the MediaStore write.
 - A fresh MediaStore entry per save in `Movies/Arul`: `IS_PENDING=1` → copy → `0`, off the main thread
   (a whole-file copy through the provider takes seconds on a budget phone); a failed copy deletes the
   row. API 29+ needs no permission — never request `READ_MEDIA_*`.

@@ -55,12 +55,13 @@ class ArulScreenHeader extends StatelessWidget {
 
   /// A localized title renders in its Noto fallback, whose taller ascent rides the ink 4–9 dp above
   /// the Marcellus titles' (measured on device against the wordmark's). Drop it back per script.
-  static const _scriptDrop = <String, double>{
-    'hi': 7.2,
-    'kn': 8.8,
-    'ml': 6.1,
-    'ta': 3.6,
-    'te': 7.0,
+  // In ems of the title (measured at 26 dp) -> the drop follows a size change in the token.
+  static const _scriptDropEm = <String, double>{
+    'hi': 7.2 / 26,
+    'kn': 8.8 / 26,
+    'ml': 6.1 / 26,
+    'ta': 3.6 / 26,
+    'te': 7.0 / 26,
   };
 
   @override
@@ -99,10 +100,11 @@ class ArulScreenHeader extends StatelessWidget {
                     0,
                     titleDrop +
                         (titleStyle == null
-                            ? _scriptDrop[Localizations.localeOf(
-                                    context,
-                                  ).languageCode] ??
-                                  0
+                            ? (_scriptDropEm[Localizations.localeOf(
+                                        context,
+                                      ).languageCode] ??
+                                      0) *
+                                  ArulTokens.screenHeaderTitle.fontSize!
                             : 0),
                   ),
                   child: Align(
