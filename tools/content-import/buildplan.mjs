@@ -2,7 +2,9 @@
 // ONE fresh UUID per item serves both the R2 key stem and the DB id -> thumbs/<cat>/<stem>.jpg matches full_key's stem.
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-const ROOT = "c:/Anish/arul-import";
+import { homedir } from "node:os";
+import { join } from "node:path";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const CATS = new Set(["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"]);
 const TITLE = {
   amman: "Amman",

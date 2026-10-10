@@ -1,8 +1,8 @@
 // Shared by inventory, apply and verify: the repo root, the scope's output folder, the baseline
 // snapshot and the per-language scanners.
-//   CG_ROOT   repo to work in (default: this repo); the CMS is `CG_ROOT="C:\Anish\Unified CMS"`
+//   CG_ROOT   repo to work in (default: this repo); the CMS is `CG_ROOT="$HOME/Anish/Unified CMS"`
 //   CG_SCOPE  output folder name under out/, so two culls can run side by side
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -130,7 +130,7 @@ export function scan(entries) {
 const splitAll = (t) => t.split(/\s+/).filter(Boolean);
 
 function scanDart(dart, res) {
-  // A fresh folder per call inside this scope's out/: Windows can still hold the last run's files open.
+  // A fresh folder per call inside this scope's out/: a previous run's leftovers never mix into this one.
   for (const d of readdirSync(OUT)) {
     if (d.startsWith("snap-"))
       try {
@@ -149,9 +149,11 @@ function scanDart(dart, res) {
     });
     let json;
     try {
-      // `dart` is a .bat shim on Windows, so it needs a shell; every path here is ours.
-      const cmd = `dart run tokens_dart.dart --json ${paths.map((a) => `"${a}"`).join(" ")}`;
-      json = execSync(cmd, { cwd: HERE, encoding: "utf8", maxBuffer: 1 << 28 });
+      json = execFileSync("dart", ["run", "tokens_dart.dart", "--json", ...paths], {
+        cwd: HERE,
+        encoding: "utf8",
+        maxBuffer: 1 << 28,
+      });
     } catch (err) {
       throw new Error(`tokens_dart failed: ${err.stderr || err.message}`);
     }

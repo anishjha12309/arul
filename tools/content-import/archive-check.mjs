@@ -8,9 +8,10 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
 const SRC = process.argv[2];

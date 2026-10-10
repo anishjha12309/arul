@@ -57,10 +57,11 @@ disable-model-invocation: true
      Two consequences, both fine because they touch sideloading only and never Play (the AAB still
      ships all three ABIs, so no real user is affected):
      · a 32-bit-only phone cannot install it — irrelevant, arm64 has been universal since ~2017;
-     · **a Windows x86_64 emulator cannot install it either.** To test a release build on an
-       emulator, rebuild with `--target-platform android-x64` for that run only.
+     · the Mac's emulators are all arm64-v8a (Apple Silicon runs no x86_64 images), so the
+       arm64 APK installs on them as-is. Retired-PC note: on the x86 PC an emulator needed a
+       `--target-platform android-x64` rebuild for that run only.
      Do NOT add `--target-platform` to the appbundle command to match — see the AAB bullet above.
-2. Signing preconditions: `android/key.properties` + keystore `C:\Users\anish\arul-upload.jks`
+2. Signing preconditions: `android/key.properties` + keystore `~/arul-upload.jks`
    (alias `arul`; passwords in the user's password manager — never ask to paste them into chat).
    **Missing key.properties silently falls back to DEBUG signing** — always verify. Which tool
    depends on the artifact:

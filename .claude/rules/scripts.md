@@ -22,7 +22,7 @@ These run on a developer machine only. Biome covers them (`npm run check` in `wo
   scripts test `argv.includes("--dry-run")`, where a typo like `--dryrun` runs the real write.
 - **Exit 2 = could not run** (usage, missing file or credential), **1 = ran and failed or refused**,
   0 = clean. After printing a result set `process.exitCode`: `process.exit()` drops stdout still being
-  written (Node docs; pipe writes are async on POSIX, TTY writes on Windows).
+  written (Node docs; pipe writes are async).
 - **A credential never rides argv**, where it lands in shell history and the transcript. Read it by
   NAME from `workers/.dev.vars` (`workers/tools/lib/neon-branch.mjs`) or from an `--env-file` path:
   `.dev.vars` holds four postgres strings and the first is the debug branch, so "the first

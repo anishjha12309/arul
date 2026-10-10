@@ -1,4 +1,4 @@
-// PreToolUse (Bash|PowerShell): deny a git add/stage/commit that names or has staged a secret file.
+// PreToolUse (Bash): deny a git add/stage/commit that names or has staged a secret file.
 // Two layers: the command text itself, and on `git commit` the staged file list.
 const { execSync } = require("node:child_process");
 const path = require("node:path");

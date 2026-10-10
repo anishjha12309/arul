@@ -4,21 +4,22 @@
 // This index is that trace at ~200 bytes per clip instead of ~1.4 MB of .mp4.
 // Per clip: dHash (near-dup), a 64-bit content hash (byte-exact), dims/duration/bytes, folders, the row it became.
 //
-// Usage: node archive-index.mjs [--root c:/Anish/arul-import] [--out <path>]
+// Usage: node archive-index.mjs [--root ~/Anish/arul-import] [--out <path>]
 //        node archive-index.mjs --dry-run     # print the tally, write nothing
 import { readdirSync, statSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, relative } from "node:path";
+import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
 const arg = (f, d) => {
   const i = process.argv.indexOf(f);
   return i > -1 ? process.argv[i + 1] : d;
 };
-const ROOT = arg("--root", "c:/Anish/arul-import").replace(/\\/g, "/");
+const ROOT = arg("--root", join(homedir(), "Anish", "arul-import")).replace(/\\/g, "/");
 const OUT = arg("--out", join(import.meta.dirname, "archive-index.json")).replace(/\\/g, "/");
 const DRY = process.argv.includes("--dry-run");
 

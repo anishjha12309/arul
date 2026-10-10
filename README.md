@@ -2,7 +2,7 @@
 
 Android-only Flutter app: a Shorts-style wallpaper feed (static + live video), category browse,
 ringtones, user uploads, and premium via PhonePe UPI Autopay. Backend: Cloudflare Workers + Neon + R2
-(`workers/`). Content authoring is the separate `hsr-cms` Worker (`c:\Anish\Unified CMS`); this
+(`workers/`). Content authoring is the separate `hsr-cms` Worker (`~/Anish/Unified CMS`); this
 repo's Worker has no `/admin`.
 
 Working in this repo with an agent: [CLAUDE.md](CLAUDE.md) is the session contract, `.claude/rules/`

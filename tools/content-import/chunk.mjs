@@ -1,7 +1,9 @@
 // Split the normalized items into batches for the vision classifiers.
 // Each batch lists {base, path, kind, hintDup} -> `path` is the image the agent should view.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-const ROOT = "c:/Anish/arul-import";
+import { homedir } from "node:os";
+import { join } from "node:path";
+const ROOT = join(homedir(), "Anish", "arul-import");
 mkdirSync(`${ROOT}/classify-batches`, { recursive: true });
 const dedup = JSON.parse(readFileSync(`${ROOT}/dedup-manifest.json`, "utf8"));
 const N = 6;

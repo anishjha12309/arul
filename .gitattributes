@@ -1,3 +1,6 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
 # Biome formats JS/TS with LF; core.autocrlf=true would check these out as CRLF, which fails
 # `npm run check` on every file git rewrites.
 *.ts text eol=lf

@@ -3,9 +3,10 @@
 import { readFileSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { AwsClient } from "aws4fetch";
 
-const ROOT = "c:/Anish/arul-import";
+const ROOT = join(homedir(), "Anish", "arul-import");
 function parseEnv(path) {
   const env = {};
   for (const line of readFileSync(path, "utf8").split(/\r?\n/)) {
@@ -19,7 +20,7 @@ function parseEnv(path) {
   }
   return env;
 }
-const E = parseEnv("c:/Anish/Arul/workers/.dev.vars");
+const E = parseEnv(join(homedir(), "Anish", "Arul", "workers", ".dev.vars"));
 const endpoint = E.R2_ENDPOINT.replace(/\/$/, ""),
   bucket = E.R2_BUCKET;
 const aws = new AwsClient({

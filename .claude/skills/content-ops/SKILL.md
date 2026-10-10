@@ -9,7 +9,7 @@ description: Arul content/catalog operations — publish, rebuild, verify, bulk 
 `/admin/arul/…`) — row write and version bump in ONE transaction, then the rebuild fires in the
 background and self-heals via the cron. There is no purge anywhere; `?v=` does that job. Prefer the
 CMS; go direct only for bulk jobs. It is a **separate worker (`hsr-cms`) in a separate repo**
-(`c:\Anish\Unified CMS`); **this repo's worker has no `/admin`**.
+(`~/Anish/Unified CMS`); **this repo's worker has no `/admin`**.
 
 Three scopes: **wallpapers**, **ringtones** and **statuses** (clip spec and required poster:
 `docs/status-clips.md`; a status library goes up as ONE batch so `content_version` bumps once). Ringtone audio lives at
@@ -65,7 +65,7 @@ node tools/prod-query.mjs "SELECT category, count(*) FROM wallpapers WHERE is_pu
 *local* namespace and returns `[]` unless you add `--remote`.
 
 ## Bulk import / replace
-`tools/content-import/` is the pipeline (stages under `c:/Anish/arul-import/`). The import stages
+`tools/content-import/` is the pipeline (stages under `~/Anish/arul-import/`). The import stages
 stamp `public, max-age=31536000, immutable`; `fix.mjs` re-PUTs bare. The shape of any bulk job:
 
 1. Re-encode locally to `docs/media-conventions.md` — live MP4 **must** be 1024×1824.

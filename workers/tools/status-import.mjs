@@ -10,6 +10,7 @@
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { parseArgs } from "node:util";
@@ -21,8 +22,11 @@ const { values: opt } = parseArgs({
   options: {
     langs: { type: "string" },
     write: { type: "boolean", default: false },
-    source: { type: "string", default: "C:/Anish/wallpaper-fetcher/output/hindu_final" },
-    out: { type: "string", default: "C:/Anish/arul-import/statuses" },
+    source: {
+      type: "string",
+      default: path.join(os.homedir(), "Anish", "wallpaper-fetcher", "output", "hindu_final"),
+    },
+    out: { type: "string", default: path.join(os.homedir(), "Anish", "arul-import", "statuses") },
     jobs: { type: "string", default: "6" },
     "rebuild-only": { type: "boolean", default: false },
   },
@@ -161,7 +165,7 @@ async function upload(rows) {
   async function worker() {
     for (let t = todo.shift(); t; t = todo.shift()) {
       try {
-        // The JS entrypoint, never `npx` -> npx is a .cmd on Windows and a shell re-splits the cache-control value.
+        // The JS entrypoint, never `npx` through a shell -> a shell re-splits the cache-control value.
         await run(
           process.execPath,
           [

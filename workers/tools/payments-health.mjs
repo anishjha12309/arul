@@ -192,6 +192,6 @@ try {
 }
 
 // Exit AFTER the connection is closed, never inside the try. Calling process.exit() while the
-// postgres socket is still tearing down trips a libuv assertion on Windows and the process dies with
+// postgres socket is still tearing down can trip a libuv assertion and the process dies with
 // 127 — so a genuine failure reported the wrong exit code, which is worse than not reporting at all.
 process.exit(exitCode);

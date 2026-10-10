@@ -26,7 +26,7 @@ reminder — campaign pushes come only from the CMS through the Worker.
 - Browse feed = edge-cached catalog JSON from the `build-catalog` cron. **It never hits the DB.**
 - Neon (via Hyperdrive) holds per-user state only and is reached **only from Workers**, never from
   the app. The app reaches the backend only through `lib/core/api/api_client.dart`.
-- Authoring is the separate `hsr-cms` Worker and repo (`c:\Anish\Unified CMS`). **This repo's Worker
+- Authoring is the separate `hsr-cms` Worker and repo (`~/Anish/Unified CMS`). **This repo's Worker
   has no `/admin`.** No server-side transcoding: ffmpeg locally per `docs/media-conventions.md`.
 
 ## 3. Stack — decided, do not re-litigate

@@ -4,8 +4,9 @@ import { readdirSync, statSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { join, extname } from "node:path";
+import { homedir } from "node:os";
 
-const DIR = "c:/Anish/arul-import/drive";
+const DIR = join(homedir(), "Anish", "arul-import", "drive");
 const IMG = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const VID = new Set([".mp4", ".mov", ".webm", ".mkv", ".m4v"]);
 
@@ -60,7 +61,7 @@ for (const it of items) {
   }
 }
 
-writeFileSync(join("c:/Anish/arul-import", "inventory.json"), JSON.stringify(items, null, 2));
+writeFileSync(join(homedir(), "Anish", "arul-import", "inventory.json"), JSON.stringify(items, null, 2));
 
 const uniq = items.filter((i) => !i.dupOf);
 const dupes = items.filter((i) => i.dupOf);

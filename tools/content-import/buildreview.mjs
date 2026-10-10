@@ -2,7 +2,9 @@
 // Each card's category dropdown defaults to the classifier pick, or SKIP for a likely existing dup.
 // "Copy corrections" yields the FINAL {base: category|"SKIP"} map -> that is what buildplan.mjs consumes.
 import { readFileSync, writeFileSync } from "node:fs";
-const ROOT = "c:/Anish/arul-import";
+import { homedir } from "node:os";
+import { join } from "node:path";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const CATS = ["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"];
 const data = JSON.parse(readFileSync(`${ROOT}/review-data.json`, "utf8"));
 

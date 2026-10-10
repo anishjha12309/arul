@@ -4,7 +4,7 @@
 // That is why this is one small script and not the wallpaper pipeline's eight stages.
 //
 //   node ringtones-plan.mjs                        # writes ringtone-import-plan.json
-//   SRC=c:/path/to/drop node ringtones-plan.mjs
+//   SRC=~/path/to/drop node ringtones-plan.mjs
 //   node ringtones-plan.mjs --allow-duplicate-titles
 //
 // Two source layouts, auto-detected:
@@ -16,10 +16,11 @@
 import { readdirSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, basename, extname } from "node:path";
+import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 
-const SRC = process.env.SRC || "c:/ringtones/output";
-const ROOT = process.env.ROOT || "c:/Anish/arul-import";
+const SRC = process.env.SRC || join(homedir(), "ringtones", "output");
+const ROOT = process.env.ROOT || join(homedir(), "Anish", "arul-import");
 const CDN = process.env.CDN || "https://arul-cdn.hsrutility.com";
 const ALLOW_DUPES = process.argv.includes("--allow-duplicate-titles");
 

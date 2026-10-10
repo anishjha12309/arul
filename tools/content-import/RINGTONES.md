@@ -13,8 +13,8 @@ names, which misfiled a sixth of one drop. So classification is a lookup and QC 
 | 2 | `ringtones-import.mjs` | **live write:** R2 PUT → one Neon txn (rows + `content_version`) → `build-catalog` → check. `--dry-run` prints only. Checkpointed, so a partial failure re-runs cheaply. |
 
 ```bash
-SRC=c:/path/to/drop node ringtones-plan.mjs      # review the printed plan first
-cp ringtones-import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node ringtones-import.mjs
+SRC=~/path/to/drop node ringtones-plan.mjs      # review the printed plan first
+cp ringtones-import.mjs ~/Anish/arul-import/ && cd ~/Anish/arul-import && node ringtones-import.mjs
 ```
 
 - **Two source layouts, auto-detected, never additive:** subfolders holding audio win (category from

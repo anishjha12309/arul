@@ -6,7 +6,7 @@ layouts. Channels and the permission ask: [notifications.md](notifications.md). 
 
 ## Owner decisions — the Play exposure is accepted, not overlooked
 
-- **Copied from Noor (`c:\prod-hsr-shubh`), minus its foreground service.** Play's FGS policy wants a
+- **Copied from Noor (`~/prod-hsr-shubh`), minus its foreground service.** Play's FGS policy wants a
   user task that breaks if deferred; a shortcut bar has none, and `specialUse` needs a Play Console
   declaration plus a demo video under human review. A plain ongoing post is held by the system, survives
   the process dying, and needs no declaration. Core App Quality ("persistent only for ongoing events")
@@ -40,8 +40,9 @@ Clear all (`FLAG_NO_CLEAR`). The re-post is what makes it come back.
 - **Collapsed custom content is capped at 48dp on Android 12+** — the collapsed root is a fixed 48dp
   (36dp buttons + 6dp padding). A `wrap_content` root lets the fitXY art's intrinsic size inflate it.
 - **The banner's corners are baked into the art**, drawn fitXY: `android:clipToOutline` exists only
-  from Android 12 and minSdk is 24. Re-cut with `python tools/quick_bar_art.py` from
-  `C:\Anish\quickbar-art\`. The buttons are shape drawables, which draw their own corners everywhere.
+  from Android 12 and minSdk is 24. Re-cut with `python tools/quick_bar_art.py <SOURCE_DIR>`; the
+  default `~/Anish/quickbar-art/` was not migrated to the Mac, and without a source the script writes
+  gradient placeholders. The buttons are shape drawables, which draw their own corners everywhere.
 - **A collapsed button is ~63dp on a 360dp phone** (half the audience; 320dp is the next real tier,
   and font scales 1.2–1.5 are common). `QuickBar.fitCollapsed` measures the labels and picks icon +
   label, label alone, or icon alone — chrome around the buttons measured 156dp on device. Expanded

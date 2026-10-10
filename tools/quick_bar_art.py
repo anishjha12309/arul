@@ -1,7 +1,7 @@
 r"""Cuts the Quick Access bar's backdrop into android/app/src/main/res/drawable-nodpi.
 
     pip install Pillow
-    python tools/quick_bar_art.py [SOURCE_DIR]     # default C:\Anish\quickbar-art
+    python tools/quick_bar_art.py [SOURCE_DIR]     # default ~/Anish/quickbar-art
 
 Reads SOURCE_DIR/banner.png (any size; the ChatGPT prompt asked for 1536x1024) and writes one cut per
 layout height. A missing source becomes a flat gradient placeholder, so the bar builds before the art
@@ -63,7 +63,7 @@ def rounded(img, radius):
 
 
 def main():
-    source = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(r"C:\Anish\quickbar-art")
+    source = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.home() / "Anish" / "quickbar-art"
     OUT.mkdir(parents=True, exist_ok=True)
     for name, stem, w, h, radius, dim in CUTS:
         src = source / f"{stem}.png"

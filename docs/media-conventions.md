@@ -123,7 +123,7 @@ ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3
   review those before publishing. `verify.mjs` fails anything still over 10 s.
 - Loops seamlessly (first ≈ last frame). Nothing enforces this; generator drops usually do NOT loop,
   so a visible jump every cycle is a content decision, not an encoder bug.
-- **Keep the masters outside the repo** (`tools/content-import/` stages under `c:/Anish/arul-import/`)
+- **Keep the masters outside the repo** (`tools/content-import/` stages under `~/Anish/arul-import/`)
   — a whole catalogue once had to be re-encoded, which worked only because masters existed.
 - Moderation queue: **never approve a user-submitted video whose dimensions fail the rule** — the
   approve flow copies bytes verbatim. Re-encode with the recipe above, or reject.

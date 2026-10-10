@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Drive the installed DEBUG app through every locale and display config on a
 real phone, and check what it actually renders.
 

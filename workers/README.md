@@ -53,7 +53,7 @@ purpose — blocking someone who is trying to pay is the worst false positive in
 ## Authoring — the unified CMS (NOT in this repo)
 
 All authoring lives in the `hsr-cms` worker (`https://api.hsrutility.com/admin`, repo
-`c:\Anish\Unified CMS`). It reaches this Worker through the **`ARUL_API` service binding** — a plain
+`~/Anish/Unified CMS`). It reaches this Worker through the **`ARUL_API` service binding** — a plain
 `fetch()` to a sibling `*.workers.dev` host is blocked by Cloudflare. This Worker exposes no `/admin`.
 
 The R2 CORS rule for browser uploads allows TWO origins — `https://api.hsrutility.com` (the CMS) and
@@ -95,8 +95,8 @@ npx wrangler deploy   # deploy IS part of "done" — the deploy-worker skill
   DISCARDED — the state of `POSTHOG_HOST` and `ANDROID_CERT_SHA256`
   ([docs/known-issues.md](../docs/known-issues.md)). Read `npx wrangler deploy --dry-run`'s warnings.
 - **Two `wrangler dev` instances on port 8787** — the second bind does not fail loudly, and the stale
-  process serves old config as a phantom `502` or missing cron output. `netstat -ano | grep :8787` first.
-- **A phone against this PC:** `node tools/local-stack.mjs up` runs the Worker (8787), a local CDN and
+  process serves old config as a phantom `502` or missing cron output. `lsof -nP -iTCP:8787 -sTCP:LISTEN` first.
+- **A phone against this Mac:** `node tools/local-stack.mjs up` runs the Worker (8787), a local CDN and
   the CMS on the debug branch and local R2 only ([docs/local-stack.md](../docs/local-stack.md)).
 - `wrangler kv key list --namespace-id <prod-id>` reads a **local** namespace and returns `[]` — add
   `--remote`.

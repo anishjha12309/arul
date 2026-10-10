@@ -23,8 +23,7 @@ const BASH_WRITES = new RegExp(
   "i",
 );
 
-const run = (args, cwd, timeout) =>
-  spawnSync(process.execPath, args, { cwd, encoding: "utf8", timeout, windowsHide: true });
+const run = (args, cwd, timeout) => spawnSync(process.execPath, args, { cwd, encoding: "utf8", timeout });
 
 // `--reporter=github` prints `::error title=<rule>,file=<f>,line=<n>,…::<message>` per diagnostic.
 function biomeIssues(stdout) {
@@ -93,7 +92,7 @@ function stop(input) {
       if (b.type !== "tool_use") continue;
       const arg = b.input || {};
       let file = "";
-      if (b.name === "Bash" || b.name === "PowerShell") {
+      if (b.name === "Bash") {
         const cmd = String(arg.command || "");
         if (BASH_WRITES.test(cmd)) file = (cmd.match(new RegExp(PATHY)) || [""])[0].replace(/["']/g, "");
       } else if (/^(Edit|Write)$/.test(b.name || "")) {

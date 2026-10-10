@@ -14,10 +14,13 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import postgres from "postgres";
 
-const ROOT = process.env.ROOT || "c:/Anish/arul-import";
-const WRANGLER = process.env.WRANGLER || "c:/Anish/Arul/workers/node_modules/wrangler/bin/wrangler.js";
+const ROOT = process.env.ROOT || join(homedir(), "Anish", "arul-import");
+const WRANGLER =
+  process.env.WRANGLER ||
+  join(homedir(), "Anish", "Arul", "workers", "node_modules", "wrangler", "bin", "wrangler.js");
 const BUCKET = "south-indian-wallpapers";
 const CDN = "https://arul-cdn.hsrutility.com";
 const API = "https://arul-api.hsrutility.com";
@@ -38,7 +41,7 @@ function parseEnv(path) {
   }
   return env;
 }
-const E = parseEnv("c:/Anish/Arul/workers/.dev.vars");
+const E = parseEnv(join(homedir(), "Anish", "Arul", "workers", ".dev.vars"));
 
 const plan = JSON.parse(readFileSync(join(ROOT, "ringtone-import-plan.json"), "utf8"));
 console.log(`plan: ${plan.length} ringtones${DRY ? "  (DRY RUN)" : ""}`);
@@ -62,7 +65,7 @@ for (const [i, p] of plan.entries()) {
     continue;
   }
   try {
-    // `node <wrangler.js>`, never `npx wrangler` -> npx is a .cmd on Windows and Node spawns it only through a shell.
+    // `node <wrangler.js>`, never `npx wrangler` through a shell -> no shell sits between us and wrangler.
     // A shell re-splits every argument on whitespace -> filenames and the cache-control value have spaces.
     // That failed every upload with "Unknown arguments" -> invoking the JS entrypoint keeps the argv array intact.
     execFileSync(

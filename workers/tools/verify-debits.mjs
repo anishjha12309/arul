@@ -92,6 +92,6 @@ IN FLIGHT — ${inFlight.length} debit(s) attempted and still inside ` +
   await sql.end();
 }
 
-// Exit AFTER the connection is closed — process.exit() mid-teardown trips a libuv assertion on
-// Windows and reports 127 instead of the real code. See payments-health.mjs for the same note.
+// Exit AFTER the connection is closed — process.exit() mid-teardown can trip a libuv assertion
+// and report 127 instead of the real code. See payments-health.mjs for the same note.
 process.exit(exitCode);

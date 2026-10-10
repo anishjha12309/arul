@@ -1,6 +1,6 @@
 # Local stack — test on the phone without touching production
 
-Worker, CDN and CMS run on this PC; the USB phone reaches them over `adb reverse`. Data = Neon **debug**
+Worker, CDN and CMS run on this Mac; the USB phone reaches them over `adb reverse`. Data = Neon **debug**
 branch + **local** R2 on disk. Release/prod APKs keep using `env/prod.json` and are unaffected: nothing
 here edits `main` resources, `prod.json` or `wrangler.toml`.
 
@@ -14,9 +14,9 @@ here edits `main` resources, `prod.json` or `wrangler.toml`.
 |---|---|---|
 | Arul Worker | 8787 | `wrangler dev --local`, Hyperdrive = debug branch, PostHog blackholed, `PUSH_ENABLED=false` |
 | Local CDN | 8788 | `workers/tools/local-cdn`: local R2 first, else read-only proxy of `arul-cdn.hsrutility.com` |
-| CMS | 8790 | `C:\Anish\Unified CMS` via its `npm run dev:local`; `ARUL_API` binds to the local Worker (shared dev registry) |
+| CMS | 8790 | `~/Anish/Unified CMS` via its `npm run dev:local`; `ARUL_API` binds to the local Worker (shared dev registry) |
 
-State, logs (`logs/*.log`) and the registry live in `C:\Anish\Arul\.wrangler\local-stack` (git-ignored).
+State, logs (`logs/*.log`) and the registry live in `~/Anish/Arul/.wrangler/local-stack` (git-ignored).
 Signed URLs from the local Worker point at `http://127.0.0.1:8788/__s3/...`, so Save/Share downloads hit
 local R2 too. Wallpapers and ringtones still work: missing keys stream from the real CDN.
 

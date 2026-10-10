@@ -128,8 +128,7 @@ dev.stdout.on("data", onLine);
 dev.stderr.on("data", onLine);
 
 const stop = () => {
-  if (process.platform === "win32") spawn("taskkill", ["/pid", String(dev.pid), "/T", "/F"], { shell: true });
-  else dev.kill("SIGTERM");
+  dev.kill("SIGTERM");
 };
 process.on("SIGINT", () => {
   stop();

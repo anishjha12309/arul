@@ -10,9 +10,9 @@
 import { readdirSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, basename } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
 const DIRS = process.argv.slice(2).filter((a) => !a.startsWith("--"));

@@ -124,7 +124,7 @@ CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="postgresql://postgres:
 ```
 
 Only ONE instance may hold 8787. Missing cron output means a second listener
-(`netstat -ano | grep :8787`) is silently serving your requests with the old config.
+(`lsof -nP -iTCP:8787 -sTCP:LISTEN`) is silently serving your requests with the old config.
 
 **3. Create a real UAT mandate**
 

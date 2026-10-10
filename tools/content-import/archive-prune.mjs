@@ -4,16 +4,17 @@
 // Run archive-index.mjs first -> a stale index leaves a file unrecorded, which is kept, not deleted.
 // Dry run by default -> nothing is deleted without --apply.
 //
-// Usage: node archive-prune.mjs [--root c:/Anish/arul-import] [--apply]
+// Usage: node archive-prune.mjs [--root ~/Anish/arul-import] [--apply]
 import { readdirSync, statSync, readFileSync, unlinkSync, rmdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 
 const arg = (f, d) => {
   const i = process.argv.indexOf(f);
   return i > -1 ? process.argv[i + 1] : d;
 };
-const ROOT = arg("--root", "c:/Anish/arul-import").replace(/\\/g, "/");
+const ROOT = arg("--root", join(homedir(), "Anish", "arul-import")).replace(/\\/g, "/");
 const APPLY = process.argv.includes("--apply");
 
 const INDEX = join(import.meta.dirname, "archive-index.json");

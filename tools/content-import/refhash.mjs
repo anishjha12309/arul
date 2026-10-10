@@ -2,8 +2,10 @@
 // static hashes full_key's jpg, live hashes thumbs/<cat>/<stem>.jpg -> writes refhashes.json.
 // dHash ignores exact bytes -> the index survives a re-encode of the same content.
 import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
 const CDN = "https://arul-cdn.hsrutility.com";
@@ -82,5 +84,8 @@ const refs = await pool(items, 10, async (it) => {
   }
 });
 
-writeFileSync("c:/Anish/arul-import/refhashes.json", JSON.stringify(refs.filter(Boolean), null, 2));
+writeFileSync(
+  join(homedir(), "Anish", "arul-import", "refhashes.json"),
+  JSON.stringify(refs.filter(Boolean), null, 2),
+);
 console.log(`hashed ${ok}, failed ${fail}. refhashes.json written.`);

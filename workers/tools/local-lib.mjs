@@ -3,6 +3,7 @@
  * Every guard FAILS CLOSED: a tool that cannot prove it is aimed at the debug branch / local storage exits.
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
@@ -10,7 +11,7 @@ import { connectionString } from "./lib/neon-branch.mjs";
 
 export const WORKERS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const REPO_DIR = path.resolve(WORKERS_DIR, "..");
-export const CMS_DIR = "C:/Anish/Unified CMS";
+export const CMS_DIR = path.join(os.homedir(), "Anish", "Unified CMS");
 export const CDN_DIR = path.join(WORKERS_DIR, "tools", "local-cdn");
 export const WRANGLER_JS = path.join(WORKERS_DIR, "node_modules", "wrangler", "bin", "wrangler.js");
 export const DEFAULT_PERSIST = path.join(REPO_DIR, ".wrangler", "local-stack");

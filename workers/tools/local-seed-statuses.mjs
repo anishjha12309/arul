@@ -34,7 +34,10 @@ const { values: opt } = parseArgs({
     "build-only": { type: "boolean", default: false },
     "no-build": { type: "boolean", default: false },
     "persist-to": { type: "string" },
-    source: { type: "string", default: "C:/Anish/wallpaper-fetcher/output/hindu_final" },
+    source: {
+      type: "string",
+      default: path.join(os.homedir(), "Anish", "wallpaper-fetcher", "output", "hindu_final"),
+    },
   },
 });
 

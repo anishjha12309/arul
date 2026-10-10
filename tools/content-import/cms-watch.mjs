@@ -14,17 +14,18 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, createWriteStream, existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 
 const arg = (f, d) => {
   const i = process.argv.indexOf(f);
   return i > -1 ? process.argv[i + 1] : d;
 };
-const OUT = arg("--out", "c:/Anish/arul-import/cms-logs").replace(/\\/g, "/");
+const OUT = arg("--out", join(homedir(), "Anish", "arul-import", "cms-logs")).replace(/\\/g, "/");
 const REPORT = process.argv.includes("--report");
 
 const TARGETS = [
-  { name: "hsr-cms", cwd: "c:/Anish/Unified CMS" },
-  { name: "arul-api", cwd: "c:/Anish/Arul/workers" },
+  { name: "hsr-cms", cwd: join(homedir(), "Anish", "Unified CMS") },
+  { name: "arul-api", cwd: join(homedir(), "Anish", "Arul", "workers") },
 ];
 
 if (REPORT) {
@@ -122,9 +123,7 @@ const logs = new Map();
 function spawnTail(t) {
   if (!logs.has(t.name)) logs.set(t.name, createWriteStream(join(OUT, `${t.name}.jsonl`), { flags: "a" }));
   const log = logs.get(t.name);
-  // One command string, not an argv array -> `npx` is a .cmd shim on Windows, so a shell is required.
-  // Passing args alongside shell:true is deprecated -> keep them inside the string.
-  const p = spawn(`npx wrangler tail ${t.name} --format json`, { cwd: t.cwd, shell: true });
+  const p = spawn("npx", ["wrangler", "tail", t.name, "--format", "json"], { cwd: t.cwd });
   children.push(p);
   const split = makeSplitter((raw) => {
     let e;

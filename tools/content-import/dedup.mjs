@@ -2,11 +2,12 @@
 // Flags likely duplicates for REVIEW -> it never auto-drops one.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
-const ROOT = "c:/Anish/arul-import";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const OUT = join(ROOT, "normalized");
 const EXIST_T = 10; // hamming <= this vs an existing object => likely already in storage
 const BATCH_T = 8; // hamming <= this vs another batch item => near-dup within this import

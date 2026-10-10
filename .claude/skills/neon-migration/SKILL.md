@@ -58,23 +58,12 @@ look for is a version pointer that stops moving, never a loud failure.
    with `--debug`), so it never lands in shell history, and it refuses a write unless you pass
    `--write`:
 
-   ```powershell
-   # PowerShell (this repo's primary shell) — from workers/
-   node tools/prod-sql.mjs --write --debug ([IO.File]::ReadAllText((Resolve-Path ..\db\schema\<FILE>.sql)))
-   node tools/prod-sql.mjs --write ([IO.File]::ReadAllText((Resolve-Path ..\db\schema\<FILE>.sql)))
-   ```
    ```bash
-   # Git Bash / POSIX — from workers/
+   # from workers/
    node tools/prod-sql.mjs --write --debug "$(cat ../db/schema/<FILE>.sql)"
    node tools/prod-sql.mjs --write "$(cat ../db/schema/<FILE>.sql)"
    ```
 
-   **Never `"$(cat …)"` in PowerShell.** `cat` is `Get-Content`, which returns `string[]`; `"$(…)"`
-   joins it with spaces, so every newline vanishes and `prod-sql.mjs`'s `--` comment stripper — with
-   no `\n` left to stop at — eats the ENTIRE file. Measured: `stripped_len 0`. An empty statement
-   trips no usage guard, prints no warning, exits 0 and outputs `[]`, byte-identical to a successful
-   apply. Never `Get-Content -Raw` without `-Encoding UTF8` either: PowerShell 5.1 decodes UTF-8 as
-   single-byte chars, so a non-ASCII default or `check` constraint reaches prod as mojibake.
    **`[prod-sql] WRITING to production:` (or `… to debug branch:`) is the only signal anything is
    being applied — if you do not see it, nothing was applied, whatever the exit code says. Read the
    target word before pressing enter on a prod run.** Step 4 is what catches it.

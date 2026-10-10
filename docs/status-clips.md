@@ -15,7 +15,7 @@ us warrant the rights. The owner took that risk for the third-party Crafto set's
 (categories `tamil`, `telugu`); never widen an upload to another language without asking.
 
 Bulk upload = `cd workers && node tools/status-import.mjs --langs tamil,telugu` (encode + QC + plan into
-`C:/Anish/arul-import/statuses`, writes nothing), then the same with `--write`: R2 clip + poster, ONE Neon
+`~/Anish/arul-import/statuses`, writes nothing), then the same with `--write`: R2 clip + poster, ONE Neon
 txn (rows, one category per language, one `content_version` bump), rebuild. Ids derive from the Crafto
 record, so a re-run refuses rather than doubling. It never touches `status_tab`.
 

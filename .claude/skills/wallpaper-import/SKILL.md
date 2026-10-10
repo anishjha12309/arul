@@ -10,8 +10,8 @@ disable-model-invocation: true
 1. The **folder path** holding the `.mp4` live wallpapers.
 2. The **category** — one of: amman · ayyappan · murugan · perumal · sivan · temples.
 
-Tooling + secrets: `ROOT = c:/Anish/arul-import`; content-import scripts under
-`c:/Anish/Arul/tools/content-import`; secrets in `c:/Anish/Arul/workers/.dev.vars`.
+Tooling + secrets: `ROOT = ~/Anish/arul-import`; content-import scripts under
+`~/Anish/Arul/tools/content-import`; secrets in `~/Anish/Arul/workers/.dev.vars`.
 
 ## Two watermarks, two removers — never guess which
 Sources come from more than one generator and the removers are **not interchangeable**:
@@ -29,7 +29,7 @@ Gemini file it merely fails to remove the sparkle, which the spot-check catches.
 `clean-batch.mjs` therefore **routes every file by measurement** (`wm-probe.py`, shape-correlation against both glyph templates — scoring brightness alone false-fires on busy artwork). Thresholds and their calibration: `ROOT/wm-probe-calibration.md`. Don't hand-force `--mode` unless you have already proven the batch.
 
 ## Steps (run in order; STOP and report on any failure)
-0. **Archive check** — `cd c:/Anish/Arul/tools/content-import && node archive-check.mjs <srcDir>`.
+0. **Archive check** — `cd ~/Anish/Arul/tools/content-import && node archive-check.mjs <srcDir>`.
    The masters under ROOT were pruned once they were confirmed in the library, so
    `archive-index.json` is the only record that a clip was ever staged. A `RE-DOWNLOAD` or
    `NEAR-DUP` hit tells you which — and whether it shipped, or **shipped and had its row
@@ -40,7 +40,7 @@ Gemini file it merely fails to remove the sparkle, which the spot-check catches.
    re-export at 720×1280. Duration is not enforced; short clips are fine.
 2. **Title offset:** find the highest existing number so labels never collide, and start at `N+1`:
    ```bash
-   cd c:/Anish/Arul/workers && node tools/prod-query.mjs \
+   cd ~/Anish/Arul/workers && node tools/prod-query.mjs \
      "SELECT max((regexp_match(title,'^<Cat> ([0-9]+)$'))[1]::int) FROM wallpapers WHERE category='<category>'"
    ```
    `prod-query.mjs` is SELECT-only and reads the connection string from `.dev.vars` itself. (Column is `is_published`, not `published`.)
@@ -50,12 +50,12 @@ Gemini file it merely fails to remove the sparkle, which the spot-check catches.
 4. **Clean:** `node ROOT/clean-batch.mjs ROOT/drive` — probes each file, routes it to the matching remover, normalizes to 1024×1824 h264/yuv420p/faststart/no-audio, writes thumbnails + `normalized-manifest.json` (which records the `wm` kind and its scores per file). Read the `probe:` tally it prints — a batch you expected to be one generator coming back mixed means look before continuing. Any file routed `none` gets **no watermark removed** and is flagged; treat it as unverified until step 6.
 5. **Dedup:** `cd tools/content-import && node refhash.mjs && node dedup.mjs`. VIEW every flagged pair (new thumb vs the matched existing thumb). dhash flags dark, low-detail frames that share only a silhouette, so most flags are false positives. Keep live-versions of existing stills (established precedent); drop only true re-uploads. Never auto-drop.
 6. **Watermark audit (BEFORE import) — measure AND look:**
-   - `py ROOT/verify-clean.py ROOT/normalized/*.mp4` — must report 0 flagged. It checks both failure
+   - `python ROOT/verify-clean.py ROOT/normalized/*.mp4` — must report 0 flagged. It checks both failure
      directions: a surviving watermark anywhere in frame, and a star-shaped artifact inside the un-blend box.
    - Then still **VIEW** the bottom-right corner of the outputs (`crop=420:260:604:1564`). The numbers are calibrated, not infallible, and `none` verdicts are a fail-safe that only the eye closes.
 7. **Plan:** `node ROOT/plan-batch.mjs <category> <Cat> <startN> ["excludeSrc,…"]` → `import-plan.json` (UUID keys, numbered titles).
 8. **QC gate:** `cd tools/content-import && node verify.mjs` — must show 0 failures.
-9. **Import:** `cp c:/Anish/Arul/tools/content-import/import.mjs c:/Anish/arul-import/ && cd c:/Anish/arul-import && node import.mjs` — R2 PUT (media + thumbs, stamped `public, max-age=31536000, immutable`) → one Neon txn (rows + `content_version` bump) → build-catalog. **Never run the copy already sitting at ROOT** — it is an older revision and ships objects with no `Cache-Control`; a shipped batch proves it has been run by mistake. It must be copied rather than run in place: `aws4fetch`/`postgres` resolve only from ROOT's `node_modules`, so running it from `tools/content-import/` throws `ERR_MODULE_NOT_FOUND` before touching R2. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
+9. **Import:** `cp ~/Anish/Arul/tools/content-import/import.mjs ~/Anish/arul-import/ && cd ~/Anish/arul-import && node import.mjs` — R2 PUT (media + thumbs, stamped `public, max-age=31536000, immutable`) → one Neon txn (rows + `content_version` bump) → build-catalog. **Never run the copy already sitting at ROOT** — it is an older revision and ships objects with no `Cache-Control`; a shipped batch proves it has been run by mistake. It must be copied rather than run in place: `aws4fetch`/`postgres` resolve only from ROOT's `node_modules`, so running it from `tools/content-import/` throws `ERR_MODULE_NOT_FOUND` before touching R2. The rows and the bytes must land together: **an object under `wallpapers/` that no row references is DELETED by the canonical sweep** (a thumb is safe — its key is derived from `full_key`).
 10. **Verify:** `node ROOT/e2e-verify.mjs`. Its "titles 1..N" line false-fails for offset batches — confirm
     titles via a DB query instead; all other checks must pass.
 

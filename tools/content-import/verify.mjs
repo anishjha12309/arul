@@ -4,12 +4,12 @@
 import { readFileSync, statSync, openSync, readSync, closeSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { createRequire } from "node:module";
-const require = createRequire("c:/Anish/Unified CMS/");
+const require = createRequire(join(homedir(), "Anish", "Unified CMS", "/"));
 const sharp = require("sharp");
 
-const ROOT = "c:/Anish/arul-import";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const plan = JSON.parse(readFileSync(join(ROOT, "import-plan.json"), "utf8"));
 const tmp = mkdtempSync(join(tmpdir(), "qc-"));
 

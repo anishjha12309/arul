@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Find Flutter's overflow banner in captured screenshots.
 
     python tools/l10n/scan_overflow_banner.py build/l10n_audit/device_sweep/shots

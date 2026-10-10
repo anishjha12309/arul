@@ -1,5 +1,5 @@
 /**
- * The local stack: Arul Worker + local CDN + CMS on this PC, the phone reaching them over `adb reverse`.
+ * The local stack: Arul Worker + local CDN + CMS on this machine, the phone reaching them over `adb reverse`.
  * Debug branch + local R2 only — nothing here reaches production storage. Owner guide: docs/local-stack.md.
  *
  *   node tools/local-stack.mjs up [--no-cms] [--persist-to DIR]   # start all three, adb reverse, health check
@@ -8,7 +8,7 @@
  *   node tools/local-stack.mjs env                                # (re)write env/local.json from env/dev.json
  *
  * Ports: Worker 8787 · CDN 8788 · CMS 8790. State, logs and the dev registry live in the persist dir
- * (default C:/Anish/Arul/.wrangler/local-stack, git-ignored). The Worker gets these overrides on top of .dev.vars:
+ * (default ~/Anish/Arul/.wrangler/local-stack, git-ignored). The Worker gets these overrides on top of .dev.vars:
  *   R2_CDN_BASE_URL -> the local CDN · R2_ENDPOINT/R2_BUCKET -> the CDN's /__s3 path, so a presigned URL
  *   resolves against LOCAL R2 · POSTHOG_HOST blackholed · PUSH_ENABLED=false.
  */
@@ -218,7 +218,6 @@ function start(name, cwd, exe, args, extraEnv = {}) {
     detached: true,
     shell: isShell,
     stdio: ["ignore", log, log],
-    windowsHide: true,
   });
   child.unref();
   return child.pid;
@@ -308,10 +307,7 @@ function down() {
       console.log(`[stack] ${name} (pid ${pid}) already stopped`);
       continue;
     }
-    const r =
-      process.platform === "win32"
-        ? spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { encoding: "utf8" })
-        : spawnSync("kill", ["-TERM", `-${pid}`], { encoding: "utf8" });
+    const r = spawnSync("kill", ["-TERM", `-${pid}`], { encoding: "utf8" });
     console.log(
       `[stack] stopped ${name} (pid ${pid})${r.status === 0 ? "" : ` — ${(r.stderr || "").trim()}`}`,
     );

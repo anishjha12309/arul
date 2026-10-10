@@ -110,8 +110,8 @@ toasts. Uncut clips: `DEBUG_RETURN_CLIP_DIR=/data/user/0/com.hsrutility.arul/fil
 
 **Deferred deep links on a sideloaded build:** `DEBUG_INSTALL_REFERRER` / `DEBUG_DEFERRED_LINK` stand in
 for Play's referrer replay and the GA4F/Meta fetch (debug only, once per install — `adb shell pm clear`
-between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: cmd.exe
-cuts a bare `--dart-define` at its first `&`. Recipes: docs/deferred-links.md. A release/profile build shows
+between runs). Pass them through a `--dart-define-from-file` JSON, never on the command line: an unquoted
+`&` in a bare `--dart-define` splits the shell command. Recipes: docs/deferred-links.md. A release/profile build shows
 NO
 labels until an accessibility service is on (Flutter builds semantics only then): `adb shell settings put secure enabled_accessibility_services com.android.systemui.accessibility.accessibilitymenu/com.android.systemui.accessibility.accessibilitymenu.AccessibilityMenuService` + `settings put secure accessibility_enabled 1` → dump → `settings delete secure enabled_accessibility_services` + `accessibility_enabled 0`. A Play install is FLAG_SECURE as well: `shot` is black there, dump is not.
 

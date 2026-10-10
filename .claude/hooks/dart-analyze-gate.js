@@ -41,7 +41,7 @@ function stop(input) {
       const name = b.name || "";
       const arg = b.input || {};
       if (/analyze_files$/.test(name)) lastAnalyze = i;
-      if (name === "Bash" || name === "PowerShell") {
+      if (name === "Bash") {
         const cmd = String(arg.command || "");
         if (BASH_ANALYZES.test(cmd)) lastAnalyze = i;
         if (BASH_WRITES_DART.test(cmd)) {

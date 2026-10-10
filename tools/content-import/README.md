@@ -3,7 +3,7 @@
 Batch importer for wallpapers (static **and** live) into the Arul R2 bucket and Neon. It does what the
 CMS upload does not: **dedup against existing content**, **vision classification** into the six
 categories, a **visual review/correction step**, and the **full media-convention QC gate**. ("The CMS" =
-the unified CMS worker at `api.hsrutility.com/admin`, a separate repo at `c:\Anish\Unified CMS`.)
+the unified CMS worker at `api.hsrutility.com/admin`, a separate repo at `~/Anish/Unified CMS`.)
 Ringtones: [RINGTONES.md](RINGTONES.md) · the staging archive: [ARCHIVE.md](ARCHIVE.md) · uploading by
 hand through the CMS: [MANUAL-UPLOAD.md](MANUAL-UPLOAD.md).
 
@@ -11,7 +11,7 @@ hand through the CMS: [MANUAL-UPLOAD.md](MANUAL-UPLOAD.md).
 
 - **Node 20+**, **ffmpeg + ffprobe** on PATH.
 - **sharp** is borrowed from the CMS repo's `node_modules` via `createRequire` — that repo must be
-  checked out at `c:/Anish/Unified CMS/`.
+  checked out at `~/Anish/Unified CMS/`.
 - **aws4fetch + postgres** — `npm i aws4fetch postgres` inside the staging ROOT: `import.mjs` needs both,
   `fix.mjs` only aws4fetch, `ringtones-import.mjs` only postgres — which is why it runs FROM ROOT.
 - Secrets are read at runtime from `workers/.dev.vars` (`R2_*`, `DATABASE_URL`, `CATALOG_BUILD_SECRET`)
@@ -19,7 +19,7 @@ hand through the CMS: [MANUAL-UPLOAD.md](MANUAL-UPLOAD.md).
 
 ## Staging ROOT
 
-A scratch dir **outside the repo** (default `c:/Anish/arul-import/`) holds `drive/` (the raw input), every
+A scratch dir **outside the repo** (default `~/Anish/arul-import/`) holds `drive/` (the raw input), every
 intermediate and `node_modules`. Media is never committed. Moving ROOT is not one edit: most scripts
 carry a `ROOT` const, but `probe.mjs` and `refhash.mjs` hardcode the path inline, `ringtones-*.mjs` read
 `process.env.ROOT`, and `archive-*.mjs` take `--root`.

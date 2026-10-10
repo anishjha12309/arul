@@ -22,7 +22,7 @@ export const DELETE_FRACTION_FLOOR = 25;
 /**
  * Maps STATIC keys too, deliberately -> only live videos get a poster -> the extra names point at nothing, harmlessly
  * Over-inclusive is the SAFE direction for a delete decision -> it can only ever protect more, never less
- * Must stay in sync with arulThumbKey() in the CMS registry (c:\Anish\Unified CMS\src\registry.ts)
+ * Must stay in sync with arulThumbKey() in the CMS registry (~/Anish/Unified CMS/src/registry.ts)
  */
 export function thumbKeyFor(fullKey: string): string | null {
   const m = /^wallpapers\/([^/]+)\/([^/]+)$/.exec(fullKey);

@@ -113,6 +113,6 @@ adb shell pm clear com.hsrutility.arul   # between runs: both seams are once-per
 ```
 Without the geo seam, the state a fresh install reads depends on the network path, not only the
 place ([deep-links.md](deep-links.md) §Language precedence).
-**A FILE, never `--dart-define=…&lang=…` on the command line** — cmd.exe cuts it at the `&`
+**A FILE, never `--dart-define=…&lang=…` on the command line** — the shell cuts it at an unquoted `&`
 ([known-issues.md](known-issues.md)). The seams feed the SAME `queueRequest` the real callbacks feed,
 so parse → persist → shell → screen → language runs end to end; only the network fetch is skipped.

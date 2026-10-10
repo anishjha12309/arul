@@ -50,7 +50,7 @@ function token() {
   if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
   spawnSync("npx wrangler whoami", { stdio: "ignore", shell: true });
   const files = [
-    process.env.APPDATA && join(process.env.APPDATA, "xdg.config", ".wrangler", "config", "default.toml"),
+    join(homedir(), "Library", "Preferences", ".wrangler", "config", "default.toml"),
     join(homedir(), ".config", ".wrangler", "config", "default.toml"),
     join(homedir(), ".wrangler", "config", "default.toml"),
   ].filter(Boolean);

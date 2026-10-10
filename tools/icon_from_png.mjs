@@ -35,9 +35,6 @@ if (!iconPath) {
 function findChrome() {
   if (process.env.CHROME) return process.env.CHROME;
   const c = [
-    "C:/Program Files/Google/Chrome/Application/chrome.exe",
-    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
-    `${os.homedir()}/AppData/Local/Google/Chrome/Application/chrome.exe`,
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
     "/usr/bin/google-chrome",
     "/usr/bin/chromium",

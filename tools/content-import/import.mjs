@@ -2,10 +2,11 @@
 // R2 goes FIRST -> a failed insert leaves only orphans -> import-result.json records the commit for rollback.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 import { AwsClient } from "aws4fetch";
 import postgres from "postgres";
 
-const ROOT = "c:/Anish/arul-import";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const CDN = "https://arul-cdn.hsrutility.com";
 const API = "https://arul-api.hsrutility.com";
 
@@ -22,7 +23,7 @@ function parseEnv(path) {
   }
   return env;
 }
-const E = parseEnv("c:/Anish/Arul/workers/.dev.vars");
+const E = parseEnv(join(homedir(), "Anish", "Arul", "workers", ".dev.vars"));
 const endpoint = E.R2_ENDPOINT.replace(/\/$/, "");
 const bucket = E.R2_BUCKET;
 const aws = new AwsClient({

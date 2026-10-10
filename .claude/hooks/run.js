@@ -1,9 +1,9 @@
 // One process per hook event. settings.json calls `node .claude/hooks/run.js <event>`; this reads the
 // payload once and runs that event's modules in order, so a Bash call costs one spawn, not four.
 //
-//   pre-bash   PreToolUse  Bash|PowerShell  first `deny` wins and stops the chain
+//   pre-bash   PreToolUse  Bash  first `deny` wins and stops the chain
 //   post-edit  PostToolUse Write|Edit       every module runs; their context lines are merged
-//   post-bash  PostToolUse Bash|PowerShell  same
+//   post-bash  PostToolUse Bash  same
 //   stop       Stop                         a module may hold the turn (exit 2 + stderr)
 //
 // A module exports plain functions of the parsed payload and returns undefined (silent) or

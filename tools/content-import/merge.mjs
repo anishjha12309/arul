@@ -1,7 +1,9 @@
 // Stage D-merge -> combine dedup-manifest.json + classifications.json into review-data.json for buildreview.mjs.
 // Classifier output is a map { base: {category, confidence, reason, title} }.
 import { readFileSync, writeFileSync } from "node:fs";
-const ROOT = "c:/Anish/arul-import";
+import { homedir } from "node:os";
+import { join } from "node:path";
+const ROOT = join(homedir(), "Anish", "arul-import");
 const CATS = new Set(["amman", "ayyappan", "murugan", "perumal", "sivan", "temples"]);
 const TITLE = {
   amman: "Amman",
