@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_ornaments.dart';
 import '../../../app/widgets/arul_sheet.dart';
-import '../../../app/widgets/gopuram_mark.dart';
+import '../../../app/widgets/gopuram_art.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/subscription_model.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/domain/entitlement.dart';
 import '../../premium/providers/entitlement_provider.dart';
@@ -18,12 +20,7 @@ enum HelpAction { support, manage, delete }
 /// the confirm dialog and the `/premium` push all run from Settings, after the sheet is gone.
 /// A dialog raised from a sheet that is closing loses its context; a mailto does not.
 Future<HelpAction?> showHelpSheet(BuildContext context) {
-  return showArulSheet<HelpAction>(
-    context,
-    // The gold edge reads as a stray line on a sheet this small -> off, as on the theme sheet.
-    topHairline: false,
-    builder: (_) => const _HelpSheet(),
-  );
+  return showArulSheet<HelpAction>(context, builder: (_) => const _HelpSheet());
 }
 
 class _HelpSheet extends ConsumerWidget {
@@ -32,8 +29,6 @@ class _HelpSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
 
     // WATCHED, not read: a cold open resolves the entitlement while the sheet is already up, and
     // the row must appear when it lands rather than on the next visit.
@@ -58,7 +53,9 @@ class _HelpSheet extends ConsumerWidget {
         children: [
           Text(
             l10n.settingsNeedHelp,
-            style: ArulTokens.sheetTitle.copyWith(color: titleColor),
+            style: ArulTokens.sheetTitle.copyWith(
+              color: ArulPalette.of(context).text,
+            ),
           ),
           const SizedBox(height: 14),
           ArulSheetRow(
@@ -72,7 +69,9 @@ class _HelpSheet extends ConsumerWidget {
             const SizedBox(height: kSheetRowGap),
             ArulSheetRow(
               // The brand mark, as on every other premium surface — never a laurel badge.
-              glyph: (color) => GopuramMark(size: 19, color: color),
+              leading: const ArulMedallion(
+                child: GopuramArt(height: ArulTokens.medallionArtHeight),
+              ),
               title: l10n.settingsHelpManage,
               sub: manageSub,
               identifier: 'arul_settings_help_manage',

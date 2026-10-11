@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_hairline_loader.dart';
+import '../../../app/widgets/gopuram_art.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
@@ -148,6 +149,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   }
 
   void _warmPosters(List<Wallpaper> items, int count) {
+    // A card whose poster is still in flight draws the gopuram -> decoded before the feed's first frame.
+    precacheImage(
+      const AssetImage(GopuramArt.asset),
+      context,
+      onError: (_, _) {},
+    );
     final decodeWidth = WallpaperTile.decodeWidthFor(context);
     for (final w in items.take(count)) {
       precacheImage(

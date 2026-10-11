@@ -27,6 +27,7 @@ import '../../../core/upi/upi_apps.dart';
 import '../../../data/models/app_config_model.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../share/share_moment_sheet.dart';
 import '../../wallpapers/data/feed_video_player.dart';
@@ -178,35 +179,6 @@ class PremiumScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<PremiumScreen> createState() => _PremiumScreenState();
-}
-
-/// Shared colour resolution for every state this screen renders — resolved ONCE per build.
-/// So the paywall, the billing card and the picker sheet cannot drift apart on theme.
-class _Palette {
-  _Palette(bool isDark)
-    : bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
-      textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText,
-      textSecondary = isDark
-          ? ArulTokens.darkBodyWarm
-          : ArulTokens.lightSecondary,
-      planSecondary = isDark
-          ? ArulTokens.darkTextSecondary
-          : ArulTokens.lightSecondary,
-      accent = isDark ? ArulTokens.gold : ArulTokens.maroon,
-      cardBg = isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight,
-      cardBorder = isDark
-          ? ArulTokens.cardBorderDark09
-          : ArulTokens.cardBorderLight,
-      footnote = isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint;
-
-  final Color bg;
-  final Color textPrimary;
-  final Color textSecondary;
-  final Color planSecondary;
-  final Color accent;
-  final Color cardBg;
-  final Color cardBorder;
-  final Color footnote;
 }
 
 /// The UPI app the user last picked. Survives leaving `/premium`, which is the whole point:
@@ -1083,7 +1055,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // This route is LIGHT, always (owner's call) — the paywall is designed against ivory only.
     // Sheets and dialogs inherit theme from this screen's context, above anything this build wraps.
     // So the light theme is pinned at the ROUTE level (router.dart), never here.
-    final p = _Palette(false);
+    final p = ArulPalette.of(context);
 
     // Intercepted only when nothing sits under this route (opened by a push or reminder via `go`):
     // the system back would otherwise close the app. A pushed open keeps predictive back.
@@ -1100,7 +1072,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
           systemNavigationBarContrastEnforced: false,
         ),
         child: Scaffold(
-          backgroundColor: p.bg,
+          backgroundColor: p.surface,
           body: SafeArea(
             child: entitlementAsync.when(
               loading: () => ArulPaywallLoading(onBack: _leave),
@@ -1414,7 +1386,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   ///
   /// Resolves the four things that view cannot: trial eligibility, price, the UPI app, social proof.
   Widget _paywall(
-    _Palette p,
+    ArulPalette p,
     Entitlement? entitlement,
     bool purchaseBusy,
     PurchaseResumable? resumable, {
@@ -1558,7 +1530,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   bool _showSocialProof(AppConfigModel? config) =>
       config?.featureFlags['show_social_proof'] != false;
 
-  Widget _planHome(_Palette p, SubscriptionModel sub, bool purchaseBusy) {
+  Widget _planHome(ArulPalette p, SubscriptionModel sub, bool purchaseBusy) {
     final trialing =
         sub.shownStatus(DateTime.now()) == SubscriptionStatus.trialing;
     final renewalDate = trialing
@@ -1584,7 +1556,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   /// This is why `cancelled` is in the entitlement IN-list.
   /// Resubscribe runs the SAME purchase flow inline (UPI picker + CTA) — no second screen.
   Widget _resubscribeHome(
-    _Palette p,
+    ArulPalette p,
     SubscriptionModel sub,
     bool purchaseBusy,
     PurchaseResumable? resumable,
@@ -1829,7 +1801,7 @@ class _QrMandateSheetState extends ConsumerState<_QrMandateSheet> {
           // than the spec asks of a scanner, and the one on the other phone may be an old camera.
           DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: ArulTokens.qrPaper,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: ArulTokens.paywallBorderControl),
             ),
@@ -1844,16 +1816,16 @@ class _QrMandateSheetState extends ConsumerState<_QrMandateSheet> {
                 // by a second phone, and a mandate link is long enough that a retry costs the
                 // person most of a five-minute window.
                 errorCorrectionLevel: QrErrorCorrectLevel.H,
-                backgroundColor: Colors.white,
+                backgroundColor: ArulTokens.qrPaper,
                 // Pure black, not the maroon: scanners threshold on luminance and a brand colour
                 // buys nothing here but a lower success rate on a cheap camera.
                 eyeStyle: const QrEyeStyle(
                   eyeShape: QrEyeShape.square,
-                  color: Colors.black,
+                  color: ArulTokens.qrInk,
                 ),
                 dataModuleStyle: const QrDataModuleStyle(
                   dataModuleShape: QrDataModuleShape.square,
-                  color: Colors.black,
+                  color: ArulTokens.qrInk,
                 ),
               ),
             ),

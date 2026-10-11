@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_dialog.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../theme/arul_tokens.dart';
 import 'paywall_ornaments.dart';
@@ -12,33 +13,15 @@ Future<bool?> showPremiumConfirmDialog(
   required String message,
   required String confirmLabel,
   required String cancelLabel,
-}) => showGeneralDialog<bool>(
-  context: context,
-  barrierDismissible: true,
+}) => showArulDialog<bool>(
+  context,
   barrierLabel: title,
-  barrierColor: ArulTokens.dialogOverlay,
-  transitionDuration: ArulTokens.dialogEnter,
-  pageBuilder: (_, _, _) => _PremiumConfirmDialog(
+  builder: (_) => _PremiumConfirmDialog(
     title: title,
     message: message,
     confirmLabel: confirmLabel,
     cancelLabel: cancelLabel,
   ),
-  transitionBuilder: (context, animation, _, child) {
-    if (context.reduceMotion) return child;
-    final t = CurvedAnimation(parent: animation, curve: ArulTokens.sheetCurve);
-    return FadeTransition(
-      opacity: t,
-      child: AnimatedBuilder(
-        animation: t,
-        builder: (_, child) => Transform.translate(
-          offset: Offset(0, (1 - t.value) * 24),
-          child: child,
-        ),
-        child: child,
-      ),
-    );
-  },
 );
 
 class _PremiumConfirmDialog extends StatelessWidget {

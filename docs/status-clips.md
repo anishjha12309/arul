@@ -13,6 +13,20 @@ limited `yuv420p`, `+faststart`, ~2 Mbps (1.5 Mbps when 2 overshoots), AAC-LC 12
 Status composer documents only 720p/1080p: probe one clip through it on a real phone before encoding a
 library. `workers/tools/local-seed-statuses.mjs` runs this recipe and validates the output.
 
+**A user submission (`kind: status`) must arrive already on this rule — H.264 MP4 with sound, ≤30 s,
+≤10 MB, video-rule dimensions** — because nothing transcodes server-side. `/media/upload-url` refuses a
+non-MP4 or over-10 MB claim; `/media/confirm-upload` runs this `status` role on the landed bytes and
+deletes a failure, returning its code ([architecture.md](architecture.md) §Uploads).
+
+**The app makes a picked clip compliant on the phone** (`video_plan.dart`, Android 12+): the largest size
+on the video rule within 2% of the clip's own aspect, never above it (1080×1920 → 1024×1824, 720×1280 →
+640×1152), H.264 High ~2 Mbps, AAC 128k, cut at 29.8 s. **One retry over 10 MB steps the SIZE down
+too**, aimed at 85% of the cap: MediaTek's AVC encoder ignores the bitrate in every mode (A001: 2 and
+1.5 Mbps both wrote 4.3, a 16.7 MB clip), has no CBR (asking for it fails the export), and the software
+encoder's slow-CPU variant caps near 410×730 — only the pixel count moves its bytes. Two recipe
+steps are skipped: the −14 LUFS `loudnorm` (no on-device equivalent) and the 48 kHz resample. A clip
+with no audio track is refused before converting, as the server would refuse it.
+
 **Which clips reach production is the owner's call, per library**: WhatsApp's Share to Status terms make
 us warrant the rights. The owner took that risk for the third-party Crafto set's Tamil and Telugu clips
 (categories `tamil`, `telugu`); never widen an upload to another language without asking.

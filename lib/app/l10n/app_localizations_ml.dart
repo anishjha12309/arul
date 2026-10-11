@@ -588,6 +588,55 @@ class AppLocalizationsMl extends AppLocalizations {
   String get uploadComingSoonToast => 'അപ്‌ലോഡ് ഉടൻ വരുന്നു.';
 
   @override
+  String get uploadKindStatus => 'സ്റ്റാറ്റസ്';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'ഒരു വീഡിയോ തിരഞ്ഞെടുക്കുക';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'ശബ്ദമുള്ള ഏത് വീഡിയോയും. അത് 30 സെക്കൻഡായി ചുരുക്കും.';
+
+  @override
+  String get uploadTitleHintStatus => 'ഉദാ. തൈപ്പൂയം സ്പെഷ്യൽ';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'അനുവദിച്ച സ്റ്റാറ്റസ് വീഡിയോകൾ നിങ്ങളുടെ പേരോടെ സ്റ്റാറ്റസ് ടാബിൽ വരും';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'നിങ്ങളുടെ സ്റ്റാറ്റസ് വീഡിയോ ഉടൻ പരിശോധിക്കും. അതുവരെ — Arul ഇഷ്ടപ്പെടുന്ന ആരെയെങ്കിലും അറിയാമോ?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'നിങ്ങളുടെ വീഡിയോ തയ്യാറാകുന്നു… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'ഈ വീഡിയോയിൽ ശബ്ദമില്ല. സ്റ്റാറ്റസിന് സംഗീതം വേണം.';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'വീഡിയോകൾ തയ്യാറാക്കാൻ Android 12 അല്ലെങ്കിൽ പുതിയ പതിപ്പ് വേണം.';
+
+  @override
+  String get uploadVideoFailed =>
+      'ഈ വീഡിയോ തയ്യാറാക്കാനായില്ല. മറ്റൊന്ന് ശ്രമിക്കൂ.';
+
+  @override
+  String get uploadFileRejected =>
+      'ഈ ഫയൽ ഞങ്ങളുടെ പരിശോധനയിൽ പാസായില്ല. മറ്റൊന്ന് ശ്രമിക്കൂ.';
+
+  @override
+  String get uploadTooManyPending =>
+      'നിങ്ങളുടെ അപ്‌ലോഡുകൾ പരിശോധനയ്ക്കായി കാത്തിരിക്കുന്നു. അവ പരിശോധിച്ച ശേഷം വീണ്ടും ശ്രമിക്കൂ.';
+
+  @override
+  String get uploadChangeFile => 'മാറ്റുക';
+
+  @override
   String get premiumNavTitle => 'സബ്‌സ്ക്രിപ്ഷൻ';
 
   @override

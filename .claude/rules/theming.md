@@ -12,6 +12,10 @@ paths:
   CustomPainter ARTWORK (the ringtone tile's grounds and ink, and every painted motif — those are
   pictures, not chrome, and must NOT become tokens), and `Color(0x00000000)` as a system-bar
   sentinel.
+- **Every widget reads roles from `ArulPalette.of(context)` and gaps from `ArulSpace`** (both built on
+  `ArulTokens` values): no `isDark ? … : …` colour pair, no spacing literal. A missing role is added to
+  the palette, never picked at the call site. `test/app/theme/colour_tokens_guard_test.dart` fails on a
+  raw colour or a picked pair outside the theme files and the artwork allowlist.
 - **Schemes are hand-specified, NOT `ColorScheme.fromSeed`** (it invents secondary/tertiary).
   **Never seed from device wallpaper or dynamic color.**
 - Light, Dark and System are all required, and the choice is persisted.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
+import '../../theme/arul_tokens.dart';
 import 'arul_button.dart';
 
 /// Definition of Done -> no async surface may show a blank screen or an endless spinner -> each one
@@ -49,19 +49,19 @@ class StateView extends StatelessWidget {
     final theme = Theme.of(context);
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(Gap.xl),
+        padding: const EdgeInsets.all(ArulSpace.s24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 44, color: ArulColors.gold),
-            const SizedBox(height: Gap.lg),
+            Icon(icon, size: 44, color: ArulTokens.gold),
+            const SizedBox(height: ArulSpace.s16),
             Text(
               title,
               textAlign: TextAlign.center,
               style: theme.textTheme.titleLarge,
             ),
             if (message != null) ...[
-              const SizedBox(height: Gap.sm),
+              const SizedBox(height: ArulSpace.s8),
               Text(
                 message!,
                 textAlign: TextAlign.center,
@@ -69,7 +69,7 @@ class StateView extends StatelessWidget {
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
-              const SizedBox(height: Gap.xl),
+              const SizedBox(height: ArulSpace.s24),
               ArulButton(
                 label: actionLabel!,
                 onPressed: onAction,

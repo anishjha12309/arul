@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
-import '../theme/tokens.dart';
 
 class Skeleton extends StatefulWidget {
   const Skeleton({
     super.key,
-    this.borderRadius = Radii.cardShape,
+    this.borderRadius = const BorderRadius.all(
+      Radius.circular(ArulTokens.cardRadius),
+    ),
     this.onMedia = false,
   });
 
@@ -57,10 +59,10 @@ class _SkeletonState extends State<Skeleton>
     // Over media the sweep stays dark-on-dark, never a coloured flash -> on a surface it follows the
     // theme and lifts toward the brand hue.
     final base = widget.onMedia
-        ? ArulColors.ink
+        ? ArulTokens.darkSurface
         : scheme.surfaceContainerHighest;
     final hi = widget.onMedia
-        ? ArulColors.inkVariant
+        ? ArulTokens.skeletonHighlight
         : Color.lerp(base, scheme.primary, 0.22)!;
     return RepaintBoundary(
       child: AnimatedBuilder(

@@ -23,6 +23,7 @@ import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
 import '../../premium/providers/entitlement_provider.dart';
@@ -528,7 +529,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final offline = ref.watch(isOnlineProvider).value == false;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+    final p = ArulPalette.of(context);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       // The frame follows the app theme, so the status/nav icons do too.
@@ -542,7 +543,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-        backgroundColor: frameColor,
+        backgroundColor: p.surface,
         body: SafeArea(
           child: Column(
             children: [
@@ -657,7 +658,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     // behind the pager.
     final cardBottom = geo.underhang + geo.peek + FeedCardGeometry.gap;
 
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final l10n = AppLocalizations.of(context);
 
     return Stack(
@@ -680,7 +681,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
               // Same end state, reached in one frame -> the mark is present or absent, never fading.
               duration: context.reduceMotion ? Duration.zero : Motion.breathe,
               curve: Motion.settleCurve,
-              child: Center(child: ReelEndMark(isDark: isDark)),
+              child: const Center(child: ReelEndMark()),
             ),
           ),
         ),
@@ -698,7 +699,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
               return _refreshCatalog();
             },
             color: ArulTokens.gold,
-            backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
+            backgroundColor: p.surface,
             child: PageView.builder(
               controller: _pagerFor(geo, geo.pagerHeight(h)),
               scrollDirection: Axis.vertical,

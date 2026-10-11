@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 import 'arul_line_icons.dart';
@@ -76,6 +77,7 @@ class _ArulIconTapState extends State<ArulIconTap> {
   @override
   Widget build(BuildContext context) {
     final glyph = widget.glyph;
+    final p = ArulPalette.of(context);
     final dip = AnimatedOpacity(
       opacity: _pressed && !context.reduceMotion ? 0.55 : 1,
       duration: context.reduceMotion ? Duration.zero : Motion.pressDip,
@@ -84,14 +86,9 @@ class _ArulIconTapState extends State<ArulIconTap> {
           : ArulLineIcon(
               glyph: glyph,
               size: widget.size,
-              color:
-                  widget.color ??
-                  (Theme.of(context).brightness == Brightness.dark
-                      ? ArulTokens.gold
-                      : ArulTokens.lightText),
+              color: widget.color ?? p.chromeInk,
             ),
     );
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final Widget box = glyph == null
         ? Center(child: dip)
         // The band's 48 is the target; the eye sees the 34 control box, on the title's line.
@@ -102,14 +99,8 @@ class _ArulIconTapState extends State<ArulIconTap> {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isDark
-                      ? ArulTokens.goldTintFill12
-                      : ArulTokens.maroonTintFill07,
-                  border: Border.all(
-                    color: isDark
-                        ? ArulTokens.goldBorder35
-                        : ArulTokens.maroonBorder18,
-                  ),
+                  color: p.accentTint,
+                  border: Border.all(color: p.rim),
                 ),
                 child: SizedBox.square(
                   dimension: ArulTokens.headerControlSize,

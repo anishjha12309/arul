@@ -89,6 +89,29 @@ void main() {
     );
   });
 
+  group('UploadConstraints (status)', () {
+    test('a status is an MP4 of at most 10MB, the Worker QC cap', () {
+      expect(UploadConstraints.maxBytes('status', 'live'), 10 * 1024 * 1024);
+      expect(UploadConstraints.allowedTypes('status', 'live'), {'video/mp4'});
+      expect(UploadConstraints.maxLabel('status', 'live'), '10MB');
+    });
+
+    test('videos the phone converts still read as videos before it does', () {
+      expect(UploadConstraints.mimeFromName('a.MOV'), 'video/quicktime');
+      expect(UploadConstraints.mimeFromName('a.3gp'), 'video/3gpp');
+      expect(UploadConstraints.mimeFromName('a.mkv'), 'video/x-matroska');
+      expect(UploadConstraints.mimeFromName('a.webm'), 'video/webm');
+    });
+
+    test('a kind\'s name is the wire value the Worker and the CMS key on', () {
+      expect(UploadKind.values.map((k) => k.name), [
+        'wallpaper',
+        'ringtone',
+        'status',
+      ]);
+    });
+  });
+
   group('UploadNotifier.submit', () {
     setUp(() => FlutterSecureStorage.setMockInitialValues({}));
 
@@ -180,6 +203,8 @@ void main() {
         final s = c.read(uploadProvider);
         expect(s, isA<UploadError>());
         expect((s as UploadError).message, 'File too large');
+        // The screen words its toast from the code, never from the English message.
+        expect(s.code, 'too_large');
       },
     );
 

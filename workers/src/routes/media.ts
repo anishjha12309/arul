@@ -6,7 +6,7 @@ import { presignGet, presignPut, SUBMISSION_INFIX } from "../lib/r2.js";
 import { getDb } from "../lib/db.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { MAX_BYTES_BY_MIME as ALLOWED } from "../lib/media-constraints.js";
-import { verifyMediaObject } from "../lib/media-verify.js";
+import { STATUS_VIDEO, verifyMediaObject } from "../lib/media-verify.js";
 
 /**
  * `counterFor` names the popularity column this grant bumps, or null for none.
@@ -144,14 +144,14 @@ export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Re
   const sub = await requireAuth(c);
   if (!sub) return errorResponse(401, "unauthorized", "Authorization required");
 
-  let body: { key?: string; contentType?: string; size?: number };
+  let body: { key?: string; contentType?: string; size?: number; kind?: string };
   try {
     body = await c.req.json();
   } catch {
     return errorResponse(400, "invalid_body", "Request body must be valid JSON");
   }
 
-  const { key, contentType, size } = body;
+  const { key, contentType, size, kind } = body;
 
   if (!key || typeof key !== "string" || !key.trim()) {
     return errorResponse(400, "bad_key", "key is required");
@@ -167,6 +167,17 @@ export async function handleUploadUrl(c: Context<{ Bindings: Env }>): Promise<Re
   }
   if (!key.includes(SUBMISSION_INFIX)) {
     return errorResponse(400, "bad_key", `key must be under user/<your-id>/submissions/`);
+  }
+
+  // confirm-upload's status QC refuses any other claim anyway -> refusing it here spares a doomed upload
+  if (kind === "status") {
+    if (contentType !== "video/mp4") {
+      return errorResponse(400, "bad_type", `A status must be an MP4 video (got "${contentType}")`);
+    }
+    if (typeof size === "number" && size > STATUS_VIDEO.maxBytes) {
+      const mb = Math.round(STATUS_VIDEO.maxBytes / (1024 * 1024));
+      return errorResponse(400, "too_large", `File too large. Max is ${mb}MB for a status`);
+    }
   }
 
   const maxBytes = ALLOWED[contentType];
@@ -212,9 +223,9 @@ export async function handleConfirmUpload(c: Context<{ Bindings: Env }>): Promis
 
   const { kind, fileKey, title, category } = body;
   // Only kinds the moderation queue can actually publish -> approve rejects an unknown kind
-  // Such a row would sit pending forever while pinning its bytes -> the CMS's `userUploadKinds` must list both
-  if (kind !== "wallpaper" && kind !== "ringtone") {
-    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone");
+  // Such a row would sit pending forever while pinning its bytes -> the CMS's `userUploadKinds` must list all three
+  if (kind !== "wallpaper" && kind !== "ringtone" && kind !== "status") {
+    return errorResponse(400, "invalid_kind", "kind must be one of: wallpaper, ringtone, status");
   }
   if (!fileKey || typeof fileKey !== "string") {
     return errorResponse(400, "missing_field", "fileKey is required");

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/motion.dart';
-import '../../../app/theme/tokens.dart';
 import '../../../app/widgets/skeleton.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
 
 /// One grid tile — pure image, nothing else.
@@ -28,7 +28,9 @@ class WallpaperTile extends ConsumerWidget {
   final Wallpaper wallpaper;
   final VoidCallback onTap;
 
-  static const radius = Radii.tileShape;
+  static const radius = BorderRadius.all(
+    Radius.circular(ArulTokens.tileRadius),
+  );
 
   /// Decode at the tile's real size, not the source's.
   ///

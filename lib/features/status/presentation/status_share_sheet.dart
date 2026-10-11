@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/widgets/arul_pressable.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/status_action_provider.dart';
 
@@ -40,8 +42,7 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
     // The brand mark the pill already carries: a person finds WhatsApp by its logo first. All
     // three cells open WhatsApp, so each wears the logo and a badge tells Groups and Status apart.
     final targets = <(StatusShareTarget, String, Widget)>[
@@ -50,11 +51,7 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
         l10n.statusShareGroups,
         const _WhatsAppMark(badge: Icons.groups_rounded),
       ),
-      (
-        StatusShareTarget.chat,
-        l10n.statusShareChat,
-        const _WhatsAppMark(),
-      ),
+      (StatusShareTarget.chat, l10n.statusShareChat, const _WhatsAppMark()),
       (
         StatusShareTarget.status,
         l10n.statusShareStatus,
@@ -63,7 +60,7 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
       (
         StatusShareTarget.more,
         l10n.statusShareMore,
-        Icon(Icons.more_horiz_rounded, size: _markSize, color: accent),
+        Icon(Icons.more_horiz_rounded, size: _markSize, color: p.accent),
       ),
     ];
 
@@ -75,9 +72,7 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
         children: [
           Text(
             l10n.statusShareTitle,
-            style: ArulTokens.sheetTitle.copyWith(
-              color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
-            ),
+            style: ArulTokens.sheetTitle.copyWith(color: p.text),
           ),
           const SizedBox(height: 16),
           // Equal cells, and ONE type size across them: the row shrinks to its widest word, so a
@@ -119,7 +114,7 @@ class _StatusShareSheetBodyState extends State<_StatusShareSheetBody> {
               child: TextButton(
                 onPressed: _close,
                 style: TextButton.styleFrom(
-                  foregroundColor: accent,
+                  foregroundColor: p.accent,
                   minimumSize: const Size(
                     ArulTokens.minHitTarget * 2,
                     ArulTokens.minHitTarget,
@@ -178,7 +173,7 @@ class _WhatsAppMark extends StatelessWidget {
     );
     final badge = this.badge;
     if (badge == null) return logo;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     return SizedBox.square(
       dimension: _StatusShareSheetBodyState._markSize,
       child: Stack(
@@ -192,21 +187,12 @@ class _WhatsAppMark extends StatelessWidget {
               width: _badgeSize,
               height: _badgeSize,
               decoration: BoxDecoration(
-                color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+                color: p.accent,
                 shape: BoxShape.circle,
                 // The sheet's own surface as a ring -> the badge reads as ON the logo, not a blot.
-                border: Border.all(
-                  color: isDark
-                      ? ArulTokens.darkSheetSurface
-                      : ArulTokens.cardBgLight,
-                  width: 1.5,
-                ),
+                border: Border.all(color: p.sheet, width: 1.5),
               ),
-              child: Icon(
-                badge,
-                size: 10,
-                color: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
-              ),
+              child: Icon(badge, size: 10, color: p.onAccent),
             ),
           ),
         ],
@@ -215,7 +201,7 @@ class _WhatsAppMark extends StatelessWidget {
   }
 }
 
-class _TargetCell extends StatefulWidget {
+class _TargetCell extends StatelessWidget {
   const _TargetCell({
     required this.label,
     required this.labelStyle,
@@ -237,75 +223,39 @@ class _TargetCell extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_TargetCell> createState() => _TargetCellState();
-}
-
-class _TargetCellState extends State<_TargetCell> {
-  bool _pressed = false;
-
-  void _setPressed(bool pressed) {
-    if (_pressed != pressed) setState(() => _pressed = pressed);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fill = _pressed
-        ? ArulTokens.goldTintFill14
-        : (isDark ? ArulTokens.cardBgDark05 : ArulTokens.maroonTintFill07);
-    final border = _pressed
-        ? ArulTokens.gold
-        : (isDark ? ArulTokens.cardBorderDark14 : ArulTokens.cardBorderLight);
-
-    return Semantics(
-      container: true,
-      button: true,
-      label: widget.label,
-      identifier: widget.identifier,
-      onTap: widget.onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        // Picking a target hands the clip to another app -> a commit, the pill's own weight.
-        onTapDown: (_) {
-          _setPressed(true);
-          ArulHaptics.firm();
-        },
-        onTapUp: (_) => _setPressed(false),
-        onTapCancel: () => _setPressed(false),
-        onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(
-            _TargetCell.padH,
-            14,
-            _TargetCell.padH,
-            12,
-          ),
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
-            border: Border.all(color: border, width: _pressed ? 1.5 : 1),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              widget.mark,
-              const SizedBox(height: 8),
-              // A guard only: the shared size already fits, but Android's non-linear font scaling can
-              // leave a word a hair wide, and a label is never clipped.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  textAlign: TextAlign.center,
-                  style: widget.labelStyle.copyWith(
-                    color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
-                  ),
-                ),
+    final p = ArulPalette.of(context);
+    return ArulPressable(
+      semanticLabel: label,
+      identifier: identifier,
+      // Picking a target hands the clip to another app -> a commit, the pill's own weight.
+      haptic: ArulHapticStyle.firm,
+      pressedScale: 0.96,
+      onTap: onTap,
+      builder: (context, pressed) => Container(
+        padding: const EdgeInsets.fromLTRB(padH, 14, padH, 12),
+        decoration: BoxDecoration(
+          color: pressed ? ArulTokens.goldTintFill14 : p.tile,
+          borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
+          border: Border.all(color: pressed ? ArulTokens.gold : p.border),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            mark,
+            const SizedBox(height: 8),
+            // A guard only: the shared size already fits, but Android's non-linear font scaling can
+            // leave a word a hair wide, and a label is never clipped.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: labelStyle.copyWith(color: p.text),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

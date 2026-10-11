@@ -194,6 +194,17 @@ const ROUTES = [
     when: ["lib/features/share/**", "lib/features/wallpapers/**/*share*"],
     docs: ["docs/share.md", "docs/edge-cases.md §Share"],
   },
+  {
+    when: [
+      "lib/app/widgets/arul_toast.dart",
+      "lib/app/widgets/arul_sheet.dart",
+      "lib/app/widgets/arul_dialog.dart",
+      "lib/app/widgets/arul_surface.dart",
+      "lib/app/widgets/arul_pressable.dart",
+      "lib/app/widgets/arul_ornaments.dart",
+    ],
+    docs: ["docs/overlays.md", ".claude/rules/overlays.md"],
+  },
   { when: ["lib/theme/**", "lib/app/theme/**"], docs: ["docs/ui-direction.md", ".claude/rules/theming.md"] },
   {
     when: [

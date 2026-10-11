@@ -416,6 +416,52 @@ describe("POST /media/upload-url", () => {
     expect(body.uploadUrl).toContain("X-Amz-Signature=");
     expect(body.publicUrl).toBe(`https://cdn.hsrutility.com/${key}`);
   });
+
+  describe("kind=status", () => {
+    const MB = 1024 * 1024;
+    const presign = async (body: Record<string, unknown>) => {
+      const { env } = envWithSql([]);
+      const jsonBody = { key: `user/${USER_ID}/submissions/clip.mp4`, ...body };
+      return handleUploadUrl(makeCtx({ env, token: await token(), jsonBody }));
+    };
+    const codeOf = async (res: Response) => ((await res.json()) as { error: { code: string } }).error.code;
+
+    it("presigns an MP4 of at most 10 MB", async () => {
+      const res = await presign({ kind: "status", contentType: "video/mp4", size: 10 * MB });
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { uploadUrl: string }).uploadUrl).toContain("X-Amz-Signature=");
+    });
+
+    it("too_large over 10 MB, though video/mp4 is otherwise allowed 50 MB", async () => {
+      const res = await presign({ kind: "status", contentType: "video/mp4", size: 10 * MB + 1 });
+      expect(res.status).toBe(400);
+      expect(await codeOf(res)).toBe("too_large");
+    });
+
+    it("bad_type for anything but video/mp4, even a type another kind may upload", async () => {
+      for (const contentType of ["image/jpeg", "audio/mp4", "video/quicktime"]) {
+        const res = await presign({ kind: "status", contentType, size: MB });
+        expect(res.status, contentType).toBe(400);
+        expect(await codeOf(res), contentType).toBe("bad_type");
+      }
+    });
+
+    it("the same 20 MB MP4 still presigns as a wallpaper, an unknown kind or no kind", async () => {
+      for (const kind of ["wallpaper", "sticker", undefined]) {
+        const res = await presign({ kind, contentType: "video/mp4", size: 20 * MB });
+        expect(res.status, String(kind)).toBe(200);
+      }
+    });
+
+    it("a ringtone keeps its 15 MB audio cap", async () => {
+      const key = `user/${USER_ID}/submissions/tone.mp3`;
+      const ok = await presign({ key, kind: "ringtone", contentType: "audio/mpeg", size: 14 * MB });
+      expect(ok.status).toBe(200);
+      const big = await presign({ key, kind: "ringtone", contentType: "audio/mpeg", size: 16 * MB });
+      expect(big.status).toBe(400);
+      expect(await codeOf(big)).toBe("too_large");
+    });
+  });
 });
 
 // ── POST /media/confirm-upload ────────────────────────────────────────────────
@@ -449,7 +495,7 @@ describe("POST /media/confirm-upload", () => {
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_key");
   });
 
-  it("invalid_kind when kind is neither wallpaper nor ringtone", async () => {
+  it("invalid_kind when kind is not wallpaper, ringtone or status", async () => {
     const { env } = envWithSql([]);
     const res = await handleConfirmUpload(
       makeCtx({
@@ -729,6 +775,70 @@ describe("POST /media/confirm-upload", () => {
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("bad_type");
     expect(deletes).toContain(key);
+  });
+
+  describe("kind=status", () => {
+    const key = `user/${USER_ID}/submissions/clip.mp4`;
+    const withMusic = (opts: Parameters<typeof mp4Fixture>[0] = {}) =>
+      mp4Fixture({ withAudio: true, ...opts });
+    const confirm = async (env: ReturnType<typeof envWithSql>["env"]) =>
+      handleConfirmUpload(
+        makeCtx({
+          env,
+          token: await token(),
+          jsonBody: { kind: "status", fileKey: key, title: "Vel", category: "tamil" },
+        }),
+      );
+
+    it("accepts a 2:3 H.264 clip with music and files it under its language", async () => {
+      const { bucket, deletes } = makeQcR2({
+        [key]: { bytes: withMusic({ width: 1024, height: 1536, durationS: 20 }), contentType: "video/mp4" },
+      });
+      const { env, capturedArgs } = envWithSql([{ id: "sm-s1", status: "pending" }], { R2: bucket });
+      const res = await confirm(env);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ id: "sm-s1", status: "pending" });
+      expect(deletes).toHaveLength(0);
+      const insert = capturedArgs.find((args) =>
+        (args[0] as string[]).join("?").includes("INSERT INTO content_submissions"),
+      );
+      expect(insert?.slice(1)).toEqual([USER_ID, "status", key, "Vel", "tamil"]);
+    });
+
+    it("auto-rejects a clip off the status rule: QC code returned, object deleted, no row", async () => {
+      // The silent clip passes the WALLPAPER role -> it proves the status role is the one applied
+      for (const [label, bytes, contentType, code] of [
+        ["silent 1024×1824 H.264", mp4Fixture({ durationS: 20 }), "video/mp4", "bad_type"],
+        ["31 s", withMusic({ durationS: 31 }), "video/mp4", "too_large"],
+        ["1080×1920", withMusic({ width: 1080, height: 1920 }), "video/mp4", "bad_dimensions"],
+        ["HEVC", withMusic({ codec: "hev1" }), "video/mp4", "bad_codec"],
+        ["a JPEG", jpegFixture(), "image/jpeg", "bad_type"],
+      ] as const) {
+        const { bucket, deletes } = makeQcR2({ [key]: { bytes, contentType } });
+        const { env, capturedArgs } = envWithSql([{ id: "sm-s2", status: "pending" }], { R2: bucket });
+        const res = await confirm(env);
+        expect(res.status, label).toBe(400);
+        expect(((await res.json()) as { error: { code: string } }).error.code, label).toBe(code);
+        expect(deletes, label).toContain(key);
+        expect(capturedArgs, label).toHaveLength(0);
+      }
+    });
+
+    it("auto-rejects a status whose REAL size is over 10 MB, whatever its presign claimed", async () => {
+      const { bucket, deletes } = makeQcR2({
+        [key]: { bytes: withMusic(), contentType: "video/mp4" },
+      });
+      const origHead = bucket.head.bind(bucket);
+      (bucket as unknown as { head: unknown }).head = async (k: string) => {
+        const h = await origHead(k);
+        return h ? { ...h, size: 10 * 1024 * 1024 + 1 } : null;
+      };
+      const { env } = envWithSql([], { R2: bucket });
+      const res = await confirm(env);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe("too_large");
+      expect(deletes).toContain(key);
+    });
   });
 });
 

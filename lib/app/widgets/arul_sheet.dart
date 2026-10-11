@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 import '../theme/theme.dart';
+import 'arul_pressable.dart';
+import 'arul_surface.dart';
 
 /// Presents [builder]'s content in an Arul-styled modal bottom sheet.
-/// [gradient] true gives the premium sheet's `#241014 → #1A0B0F` top.
 /// [brightness] pins the sheet to one form instead of the app theme -> for a caller whose own
 /// surface does not follow that theme (the sign-in wall is always dark over video, so its sheet
 /// follows the DEVICE instead). It goes on as a `Theme` ABOVE [ArulSheet], not inside the builder:
@@ -15,7 +17,6 @@ import '../theme/theme.dart';
 Future<T?> showArulSheet<T>(
   BuildContext context, {
   required WidgetBuilder builder,
-  bool gradient = false,
   bool isDismissible = true,
   bool enableDrag = true,
   bool topHairline = true,
@@ -35,9 +36,11 @@ Future<T?> showArulSheet<T>(
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: ArulTokens.sheetOverlay,
+    sheetAnimationStyle: context.reduceMotion
+        ? AnimationStyle.noAnimation
+        : Motion.sheet,
     builder: (context) {
       final sheet = ArulSheet(
-        gradient: gradient,
         topHairline: topHairline,
         surfaceColor: surfaceColor,
         // A handle promises the drag; a sheet that cannot be dragged away draws none.
@@ -55,11 +58,10 @@ Future<T?> showArulSheet<T>(
   );
 }
 
-class ArulSheet extends StatefulWidget {
+class ArulSheet extends StatelessWidget {
   const ArulSheet({
     super.key,
     required this.child,
-    this.gradient = false,
     this.topHairline = true,
     this.surfaceColor,
     this.grabber = true,
@@ -69,98 +71,34 @@ class ArulSheet extends StatefulWidget {
 
   final bool grabber;
 
-  final bool gradient;
-
-  /// The 1px gold-35% top hairline, dark only. Off where it reads as a stray line, not an edge.
+  /// The gold lit edge along the rounded top, on dark.
   final bool topHairline;
 
   final Color? surfaceColor;
 
   @override
-  State<ArulSheet> createState() => _ArulSheetState();
-}
-
-class _ArulSheetState extends State<ArulSheet>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: ArulTokens.sheetEnter,
-  );
-
-  /// Armed from [didChangeDependencies] — `reduceMotion` needs an InheritedWidget lookup, and the
-  /// sheet must never paint one frame of its +24 offset before that answer exists.
-  bool _motionStarted = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_motionStarted) return;
-    _motionStarted = true;
-    if (context.reduceMotion) {
-      _c.value = 1;
-    } else {
-      _c.forward();
-    }
-  }
-
-  late final Animation<double> _t = CurvedAnimation(
-    parent: _c,
-    curve: ArulTokens.sheetCurve,
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    const radius = Radius.circular(ArulTokens.sheetTopRadius);
-
-    final surface = DecoratedBox(
-      decoration: BoxDecoration(
-        color:
-            widget.surfaceColor ??
-            (isDark ? ArulTokens.darkSheetSurface : ArulTokens.cardBgLight),
-        gradient: widget.gradient && isDark
-            ? ArulTokens.sheetGradientDark
-            : null,
-        borderRadius: const BorderRadius.vertical(top: radius),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (widget.grabber) const _Grabber(),
-          Flexible(child: widget.child),
-        ],
-      ),
+    const radius = BorderRadius.vertical(
+      top: Radius.circular(ArulTokens.sheetTopRadius),
     );
-
-    return SafeArea(
-      top: false,
-      child: AnimatedBuilder(
-        animation: _t,
-        builder: (context, child) => Opacity(
-          opacity: _t.value,
-          child: Transform.translate(
-            offset: Offset(0, (1 - _t.value) * 24),
-            child: child,
-          ),
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: radius),
-          child: Stack(
+    return ClipRRect(
+      borderRadius: radius,
+      child: ArulSurface(
+        borderRadius: radius,
+        color: surfaceColor,
+        // A sheet meets the screen's edges and sits on its own scrim: no rim, no lift.
+        rim: false,
+        shadow: const [],
+        litEdge: topHairline,
+        // The ground runs under the gesture bar and only the content keeps clear of it: a sheet
+        // stopped above the bar left a strip of scrim beneath it.
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              surface,
-              if (isDark && widget.topHairline)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(height: 1, color: ArulTokens.goldBorder35),
-                ),
+              if (grabber) const _Grabber(),
+              Flexible(child: child),
             ],
           ),
         ),
@@ -174,16 +112,13 @@ class _Grabber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Container(
         width: ArulTokens.grabberWidth,
         height: ArulTokens.grabberHeight,
         decoration: BoxDecoration(
-          color: isDark
-              ? ArulTokens.grabberColorDark
-              : ArulTokens.grabberColorLight,
+          color: ArulPalette.of(context).grabber,
           borderRadius: BorderRadius.circular(ArulTokens.grabberRadius),
         ),
       ),
@@ -191,7 +126,7 @@ class _Grabber extends StatelessWidget {
   }
 }
 
-/// One option in an Arul sheet — icon chip, title, one short sub, on its own bordered card.
+/// One option in an Arul sheet — icon chip, title, an optional short sub, on its own bordered card.
 /// [selected] is the picker state — gold rim, gold tint, gold type and a check, as on a language
 /// tile. [destructive] is the one irreversible act. A row is never both.
 class ArulSheetRow extends StatelessWidget {
@@ -199,14 +134,18 @@ class ArulSheetRow extends StatelessWidget {
     super.key,
     this.icon,
     this.glyph,
+    this.leading,
     required this.title,
-    required this.sub,
+    this.sub,
     required this.onTap,
     this.haptic = ArulHapticStyle.tap,
     this.identifier,
     this.selected = false,
     this.destructive = false,
-  }) : assert(icon != null || glyph != null, 'a row needs one or the other'),
+  }) : assert(
+         icon != null || glyph != null || leading != null,
+         'a row needs a mark',
+       ),
        assert(
          !(selected && destructive),
          'a row is a choice or an act, never both',
@@ -214,12 +153,15 @@ class ArulSheetRow extends StatelessWidget {
 
   final IconData? icon;
 
-  /// A custom mark, for where a Material icon would be the wrong voice (the brand gopuram).
+  /// A custom mark, for where a Material icon would be the wrong voice (a deity's line art).
   /// Takes the row's resolved ink so it tints with the state.
   final Widget Function(Color color)? glyph;
 
+  /// Replaces the icon chip outright — the premium medallion on the row that leads to /premium.
+  final Widget? leading;
+
   final String title;
-  final String sub;
+  final String? sub;
   final VoidCallback onTap;
 
   /// The beat this row answers with. A picker ticks; an action presses; deleting lands hard.
@@ -235,65 +177,64 @@ class ArulSheetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight;
-    // Gold TYPE dies on ivory -> goldInkLight is the ink role for exactly this (arul_tokens.dart).
-    final goldInk = isDark ? ArulTokens.gold : ArulTokens.goldInkLight;
+    final p = ArulPalette.of(context);
 
-    final fill = selected ? ArulTokens.goldTintFill10 : surface;
+    final fill = selected ? ArulTokens.goldTintFill10 : p.card;
     // On LIGHT the neutral row is already maroon-tinted, so maroonBorder18 / maroonTintFill08 land
     // a percent or two off it and the delete row read identical to its neighbour on device. The rim
     // and chip take the logout pill's values instead — the app's existing destructive voice.
     final border = selected
         ? ArulTokens.gold
         : destructive
-        ? (isDark ? _maroonRimDark : _maroonRimLight)
-        : (isDark ? ArulTokens.cardBorderDark14 : ArulTokens.cardBorderLight);
+        ? p.destructiveRim
+        : p.border;
     // Inverted on a selected row: a quiet well inside the gold card, so the chip does not silt up.
     final chipBg = selected
-        ? surface
+        ? p.card
         : destructive
-        ? (isDark ? _maroonChipDark : _maroonChipLight)
-        : (isDark ? ArulTokens.goldTintFill10 : ArulTokens.maroonTintFill07);
-    // Maroon ink dies on the dark ground -> the logout pill's warm pale, the app's one destructive
-    // voice on dark (`_LogoutButton` derives the same lerp; no token exposes it).
+        ? p.destructiveChip
+        : p.accentTint;
     final accent = selected
-        ? goldInk
+        ? p.goldInk
         : destructive
-        ? (isDark ? _destructiveInkDark : ArulTokens.maroon)
-        : (isDark ? ArulTokens.gold : ArulTokens.maroon);
-    final titleColor = (selected || destructive)
-        ? accent
-        : (isDark ? ArulTokens.darkText : ArulTokens.lightText);
-    final subColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
+        ? p.destructiveInk
+        : p.accent;
+    final titleColor = (selected || destructive) ? accent : p.text;
 
-    final row = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => ArulHaptics.fire(haptic),
+    return ArulPressable(
+      haptic: haptic,
+      identifier: identifier,
+      selected: selected,
       onTap: onTap,
-      child: Container(
+      builder: (context, pressed) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: fill,
+          // Held: the accent's own wash over the ground, the same family as the selected tint.
+          color: pressed ? Color.alphaBlend(p.accentTint, fill) : fill,
           border: Border.all(color: border, width: selected ? 1.5 : 1),
           borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
         ),
         child: Row(
           children: [
-            Container(
-              width: ArulTokens.iconChipSize,
-              height: ArulTokens.iconChipSize,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: chipBg,
-                borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius),
-              ),
-              child:
-                  glyph?.call(accent) ??
-                  Icon(icon, size: ArulTokens.iconChipIconSize, color: accent),
-            ),
+            leading ??
+                Container(
+                  width: ArulTokens.iconChipSize,
+                  height: ArulTokens.iconChipSize,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: chipBg,
+                    borderRadius: BorderRadius.circular(
+                      ArulTokens.iconChipRadius,
+                    ),
+                  ),
+                  child:
+                      glyph?.call(accent) ??
+                      Icon(
+                        icon,
+                        size: ArulTokens.iconChipIconSize,
+                        color: accent,
+                      ),
+                ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -303,41 +244,26 @@ class ArulSheetRow extends StatelessWidget {
                     title,
                     style: ArulTokens.rowTitle.copyWith(color: titleColor),
                   ),
-                  const SizedBox(height: 1),
-                  Text(sub, style: ArulTokens.rowSub.copyWith(color: subColor)),
+                  if (sub case final sub?) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      sub,
+                      style: ArulTokens.rowSub.copyWith(color: p.textSecondary),
+                    ),
+                  ],
                 ],
               ),
             ),
             if (selected) ...[
               const SizedBox(width: 8),
-              Icon(Icons.check_circle, size: 20, color: goldInk),
+              Icon(Icons.check_circle, size: 20, color: p.goldInk),
             ],
           ],
         ),
       ),
-    );
-
-    return Semantics(
-      container: true,
-      button: true,
-      selected: selected,
-      identifier: identifier,
-      child: row,
     );
   }
 }
 
 /// Air between the option cards. Wider than a divider on purpose — separate things, not a list.
 const double kSheetRowGap = 10;
-
-// Derived from ArulTokens.maroon where no token exposes the alpha — the logout pill's own values,
-// so the destructive-leaning surfaces read as one.
-final Color _maroonRimDark = ArulTokens.maroon.withValues(alpha: 0.55);
-final Color _maroonChipDark = ArulTokens.maroon.withValues(alpha: 0.35);
-final Color _maroonRimLight = ArulTokens.maroon.withValues(alpha: 0.35);
-final Color _maroonChipLight = ArulTokens.maroon.withValues(alpha: 0.14);
-final Color _destructiveInkDark = Color.lerp(
-  ArulTokens.ivory,
-  ArulTokens.maroon,
-  0.14,
-)!;

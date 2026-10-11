@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../theme/arul_palette.dart';
 import 'component_themes.dart';
 import 'schemes.dart';
 import 'typography.dart';
@@ -73,6 +74,7 @@ abstract final class ArulTheme {
       snackBarTheme: ArulComponents.snackBar(scheme, text),
       listTileTheme: ArulComponents.listTile(text, muted),
       dividerTheme: ArulComponents.divider(scheme),
+      extensions: [isDark ? ArulPalette.dark : ArulPalette.light],
     );
   }
 }

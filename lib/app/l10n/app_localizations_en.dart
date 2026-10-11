@@ -580,6 +580,55 @@ class AppLocalizationsEn extends AppLocalizations {
   String get uploadComingSoonToast => 'Upload is coming soon.';
 
   @override
+  String get uploadKindStatus => 'Status';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'Choose a video';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'Any video with sound. We trim it to 30 seconds.';
+
+  @override
+  String get uploadTitleHintStatus => 'e.g. Thaipusam special';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'Approved status videos appear in the Status tab with your name';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'We\'ll review your status video shortly. While you wait — know someone who would enjoy Arul?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'Getting your video ready… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'This video has no sound. A status needs music.';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'Preparing videos needs Android 12 or newer.';
+
+  @override
+  String get uploadVideoFailed =>
+      'We couldn\'t prepare this video. Try another one.';
+
+  @override
+  String get uploadFileRejected =>
+      'This file didn\'t pass our checks. Try another one.';
+
+  @override
+  String get uploadTooManyPending =>
+      'You have uploads waiting for review. Try again once they\'re reviewed.';
+
+  @override
+  String get uploadChangeFile => 'Change';
+
+  @override
   String get premiumNavTitle => 'SUBSCRIPTION';
 
   @override

@@ -584,6 +584,55 @@ class AppLocalizationsTe extends AppLocalizations {
   String get uploadComingSoonToast => 'అప్‌లోడ్ త్వరలో వస్తుంది.';
 
   @override
+  String get uploadKindStatus => 'స్టేటస్';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'వీడియోను ఎంచుకోండి';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'సౌండ్ ఉన్న ఏ వీడియో అయినా సరే. దాన్ని 30 సెకన్లకు కుదిస్తాం.';
+
+  @override
+  String get uploadTitleHintStatus => 'ఉదా. తైపూసం స్పెషల్';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'ఆమోదించిన స్టేటస్ వీడియోలు మీ పేరుతో స్టేటస్ ట్యాబ్‌లో కనిపిస్తాయి';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'మీ స్టేటస్ వీడియోను త్వరలో చెక్ చేస్తాం. ఈ లోపు — Arul నచ్చే వాళ్లు ఎవరైనా తెలుసా?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'మీ వీడియో సిద్ధమవుతోంది… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'ఈ వీడియోలో సౌండ్ లేదు. స్టేటస్‌కు సంగీతం కావాలి.';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'వీడియోలను సిద్ధం చేయడానికి Android 12 లేదా కొత్త వెర్షన్ కావాలి.';
+
+  @override
+  String get uploadVideoFailed =>
+      'ఈ వీడియోను సిద్ధం చేయలేకపోయాం. మరొకటి ప్రయత్నించండి.';
+
+  @override
+  String get uploadFileRejected =>
+      'ఈ ఫైల్ మా తనిఖీలో పాస్ కాలేదు. మరొకటి ప్రయత్నించండి.';
+
+  @override
+  String get uploadTooManyPending =>
+      'మీ అప్‌లోడ్‌లు సమీక్ష కోసం వేచి ఉన్నాయి. అవి సమీక్షించబడిన తర్వాత మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get uploadChangeFile => 'మార్చు';
+
+  @override
   String get premiumNavTitle => 'సబ్‌స్క్రిప్షన్';
 
   @override

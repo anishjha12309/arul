@@ -2,11 +2,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/theme/motion.dart';
-import '../../../app/theme/tokens.dart';
 import '../../../app/widgets/reel/reel_card.dart';
 import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/config/app_config.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_tokens.dart';
 import 'feed_states.dart';
 import 'wallpaper_tile.dart';
 
@@ -46,7 +46,7 @@ class ViewerMedia extends StatelessWidget {
 
     return ColoredBox(
       // Shows before the poster decodes and in any letterbox -> ink, never white.
-      color: ArulColors.ink,
+      color: ArulTokens.darkSurface,
       child: Stack(
         fit: StackFit.expand,
         children: [

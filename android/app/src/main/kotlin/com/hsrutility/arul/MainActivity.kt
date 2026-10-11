@@ -48,9 +48,11 @@ import com.hsrutility.arul.share.ShareWatermarkChannel
 import com.hsrutility.arul.status.StatusSaveChannel
 import com.hsrutility.arul.update.AppUpdateChannel
 import com.hsrutility.arul.upload.MediaPickChannel
+import com.hsrutility.arul.upload.VideoPrepChannel
 import com.hsrutility.arul.wallpaper.WallpaperApplyChannel
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
@@ -112,6 +114,7 @@ class MainActivity : FlutterFragmentActivity() {
     private var shareWatermarkChannel: ShareWatermarkChannel? = null
     private var statusSaveChannel: StatusSaveChannel? = null
     private var mediaPickChannel: MediaPickChannel? = null
+    private var videoPrepChannel: VideoPrepChannel? = null
     private var appUpdateChannel: AppUpdateChannel? = null
 
     // Registered as a member -> the Activity Result API requires it before STARTED, and
@@ -369,6 +372,17 @@ class MainActivity : FlutterFragmentActivity() {
             MediaPickChannel.CHANNEL,
         ).setMethodCallHandler(mediaPick)
 
+        val videoPrep = VideoPrepChannel(applicationContext)
+        videoPrepChannel = videoPrep
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            VideoPrepChannel.CHANNEL,
+        ).setMethodCallHandler(videoPrep)
+        EventChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            VideoPrepChannel.PROGRESS_CHANNEL,
+        ).setStreamHandler(videoPrep)
+
         // Play in-app update (docs/app-update.md) -> its flow result comes back through appUpdateLauncher.
         val updateMethodChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -473,6 +487,8 @@ class MainActivity : FlutterFragmentActivity() {
         statusSaveChannel = null
         mediaPickChannel?.dispose()
         mediaPickChannel = null
+        videoPrepChannel?.dispose()
+        videoPrepChannel = null
         deferredLinkChannel?.setMethodCallHandler(null)
         deferredLinkChannel = null
         super.cleanUpFlutterEngine(flutterEngine)

@@ -13,8 +13,6 @@ class ArulHairlineLoader extends StatefulWidget {
 
 class _ArulHairlineLoaderState extends State<ArulHairlineLoader>
     with SingleTickerProviderStateMixin {
-  static const _transparentGold = Color.fromRGBO(212, 160, 23, 0);
-
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: ArulTokens.hairlineLoop,
@@ -68,10 +66,10 @@ class _ArulHairlineLoaderState extends State<ArulHairlineLoader>
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      _transparentGold,
+                      ArulTokens.goldClear,
                       ArulTokens.gold,
                       ArulTokens.gold,
-                      _transparentGold,
+                      ArulTokens.goldClear,
                     ],
                     stops: [0.0, 0.4, 0.6, 1.0],
                   ),

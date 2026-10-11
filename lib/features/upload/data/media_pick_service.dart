@@ -15,6 +15,9 @@ enum MediaPickKind {
   /// The Android Photo Picker: images and video, never audio.
   visual,
 
+  /// The Photo Picker filtered to video: a status clip or a live wallpaper.
+  video,
+
   /// The documents picker opened at the audio root: what a ringtone submission needs.
   audio,
 }
@@ -35,7 +38,11 @@ class MediaPickService {
     final Map<Object?, Object?>? answer;
     try {
       answer = await _channel.invokeMethod<Map<Object?, Object?>>('pick', {
-        'kind': kind == MediaPickKind.audio ? 'audio' : 'visual',
+        'kind': switch (kind) {
+          MediaPickKind.visual => 'visual',
+          MediaPickKind.video => 'video',
+          MediaPickKind.audio => 'audio',
+        },
       });
     } on MissingPluginException {
       // No native side (tests, a future platform) -> the same as a dismissed picker.

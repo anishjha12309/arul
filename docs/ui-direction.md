@@ -10,7 +10,9 @@ so changing the paradigm means rebuilding the video layer.
 Read colours by role from **`lib/theme/arul_tokens.dart`** — never dynamic colour. `lib/app/theme/tokens.dart`
 is the legacy ladder whose `rose*`/`teal*` NAMES survive with the new values behind them; there is no
 teal. Light and dark are both required, and the choice is persisted. The green CTA is a proven
-affordance — keep it.
+affordance — keep it. Every widget reads roles from `ArulPalette.of(context)` (a ThemeExtension of existing
+token values, no new paint), not `isDark ? … : …`, and spacing from `ArulSpace.s4…s48`: named by value
+because the legacy `Gap.md` is 12.
 
 ## Chrome rules paid for on device
 
@@ -20,8 +22,11 @@ affordance — keep it.
   before it clips — never re-add an ellipsis (it cut a Malayalam title at 320 dp/1.3). Never tune title
   size per screen: tabs cross-fade, and per-screen sizes read as the screen jumping. The band's height is
   what the reel card is solved against ([feed-card.md](feed-card.md)).
-- `ArulChipVariant.category` is the browse chip on both tabs; `.surface` is the Upload FORM chip. No rule
-  under the chips.
+- `ArulChipVariant.category` is the browse chip on both tabs. No rule under the chips.
+- **Forms (Upload is the reference):** a MODE is `ArulSegmented` with the dock's glyphs; a pick-one of
+  more than a handful is `ArulSelectField` opening a sheet of `ArulSheetRow` cards, never a wrap of chips
+  (fourteen deity pills read as noise, owner); typed text is `ArulTextField`. Every field is
+  `fieldHeight`, `inputRadius`, a 1.5 rim whose COLOUR marks focus, never its width, so nothing shifts.
 - **Every custom tappable is built from `ArulTokens.minHitTarget` = 48** (Android's number, not iOS's
   44); the DRAWN size never changes — each control centres its visual in the box. A gap beside one is
   written `gap - slack`, never a literal, or raising the target eats it (`RingtoneRow.controlGap`). Lay
@@ -67,7 +72,9 @@ member-view card, crest and `ShrineCta`, never a stock Material card.
 The ringtone tile's grounds and gold ink live in `ringtone_tile.dart` and **must not become tokens** —
 tokens describe chrome, not pictures; the same holds for every CustomPainter motif. Bundled deity art is
 lossless WebP, inked a shade paler than the tile because it sits ON a ground. A glyph the icon set lacks
-is PAINTED (`arul_line_icons.dart`), never an emoji — budget Android 8–10 ROMs draw one as tofu. The
+is PAINTED (`arul_line_icons.dart`), never an emoji — budget Android 8–10 ROMs draw one as tofu. Loading and
+empty states draw `GopuramArt`, the premium ornament redrawn at 4× (owner); the blocky `GopuramMark` is
+only for marks under ~24 dp, where line art turns to mush. The
 red/gold static splash art was REJECTED by the owner. The lotus video is retired too (owner): the splash
 and the wall show the region's deity, Murugan by default.
 

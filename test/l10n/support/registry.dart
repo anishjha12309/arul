@@ -16,6 +16,7 @@ import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
 import 'package:arul/app/widgets/arul_browse_header.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
+import 'package:arul/app/widgets/arul_toast.dart';
 import 'package:arul/app/widgets/reel/reel_card.dart';
 import 'package:arul/app/widgets/state_views.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
@@ -49,7 +50,9 @@ import 'package:arul/features/status/presentation/status_screen.dart';
 import 'package:arul/features/status/presentation/status_share_sheet.dart';
 import 'package:arul/features/status/providers/status_action_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
+import 'package:arul/features/upload/presentation/upload_category_sheet.dart';
 import 'package:arul/features/upload/presentation/upload_screen.dart';
+import 'package:arul/features/upload/providers/upload_provider.dart';
 import 'package:arul/features/wallpapers/presentation/apply_sheet.dart';
 import 'package:arul/features/wallpapers/presentation/feed_states.dart';
 import 'package:arul/features/wallpapers/providers/catalog_providers.dart';
@@ -216,6 +219,16 @@ final List<Wallpaper> kFakeWallpapers = <Wallpaper>[
     'temples',
   ])
     _wallpaper('w-$c', c),
+];
+
+/// The upload sheet's deity rows, with labels as long as the catalog's.
+const List<WallpaperCategory> kFakeUploadCategories = <WallpaperCategory>[
+  WallpaperCategory('sivan', 'Sivan'),
+  WallpaperCategory('amman', 'Amman'),
+  WallpaperCategory('ayyappan', 'Ayyappan'),
+  WallpaperCategory('murugan', 'Murugan'),
+  WallpaperCategory('perumal', 'Perumal'),
+  WallpaperCategory('venkateswara', 'Venkateswara'),
 ];
 
 class _FakeRingtoneCatalog extends RingtoneCatalogNotifier {
@@ -606,6 +619,68 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
     build: () => SheetHost(
       open: (context) =>
           ApplySheet.show(context, wallpaper: kFakeWallpapers.first),
+    ),
+  ),
+
+  // One toast per kind, each with the longest line that kind carries: a toast wraps, so what can
+  // break is the badge row, not the text.
+  ScreenEntry(
+    id: 'toast.info',
+    build: () => SheetHost(
+      open: (context) async => showArulToast(
+        context,
+        AppLocalizations.of(context).uploadTooManyPending,
+        haptic: false,
+      ),
+    ),
+  ),
+  ScreenEntry(
+    id: 'toast.success',
+    build: () => SheetHost(
+      open: (context) async => showArulToast(
+        context,
+        AppLocalizations.of(context).statusSaved,
+        kind: ToastKind.success,
+        haptic: false,
+      ),
+    ),
+  ),
+  ScreenEntry(
+    id: 'toast.error',
+    build: () => SheetHost(
+      open: (context) async => showArulToast(
+        context,
+        AppLocalizations.of(context).uploadVideoNeedsAndroid12,
+        kind: ToastKind.error,
+        haptic: false,
+      ),
+    ),
+  ),
+
+  // The category picker for both shapes of list: deities with art, and status languages.
+  ScreenEntry(
+    id: 'upload.category_sheet',
+    build: () => SheetHost(
+      open: (context) => showUploadCategorySheet(
+        context,
+        kind: UploadKind.wallpaper,
+        categories: kFakeUploadCategories,
+        selected: 'murugan',
+      ),
+    ),
+  ),
+  ScreenEntry(
+    id: 'upload.category_sheet.status',
+    build: () => SheetHost(
+      open: (context) => showUploadCategorySheet(
+        context,
+        kind: UploadKind.status,
+        categories: const [
+          WallpaperCategory('tamil', 'Tamil'),
+          WallpaperCategory('telugu', 'Telugu'),
+        ],
+        selected: null,
+      ),
     ),
   ),
 

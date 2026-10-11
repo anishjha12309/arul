@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
 
@@ -59,11 +60,10 @@ class _ArulChipState extends State<ArulChip> {
     final onTap = widget.onTap;
     final variant = widget.variant;
     final identifier = widget.identifier;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final (Color bg, Color border, Color fg) = _palette(
       variant,
       selected,
-      isDark,
+      ArulPalette.of(context),
     );
 
     final Widget visual = Container(
@@ -133,7 +133,7 @@ class _ArulChipState extends State<ArulChip> {
   static (Color, Color, Color) _palette(
     ArulChipVariant variant,
     bool selected,
-    bool isDark,
+    ArulPalette p,
   ) {
     switch (variant) {
       case ArulChipVariant.feed:
@@ -141,46 +141,16 @@ class _ArulChipState extends State<ArulChip> {
           return (ArulTokens.gold, ArulTokens.gold, ArulTokens.darkSurface);
         }
         return (
-          const Color.fromRGBO(20, 9, 12, 0.42),
-          const Color.fromRGBO(250, 245, 236, 0.22),
-          const Color.fromRGBO(250, 245, 236, 0.92),
+          ArulTokens.overMediaChipFill,
+          ArulTokens.ivoryBorder22,
+          ArulTokens.ivoryText92,
         );
       case ArulChipVariant.surface:
-        if (selected) {
-          final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
-          final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-          return (fill, fill, fg);
-        }
-        if (isDark) {
-          return (
-            ArulTokens.cardBgDark05,
-            ArulTokens.cardBorderDark14,
-            ArulTokens.darkText,
-          );
-        }
-        return (
-          ArulTokens.cardBgLight,
-          ArulTokens.cardBorderLight,
-          ArulTokens.lightText,
-        );
+        if (selected) return (p.accent, p.accent, p.onAccent);
+        return (p.field, p.border, p.text);
       case ArulChipVariant.category:
-        if (selected) {
-          final fill = isDark ? ArulTokens.gold : ArulTokens.maroon;
-          final fg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-          return (fill, fill, fg);
-        }
-        if (isDark) {
-          return (
-            ArulTokens.cardBgDark045,
-            ArulTokens.cardBorderDark12,
-            ArulTokens.darkTextSecondary,
-          );
-        }
-        return (
-          ArulTokens.cardBgLight,
-          ArulTokens.cardBorderLight,
-          ArulTokens.lightBody,
-        );
+        if (selected) return (p.accent, p.accent, p.onAccent);
+        return (p.card, p.border, p.textSecondary);
     }
   }
 }

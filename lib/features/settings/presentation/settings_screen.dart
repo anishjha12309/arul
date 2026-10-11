@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_icon_tap.dart';
+import '../../../app/widgets/arul_pressable.dart';
 import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../core/analytics/analytics_provider.dart';
@@ -17,6 +18,7 @@ import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/package_info_provider.dart';
 import '../../../data/models/subscription_model.dart';
 import '../../../data/repositories/repository_providers.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../legal/presentation/policy_screen.dart';
@@ -44,9 +46,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-    final textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText;
+    final p = ArulPalette.of(context);
     final themeMode = ref.watch(themeModeProvider);
 
     // The broadcast stream does not REPLAY -> a startup-seed emission lands before this subscribes.
@@ -71,7 +71,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final quickBarOn = ref.watch(quickBarSettingProvider) == true;
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: p.surface,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -80,7 +80,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             // Pushed from the header gear on every tab -> back pops to whichever tab opened it.
             ArulPushedHeader(
               title: l10n.settingsTitle,
-              color: textPrimary,
+              color: p.text,
               identifier: 'arul_settings_back',
             ),
             Expanded(
@@ -425,12 +425,7 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final nameColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final emailColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    final pencilColor = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
     final l10n = AppLocalizations.of(context);
 
     return Container(
@@ -441,12 +436,8 @@ class _ProfileCard extends StatelessWidget {
         ArulTokens.cardPadding16,
       ),
       decoration: BoxDecoration(
-        gradient: isDark ? ArulTokens.silkDark : ArulTokens.silkLight,
-        border: Border.all(
-          color: isDark
-              ? ArulTokens.silkBorderDark
-              : ArulTokens.silkBorderLight,
-        ),
+        gradient: p.silk,
+        border: Border.all(color: p.silkRim),
         borderRadius: BorderRadius.circular(ArulTokens.cardRadius),
       ),
       child: Row(
@@ -476,17 +467,19 @@ class _ProfileCard extends StatelessWidget {
                   style: ArulTokens.rowTitle.copyWith(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: nameColor,
+                    color: p.text,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   email,
-                  maxLines: 1,
+                  // Wraps before it clips: on a wide OEM font at 320 dp and 130% text, one line cut
+                  // "Signed in with Google" short.
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: ArulTokens.rowSub.copyWith(
                     fontSize: 13,
-                    color: emailColor,
+                    color: p.textSecondary,
                   ),
                 ),
               ],
@@ -499,7 +492,7 @@ class _ProfileCard extends StatelessWidget {
           ArulIconTap(
             icon: Icons.edit,
             size: 20,
-            color: pencilColor,
+            color: p.accent,
             label: l10n.settingsEditNameTitle,
             identifier: 'arul_settings_edit_name',
             onTap: onEdit,
@@ -547,19 +540,12 @@ class _RowsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final divider = isDark
-        ? ArulTokens.rowDividerDark
-        : ArulTokens.dividerLight;
+    final p = ArulPalette.of(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.cardBgDark04 : ArulTokens.cardBgLight,
-        border: Border.all(
-          color: isDark
-              ? ArulTokens.cardBorderDark09
-              : ArulTokens.cardBorderLight,
-        ),
+        color: p.card,
+        border: Border.all(color: p.borderQuiet),
         borderRadius: BorderRadius.circular(ArulTokens.rowsCardRadius),
       ),
       clipBehavior: Clip.antiAlias,
@@ -567,7 +553,7 @@ class _RowsCard extends StatelessWidget {
         children: [
           for (var i = 0; i < rows.length; i++) ...[
             _SettingsRow(data: rows[i]),
-            if (i < rows.length - 1) Container(height: 1, color: divider),
+            if (i < rows.length - 1) Container(height: 1, color: p.divider),
           ],
         ],
       ),
@@ -582,17 +568,7 @@ class _SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chipBg = isDark
-        ? ArulTokens.goldTintFill10
-        : ArulTokens.maroonTintFill07;
-    final iconColor = isDark ? ArulTokens.gold : ArulTokens.maroon;
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final subColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    // The chevron's exact alphas have no token — darkMuted and lightFaint are the nearest neutrals.
-    final chevronColor = isDark ? ArulTokens.darkMuted : ArulTokens.lightFaint;
+    final p = ArulPalette.of(context);
 
     return Semantics(
       container: true,
@@ -613,17 +589,17 @@ class _SettingsRow extends StatelessWidget {
                 height: ArulTokens.iconChipSize,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: chipBg,
+                  color: p.accentTint,
                   borderRadius: BorderRadius.circular(
                     ArulTokens.iconChipRadius,
                   ),
                 ),
                 child:
-                    data.glyph?.call(iconColor) ??
+                    data.glyph?.call(p.accent) ??
                     Icon(
                       data.icon,
                       size: ArulTokens.iconChipIconSize,
-                      color: iconColor,
+                      color: p.accent,
                     ),
               ),
               const SizedBox(width: 14),
@@ -633,19 +609,19 @@ class _SettingsRow extends StatelessWidget {
                   children: [
                     Text(
                       data.title,
-                      style: ArulTokens.rowTitle.copyWith(color: titleColor),
+                      style: ArulTokens.rowTitle.copyWith(color: p.text),
                     ),
                     const SizedBox(height: 1),
                     Text(
                       data.sub,
-                      style: ArulTokens.rowSub.copyWith(color: subColor),
+                      style: ArulTokens.rowSub.copyWith(color: p.textSecondary),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
               data.trailing ??
-                  Icon(Icons.chevron_right, size: 20, color: chevronColor),
+                  Icon(Icons.chevron_right, size: 20, color: p.textFaint),
             ],
           ),
         ),
@@ -662,14 +638,14 @@ class _QuickBarSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     return Switch(
       value: on,
       onChanged: onChanged,
       // The row is the tap target -> the switch's own 48dp padding would make this row taller.
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      activeThumbColor: Colors.white,
-      activeTrackColor: isDark ? ArulTokens.gold : ArulTokens.maroon,
+      activeThumbColor: ArulTokens.thumbOn,
+      activeTrackColor: p.accent,
     );
   }
 }
@@ -684,7 +660,7 @@ class _PolicyFooter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     // The real installed version — blank until the platform read lands, and the row stays out.
     final info = ref.watch(packageInfoProvider).asData?.value;
 
@@ -697,19 +673,9 @@ class _PolicyFooter extends ConsumerWidget {
           runSpacing: 4,
           children: [
             _FooterLink(label: l10n.settingsPrivacy, doc: PolicyDoc.privacy),
-            Text(
-              '·',
-              style: ArulTokens.body.copyWith(
-                color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
-              ),
-            ),
+            Text('·', style: ArulTokens.body.copyWith(color: p.textFaint)),
             _FooterLink(label: l10n.settingsTerms, doc: PolicyDoc.terms),
-            Text(
-              '·',
-              style: ArulTokens.body.copyWith(
-                color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
-              ),
-            ),
+            Text('·', style: ArulTokens.body.copyWith(color: p.textFaint)),
             _FooterLink(label: l10n.settingsRefund, doc: PolicyDoc.refund),
           ],
         ),
@@ -719,9 +685,7 @@ class _PolicyFooter extends ConsumerWidget {
           const SizedBox(height: 12),
           Text(
             'Version: ${info.version} (${info.buildNumber})',
-            style: ArulTokens.caption.copyWith(
-              color: isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint,
-            ),
+            style: ArulTokens.caption.copyWith(color: p.textFaint),
           ),
         ],
       ],
@@ -737,7 +701,7 @@ class _FooterLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     return Semantics(
       link: true,
       label: label,
@@ -762,7 +726,7 @@ class _FooterLink extends StatelessWidget {
               label,
               style: ArulTokens.body.copyWith(
                 fontWeight: FontWeight.w500,
-                color: isDark ? ArulTokens.gold : ArulTokens.maroon,
+                color: p.accent,
               ),
             ),
           ),
@@ -777,24 +741,19 @@ class _DmcaBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight,
+        color: p.field,
         borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-        border: Border.all(
-          color: isDark
-              ? ArulTokens.cardBorderDark14
-              : ArulTokens.cardBorderLight,
-        ),
+        border: Border.all(color: p.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lock_rounded, size: 16, color: accent),
+          Icon(Icons.lock_rounded, size: 16, color: p.accent),
           const SizedBox(width: 8),
           Text.rich(
             TextSpan(
@@ -805,7 +764,7 @@ class _DmcaBadge extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.7,
-                    color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
+                    color: p.text,
                   ),
                 ),
                 TextSpan(
@@ -814,9 +773,7 @@ class _DmcaBadge extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.7,
-                    color: isDark
-                        ? ArulTokens.darkTextSecondary
-                        : ArulTokens.lightSecondary,
+                    color: p.textSecondary,
                   ),
                 ),
               ],
@@ -828,68 +785,44 @@ class _DmcaBadge extends StatelessWidget {
   }
 }
 
-class _LogoutButton extends StatefulWidget {
+class _LogoutButton extends StatelessWidget {
   const _LogoutButton({required this.onTap});
 
   final VoidCallback onTap;
 
   @override
-  State<_LogoutButton> createState() => _LogoutButtonState();
-}
-
-class _LogoutButtonState extends State<_LogoutButton> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
-    // Derived from ArulTokens.maroon where no token exposes these alphas; light is maroonTintFill08.
-    final bg = isDark
-        ? ArulTokens.maroon.withValues(alpha: _pressed ? 0.5 : 0.35)
-        : ArulTokens.maroonTintFill08;
-    final border = isDark
-        ? ArulTokens.maroon.withValues(alpha: 0.6)
-        : ArulTokens.maroon.withValues(alpha: 0.35);
-    // `#F0C9BA` has no token and is not cleanly derivable — nearest is a light ivory→maroon lerp.
-    final text = isDark ? _logoutTextDark : ArulTokens.maroon;
-
-    return GestureDetector(
+    return ArulPressable(
       // Signing out is deliberate but not destructive — a firm press, one step below delete.
-      onTapDown: (_) {
-        ArulHaptics.firm();
-        setState(() => _pressed = true);
-      },
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTap: widget.onTap,
-      child: Container(
+      haptic: ArulHapticStyle.firm,
+      pressedScale: 0.97,
+      onTap: onTap,
+      builder: (context, pressed) => Container(
         height: ArulTokens.ctaHeight50,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border),
+          // Held: the same maroon tint laid twice, so the press deepens the pill in both themes.
+          color: pressed
+              ? Color.alphaBlend(p.destructiveFill, p.destructiveFill)
+              : p.destructiveFill,
+          border: Border.all(color: p.destructiveRim),
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.logout, size: 20, color: text),
+            Icon(Icons.logout, size: 20, color: p.destructiveInk),
             const SizedBox(width: 8),
             Text(
               l10n.settingsLogout,
-              style: ArulTokens.button.copyWith(color: text),
+              style: ArulTokens.button.copyWith(color: p.destructiveInk),
             ),
           ],
         ),
       ),
     );
   }
-
-  static final Color _logoutTextDark = Color.lerp(
-    ArulTokens.ivory,
-    ArulTokens.maroon,
-    0.14,
-  )!;
 }

@@ -6,15 +6,23 @@ import 'package:http/http.dart' as http;
 import '../../../core/api/api_client.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../data/api_content_submission_repository.dart';
+import '../data/video_prep_service.dart';
+
+/// What a submission is. [name] is the wire value the Worker and the CMS key on.
+enum UploadKind { wallpaper, ringtone, status }
 
 /// Single source of truth for upload size and type limits.
 /// Mirrored in `workers/src/lib/media-constraints.ts` and again in the CMS — keep all three in step.
 ///
-/// Keyed on `kind`; `wallpaperType` only narrows the wallpaper branch and is ignored for a ringtone.
+/// Keyed on `kind`; `wallpaperType` only narrows the wallpaper branch and is ignored otherwise.
+/// A video is checked AFTER the phone prepared it ([VideoPrepService]), so these are the MP4's limits.
 abstract final class UploadConstraints {
   static const int maxStaticWallpaper = 10 * 1024 * 1024;
   static const int maxLiveWallpaper = 50 * 1024 * 1024;
   static const int maxRingtone = 15 * 1024 * 1024;
+
+  /// The Worker's status QC cap (`STATUS_VIDEO.maxBytes`), stricter than a live wallpaper's.
+  static const int maxStatus = 10 * 1024 * 1024;
 
   static const Set<String> staticWallpaperTypes = {
     'image/jpeg',
@@ -22,6 +30,7 @@ abstract final class UploadConstraints {
     'image/webp',
   };
   static const Set<String> liveWallpaperTypes = {'video/mp4'};
+  static const Set<String> statusTypes = {'video/mp4'};
   static const Set<String> ringtoneTypes = {
     'audio/mpeg',
     'audio/aac',
@@ -31,11 +40,13 @@ abstract final class UploadConstraints {
 
   static int maxBytes(String kind, String wallpaperType) {
     if (kind == 'ringtone') return maxRingtone;
+    if (kind == 'status') return maxStatus;
     return wallpaperType == 'live' ? maxLiveWallpaper : maxStaticWallpaper;
   }
 
   static Set<String> allowedTypes(String kind, String wallpaperType) {
     if (kind == 'ringtone') return ringtoneTypes;
+    if (kind == 'status') return statusTypes;
     return wallpaperType == 'live' ? liveWallpaperTypes : staticWallpaperTypes;
   }
 
@@ -56,6 +67,11 @@ abstract final class UploadConstraints {
       'webp' => 'image/webp',
       'gif' => 'image/gif',
       'mp4' => 'video/mp4',
+      // Videos the phone converts to MP4 before upload -> named so a pick reads as a video.
+      'mov' => 'video/quicktime',
+      '3gp' => 'video/3gpp',
+      'mkv' => 'video/x-matroska',
+      'webm' => 'video/webm',
       'mp3' => 'audio/mpeg',
       'aac' => 'audio/aac',
       'm4a' => 'audio/mp4',
@@ -89,8 +105,12 @@ final class UploadSuccess extends UploadState {
 }
 
 final class UploadError extends UploadState {
-  const UploadError({required this.message});
+  const UploadError({required this.message, this.code});
   final String message;
+
+  /// The Worker's error code (`too_large`, `bad_dimensions`, `too_many_pending`…), null when the
+  /// failure never reached it. The screen words its toast from this, never from [message].
+  final String? code;
 }
 
 class UploadNotifier extends Notifier<UploadState> {
@@ -170,7 +190,7 @@ class UploadNotifier extends Notifier<UploadState> {
 
       state = const UploadSuccess();
     } on ApiException catch (e) {
-      state = UploadError(message: e.message);
+      state = UploadError(message: e.message, code: e.code);
     } catch (e) {
       state = UploadError(message: e.toString());
     }
@@ -181,4 +201,8 @@ class UploadNotifier extends Notifier<UploadState> {
 
 final uploadProvider = NotifierProvider<UploadNotifier, UploadState>(
   UploadNotifier.new,
+);
+
+final videoPrepServiceProvider = Provider<VideoPrepService>(
+  (ref) => VideoPrepService(),
 );

@@ -11,6 +11,7 @@ import '../../features/ringtones/providers/ringtone_catalog_providers.dart';
 import '../../features/ringtones/providers/ringtone_preview_provider.dart';
 import '../../features/status/providers/status_providers.dart';
 import '../../features/wallpapers/providers/video_preload_provider.dart';
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import '../l10n/app_localizations.dart';
 import '../theme/motion.dart';
@@ -352,8 +353,8 @@ class ArulNavDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final surface = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+    final p = ArulPalette.of(context);
+    final surface = p.surface;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -383,18 +384,10 @@ class ArulNavDock extends StatelessWidget {
                 horizontal: ArulTokens.dockInnerPadding,
               ),
               decoration: BoxDecoration(
-                color: isDark
-                    ? ArulTokens.dockFillDark
-                    : ArulTokens.cardBgLight,
+                color: p.dockFill,
                 borderRadius: BorderRadius.circular(ArulTokens.dockRadius),
-                border: Border.all(
-                  color: isDark
-                      ? ArulTokens.cardBorderDark08
-                      : ArulTokens.maroonBorder08,
-                ),
-                boxShadow: isDark
-                    ? ArulTokens.dockShadowDark
-                    : ArulTokens.dockShadowLight,
+                border: Border.all(color: p.dockRim),
+                boxShadow: p.dockShadow,
               ),
               child: Row(
                 children: [
@@ -429,16 +422,11 @@ class _DockTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
     // Active is a lit cell: gold ink on a gold tint in the dark.
     // Gold-on-gold would vanish on the light theme -> dark ink on solid pale gold there instead.
-    final Color fg;
-    if (selected) {
-      fg = isDark ? ArulTokens.gold : ArulTokens.lightText;
-    } else {
-      fg = isDark ? ArulTokens.darkMuted : ArulTokens.lightSecondary;
-    }
+    final fg = selected ? p.chromeInk : p.textMuted;
 
     return Semantics(
       button: true,
@@ -457,17 +445,11 @@ class _DockTab extends StatelessWidget {
           height: ArulTokens.dockTabHeight,
           decoration: selected
               ? BoxDecoration(
-                  color: isDark
-                      ? ArulTokens.goldTintFill13
-                      : ArulTokens.dockActiveFillLight,
+                  color: p.dockActiveFill,
                   borderRadius: BorderRadius.circular(
                     ArulTokens.dockActiveTabRadius,
                   ),
-                  border: Border.all(
-                    color: isDark
-                        ? ArulTokens.goldBorder45
-                        : ArulTokens.goldBorder50,
-                  ),
+                  border: Border.all(color: p.dockActiveRim),
                 )
               : null,
           child: Column(

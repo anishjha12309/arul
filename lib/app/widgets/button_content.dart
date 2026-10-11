@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../theme/tokens.dart';
+import '../../theme/arul_tokens.dart';
 import 'arul_spinner.dart';
 
 class ButtonContent extends StatelessWidget {
@@ -30,7 +30,7 @@ class ButtonContent extends StatelessWidget {
       children: [
         if (icon != null) ...[
           Icon(icon, size: 20, color: foreground),
-          const SizedBox(width: Gap.sm),
+          const SizedBox(width: ArulSpace.s8),
         ],
         Flexible(
           child: Text(

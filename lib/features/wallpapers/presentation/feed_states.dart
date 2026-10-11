@@ -5,11 +5,12 @@ import '../../../app/l10n/app_localizations.dart';
 import '../../../app/theme/motion.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/cta_button.dart';
-import '../../../app/widgets/gopuram_mark.dart';
+import '../../../app/widgets/gopuram_art.dart';
 import '../../../app/widgets/reel/feed_card_geometry.dart';
 import '../../../app/widgets/sliding_skeleton.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/catalog_providers.dart';
 
@@ -76,10 +77,7 @@ class FeedChipsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fill = isDark
-        ? ArulTokens.cardBgDark045
-        : ArulTokens.maroonTintFill08;
+    final p = ArulPalette.of(context);
     return SizedBox(
       // Matches the real chip row it stands in for -> the strip must not resize when they land.
       height: ArulChip.categoryStripHeight,
@@ -91,7 +89,7 @@ class FeedChipsSkeleton extends StatelessWidget {
               width: w,
               height: ArulChip.categoryHeight,
               decoration: BoxDecoration(
-                color: fill,
+                color: p.tile,
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
               ),
             ),
@@ -104,6 +102,7 @@ class FeedChipsSkeleton extends StatelessWidget {
 }
 
 /// Feed loading fill — the sliding-gradient card with a centred gopuram that pulses on opacity only.
+/// The gopuram is the premium screens' own drawing ([GopuramArt]).
 /// Renders in the same inset rounded card as the reel -> the loading → content swap never jumps.
 class FeedLoading extends StatelessWidget {
   const FeedLoading({
@@ -160,8 +159,8 @@ class FeedLoading extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const GopuramMark(size: 38, color: ArulTokens.gold),
-                    const SizedBox(height: 12),
+                    const GopuramArt(height: GopuramArt.stateHeight),
+                    const SizedBox(height: ArulSpace.s16),
                     Text(
                       body ?? AppLocalizations.of(context).feedLoadingBody,
                       style: ArulTokens.body.copyWith(
@@ -194,7 +193,7 @@ class ReelPosterPlaceholder extends StatelessWidget {
         SlidingSkeleton(),
         Center(
           child: _OpacityPulse(
-            child: GopuramMark(size: 38, color: ArulTokens.gold),
+            child: GopuramArt(height: GopuramArt.stateHeight),
           ),
         ),
       ],
@@ -299,36 +298,28 @@ class FeedEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     // The chips stay visible via the feed's persistent top bar — this is only the body.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Opacity(
-            opacity: 0.55,
-            child: GopuramMark(
-              size: 40,
-              color: isDark ? ArulTokens.gold : ArulTokens.maroon,
-            ),
+          GopuramArt(
+            height: GopuramArt.stateHeight,
+            color: p.accent.withValues(alpha: 0.55),
           ),
           const SizedBox(height: 12),
           Text(
             title ?? l10n.feedEmptyTitle,
             textAlign: TextAlign.center,
-            style: ArulTokens.screenTitle.copyWith(
-              fontSize: 20,
-              color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-            ),
+            style: ArulTokens.screenTitle.copyWith(fontSize: 20, color: p.text),
           ),
           const SizedBox(height: 12),
           Text(
             l10n.feedEmptyBody,
             textAlign: TextAlign.center,
-            style: ArulTokens.body.copyWith(
-              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
-            ),
+            style: ArulTokens.body.copyWith(color: p.textMuted),
           ),
           const SizedBox(height: 20),
           Semantics(
@@ -361,8 +352,8 @@ class _OutlinedAccentPillState extends State<_OutlinedAccentPill> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
+    final accent = p.accent;
     return Semantics(
       button: true,
       label: widget.label,
@@ -390,11 +381,7 @@ class _OutlinedAccentPillState extends State<_OutlinedAccentPill> {
                     ? accent.withValues(alpha: 0.12)
                     : accent.withValues(alpha: 0),
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-                border: Border.all(
-                  color: isDark
-                      ? ArulTokens.goldBorder50
-                      : ArulTokens.maroon.withValues(alpha: 0.5),
-                ),
+                border: Border.all(color: p.dash),
               ),
               child: Text(
                 widget.label,
@@ -435,7 +422,7 @@ class FeedError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final title = offline
         ? l10n.offlineTitle
         : this.title ?? l10n.feedErrorTitle;
@@ -449,25 +436,19 @@ class FeedError extends StatelessWidget {
           Icon(
             Icons.cloud_off_rounded,
             size: 34,
-            color: (isDark ? ArulTokens.ivory : ArulTokens.lightText)
-                .withValues(alpha: 0.35),
+            color: p.text.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 12),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: ArulTokens.screenTitle.copyWith(
-              fontSize: 20,
-              color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-            ),
+            style: ArulTokens.screenTitle.copyWith(fontSize: 20, color: p.text),
           ),
           const SizedBox(height: 12),
           Text(
             body,
             textAlign: TextAlign.center,
-            style: ArulTokens.body.copyWith(
-              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
-            ),
+            style: ArulTokens.body.copyWith(color: p.textMuted),
           ),
           const SizedBox(height: 20),
           CtaButton(

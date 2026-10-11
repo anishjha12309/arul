@@ -588,6 +588,55 @@ class AppLocalizationsTa extends AppLocalizations {
   String get uploadComingSoonToast => 'பதிவேற்றம் விரைவில் வருகிறது.';
 
   @override
+  String get uploadKindStatus => 'ஸ்டேட்டஸ்';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'ஒரு வீடியோவைத் தேர்ந்தெடுக்கவும்';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'ஒலியுள்ள எந்த வீடியோவும். அதை 30 விநாடிகளாகக் குறைப்போம்.';
+
+  @override
+  String get uploadTitleHintStatus => 'எ.கா. தைப்பூசம் சிறப்பு';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'ஏற்கப்பட்ட ஸ்டேட்டஸ் வீடியோக்கள் உங்கள் பெயருடன் ஸ்டேட்டஸ் பக்கத்தில் தோன்றும்';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'உங்கள் ஸ்டேட்டஸ் வீடியோவை விரைவில் பார்க்கிறோம். அதுவரை — Arul-ஐ ரசிக்கும் யாராவது உங்களுக்குத் தெரியுமா?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'உங்கள் வீடியோ தயாராகிறது… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'இந்த வீடியோவில் ஒலி இல்லை. ஸ்டேட்டஸுக்கு இசை தேவை.';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'வீடியோக்களைத் தயாரிக்க Android 12 அல்லது அதற்குப் புதிய பதிப்பு தேவை.';
+
+  @override
+  String get uploadVideoFailed =>
+      'இந்த வீடியோவைத் தயாரிக்க முடியவில்லை. வேறொன்றை முயலவும்.';
+
+  @override
+  String get uploadFileRejected =>
+      'இந்த ஃபைல் எங்கள் சோதனையில் தேறவில்லை. வேறொன்றை முயலவும்.';
+
+  @override
+  String get uploadTooManyPending =>
+      'உங்கள் பதிவேற்றங்கள் பரிசீலனைக்காகக் காத்திருக்கின்றன. அவை பரிசீலிக்கப்பட்ட பின் மீண்டும் முயலவும்.';
+
+  @override
+  String get uploadChangeFile => 'மாற்று';
+
+  @override
   String get premiumNavTitle => 'சந்தா';
 
   @override

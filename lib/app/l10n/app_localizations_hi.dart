@@ -579,6 +579,55 @@ class AppLocalizationsHi extends AppLocalizations {
   String get uploadComingSoonToast => 'अपलोड जल्द आ रहा है।';
 
   @override
+  String get uploadKindStatus => 'स्टेटस';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'वीडियो चुनें';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'आवाज़ वाला कोई भी वीडियो। हम उसे 30 सेकंड का कर देंगे।';
+
+  @override
+  String get uploadTitleHintStatus => 'जैसे, थाईपूसम स्पेशल';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'मंज़ूर स्टेटस वीडियो आपके नाम के साथ स्टेटस टैब में दिखेंगे';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'हम आपके स्टेटस वीडियो का जल्द रिव्यू करेंगे। तब तक — कोई दोस्त है जिसे Arul पसंद आएगा?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'आपका वीडियो तैयार हो रहा है… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'इस वीडियो में आवाज़ नहीं है। स्टेटस के लिए संगीत चाहिए।';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'वीडियो तैयार करने के लिए Android 12 या नया वर्ज़न चाहिए।';
+
+  @override
+  String get uploadVideoFailed =>
+      'यह वीडियो तैयार नहीं हो सका। कोई दूसरा आज़माएँ।';
+
+  @override
+  String get uploadFileRejected =>
+      'यह फ़ाइल हमारी जाँच में पास नहीं हुई। कोई दूसरी आज़माएँ।';
+
+  @override
+  String get uploadTooManyPending =>
+      'आपके अपलोड रिव्यू का इंतज़ार कर रहे हैं। उनका रिव्यू होने के बाद फिर से कोशिश करें।';
+
+  @override
+  String get uploadChangeFile => 'बदलें';
+
+  @override
   String get premiumNavTitle => 'सब्सक्रिप्शन';
 
   @override

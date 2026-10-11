@@ -4,6 +4,7 @@
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/theme/theme.dart';
+import 'package:arul/app/widgets/arul_surface.dart';
 import 'package:arul/features/settings/presentation/confirm_dialog.dart';
 import 'package:arul/theme/arul_tokens.dart';
 import 'package:flutter/material.dart';
@@ -36,13 +37,12 @@ Widget _host({ThemeData? pinned}) {
 }
 
 Color? _cardColor(WidgetTester tester) {
-  final card = tester.widget<Container>(
-    find
-        .ancestor(
-          of: find.text('Cancel subscription?'),
-          matching: find.byType(Container),
-        )
-        .first,
+  final surface = find.ancestor(
+    of: find.text('Cancel subscription?'),
+    matching: find.byType(ArulSurface),
+  );
+  final card = tester.widget<DecoratedBox>(
+    find.descendant(of: surface, matching: find.byType(DecoratedBox)).first,
   );
   return (card.decoration as BoxDecoration?)?.color;
 }

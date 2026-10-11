@@ -323,6 +323,63 @@
   "uploadShareMomentTitle": "Thank you",
   "uploadShareMomentBody": "We'll review your wallpaper shortly. While you wait — know someone who would enjoy Arul?",
   "uploadComingSoonToast": "Upload is coming soon.",
+  "uploadKindStatus": "Status",
+  "@uploadKindStatus": {
+    "description": "The third upload kind: a short video with music for WhatsApp Status. Same word as the Status tab."
+  },
+  "uploadPickZoneTitleVideo": "Choose a video",
+  "@uploadPickZoneTitleVideo": {
+    "description": "Pick-zone title when the Status kind is selected."
+  },
+  "uploadPickZoneSubVideo": "Any video with sound. We trim it to 30 seconds.",
+  "@uploadPickZoneSubVideo": {
+    "description": "One line under the Status pick-zone title. The app converts and trims the clip on the phone."
+  },
+  "uploadTitleHintStatus": "e.g. Thaipusam special",
+  "@uploadTitleHintStatus": {
+    "description": "Placeholder in the optional title field for a status video."
+  },
+  "uploadFootnoteStatus": "Approved status videos appear in the Status tab with your name",
+  "@uploadFootnoteStatus": {
+    "description": "Footnote under the submit button for the Status kind."
+  },
+  "uploadShareMomentBodyStatus": "We'll review your status video shortly. While you wait — know someone who would enjoy Arul?",
+  "@uploadShareMomentBodyStatus": {
+    "description": "Share-moment sheet body after a status video is submitted."
+  },
+  "uploadPreparingVideo": "Getting your video ready… {percent}%",
+  "@uploadPreparingVideo": {
+    "description": "Shown in the file card while the phone converts a picked video. {percent} is 0–100.",
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadVideoNoSound": "This video has no sound. A status needs music.",
+  "@uploadVideoNoSound": {
+    "description": "Error toast: a status video was picked that has no audio track."
+  },
+  "uploadVideoNeedsAndroid12": "Preparing videos needs Android 12 or newer.",
+  "@uploadVideoNeedsAndroid12": {
+    "description": "Error toast: the phone is too old to convert a video, and the clip is not already in the right format."
+  },
+  "uploadVideoFailed": "We couldn't prepare this video. Try another one.",
+  "@uploadVideoFailed": {
+    "description": "Error toast: converting the picked video failed on the phone."
+  },
+  "uploadFileRejected": "This file didn't pass our checks. Try another one.",
+  "@uploadFileRejected": {
+    "description": "Error toast: the server's media check refused the uploaded file (type, size, length or format)."
+  },
+  "uploadTooManyPending": "You have uploads waiting for review. Try again once they're reviewed.",
+  "@uploadTooManyPending": {
+    "description": "Error toast: the person already has the maximum number of submissions awaiting moderation."
+  },
+  "uploadChangeFile": "Change",
+  "@uploadChangeFile": {
+    "description": "Button on the file card that picks a different file."
+  },
   "premiumNavTitle": "SUBSCRIPTION",
   "premiumEyebrow": "PREMIUM",
   "premiumTagline": "Divine grace, every day",

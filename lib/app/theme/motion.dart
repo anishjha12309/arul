@@ -10,7 +10,36 @@ abstract final class Motion {
   static const enter = Duration(milliseconds: 300);
   static const enterCurve = Curves.ease;
 
-  static const dialogEnter = Duration(milliseconds: 250);
+  /// A sheet or dialog arriving: most of the travel lands in the first hundred milliseconds, then a
+  /// long settle — quick to answer the tap, slow to land.
+  static const overlayIn = Durations.medium4;
+  static const overlayInCurve = Easing.emphasizedDecelerate;
+
+  /// Leaving takes half the entrance and accelerates away: a closed thing gets out of the way.
+  static const overlayOut = Durations.short4;
+  static const overlayOutCurve = Easing.emphasizedAccelerate;
+
+  /// The ONLY motion a sheet makes is its route's rise. A second fade inside the sheet sent the
+  /// whole sheet through an offscreen layer on every frame of it.
+  static const sheet = AnimationStyle(
+    duration: overlayIn,
+    reverseDuration: overlayOut,
+    curve: overlayInCurve,
+    reverseCurve: overlayOutCurve,
+  );
+
+  /// A dialog travels nowhere, so it takes less time than a sheet: a fade and a small grow.
+  static const dialogIn = Durations.medium2;
+  static const dialogScaleFrom = 0.94;
+
+  /// A toast rises this far into place and sinks back out.
+  static const toastIn = Durations.medium3;
+  static const toastRise = 16.0;
+
+  /// Material's floor for a message with no action; a long line earns reading time up to the cap.
+  static const toastHold = Duration(seconds: 4);
+  static const toastHoldMax = Duration(seconds: 8);
+  static const toastReadPerChar = Duration(milliseconds: 50);
 
   static const exit = Duration(milliseconds: 150);
   static const exitCurve = Easing.emphasizedAccelerate;

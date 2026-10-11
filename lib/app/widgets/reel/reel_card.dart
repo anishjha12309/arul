@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../theme/motion.dart';
 import '../gopuram_mark.dart';
@@ -99,15 +100,13 @@ class ReelLiveTexture extends StatelessWidget {
 /// peek. Deliberately quiet — a closing flourish, not a message — so the feed
 /// ends the way a book does, and no localized copy is needed.
 class ReelEndMark extends StatelessWidget {
-  const ReelEndMark({super.key, required this.isDark});
-
-  final bool isDark;
+  const ReelEndMark({super.key});
 
   @override
   Widget build(BuildContext context) {
     // Same accent split as the header's mark: gold on the dark frame, maroon on
     // ivory — muted further because this sits at the feed's quietest edge.
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final accent = ArulPalette.of(context).accent;
 
     Widget hairline(bool leading) => Container(
       width: 30,
@@ -423,7 +422,12 @@ class _ActionGlyph extends StatelessWidget {
     if (image == null) {
       return Icon(action.icon, size: size, color: color, shadows: shadows);
     }
-    return Image(image: image, width: size, height: size, filterQuality: FilterQuality.medium);
+    return Image(
+      image: image,
+      width: size,
+      height: size,
+      filterQuality: FilterQuality.medium,
+    );
   }
 }
 

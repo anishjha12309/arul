@@ -7,6 +7,7 @@ import '../../app/l10n/app_localizations.dart';
 import '../../app/widgets/arul_sheet.dart';
 import '../../app/widgets/cta_button.dart';
 import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import '../premium/presentation/paywall_ornaments.dart';
 import '../premium/presentation/paywall_view.dart';
@@ -52,12 +53,7 @@ class _Body extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final bodyColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
 
     if (premium) {
       return Padding(
@@ -151,11 +147,14 @@ class _Body extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(title, style: ArulTokens.sheetTitle.copyWith(color: titleColor)),
+          Text(title, style: ArulTokens.sheetTitle.copyWith(color: p.text)),
           const SizedBox(height: 10),
           Text(
             body,
-            style: ArulTokens.rowSub.copyWith(color: bodyColor, height: 1.5),
+            style: ArulTokens.rowSub.copyWith(
+              color: p.textSecondary,
+              height: 1.5,
+            ),
           ),
           const SizedBox(height: 20),
           CtaButton(
@@ -177,7 +176,7 @@ class _Body extends ConsumerWidget {
           const SizedBox(height: 8),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(foregroundColor: accent),
+            style: TextButton.styleFrom(foregroundColor: p.accent),
             child: Text(l10n.referNotNow),
           ),
         ],

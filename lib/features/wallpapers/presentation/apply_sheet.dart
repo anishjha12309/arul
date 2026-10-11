@@ -2,11 +2,14 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_pressable.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../data/wallpaper_apply_service.dart';
 import 'viewer_media.dart';
@@ -49,7 +52,6 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     // Every word on this sheet is an ARB key -> it renders in the user's language, not the author's.
     final cards = <(ApplyTarget, IconData, String, String)>[
       (
@@ -86,7 +88,7 @@ class _ApplySheetBodyState extends State<_ApplySheetBody> {
                 child: Text(
                   l10n.applyTargetTitle,
                   style: ArulTokens.sheetTitle.copyWith(
-                    color: isDark ? ArulTokens.darkText : ArulTokens.lightText,
+                    color: ArulPalette.of(context).text,
                   ),
                 ),
               ),
@@ -155,7 +157,6 @@ class _WallpaperThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final provider = ResizeImage.resizeIfNeeded(
       WallpaperTile.decodeWidthFor(context),
       null,
@@ -173,7 +174,7 @@ class _WallpaperThumb extends StatelessWidget {
         width: ArulTokens.iconChipSize,
         height: ArulTokens.iconChipSize,
         child: ColoredBox(
-          color: isDark ? ArulTokens.cardBgDark05 : ArulTokens.maroonTintFill07,
+          color: ArulPalette.of(context).tile,
           child: decoded
               ? Image(
                   image: provider,
@@ -208,60 +209,51 @@ class _TargetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final unselectedFill = isDark
-        ? ArulTokens.cardBgDark05
-        : ArulTokens.maroonTintFill07;
-    final unselectedBorder = isDark
-        ? ArulTokens.cardBorderDark14
-        : ArulTokens.cardBorderLight;
-    final unselectedIcon = isDark
-        ? ArulTokens.ivory
-        : ArulTokens.lightSecondary;
-    final labelColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-
-    return Semantics(
-      container: true,
-      button: true,
-      label: label,
+    final p = ArulPalette.of(context);
+    final still = context.reduceMotion;
+    return ArulPressable(
+      semanticLabel: label,
       identifier: identifier,
       selected: selected,
+      // A card picks between values -> the lightest tick, on press-DOWN, like every other picker.
+      haptic: ArulHapticStyle.selection,
+      pressedScale: 0.96,
       onTap: onTap,
-      excludeSemantics: true,
-      child: GestureDetector(
-        // A card picks between values -> the lightest tick, on press-DOWN, like every other picker.
-        onTapDown: (_) => ArulHaptics.selection(),
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
-          decoration: BoxDecoration(
-            color: selected ? ArulTokens.goldTintFill14 : unselectedFill,
-            borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
-            border: Border.all(
-              color: selected ? ArulTokens.gold : unselectedBorder,
-              width: selected ? 1.5 : 1,
+      builder: (context, pressed) => AnimatedContainer(
+        // The gold moves to the picked card instead of jumping there.
+        duration: still ? Duration.zero : Motion.quick,
+        curve: Motion.quickCurve,
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 13),
+        decoration: BoxDecoration(
+          color: selected
+              ? ArulTokens.goldTintFill14
+              : pressed
+              ? Color.alphaBlend(p.accentTint, p.tile)
+              : p.tile,
+          borderRadius: BorderRadius.circular(ArulTokens.iconChipRadius + 4),
+          border: Border.all(
+            color: selected ? ArulTokens.gold : p.border,
+            width: 1.5,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 26,
+              color: selected ? ArulTokens.gold : p.textSecondary,
             ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 26,
-                color: selected ? ArulTokens.gold : unselectedIcon,
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: ArulTokens.body.copyWith(
+                fontWeight: FontWeight.w500,
+                color: p.text,
               ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: ArulTokens.body.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: labelColor,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

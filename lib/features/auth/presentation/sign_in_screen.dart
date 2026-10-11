@@ -423,8 +423,6 @@ class _SignInPill extends StatefulWidget {
 }
 
 class _SignInPillState extends State<_SignInPill> {
-  static const _pillFill = Color.fromRGBO(20, 9, 12, 0.55);
-
   bool _pressed = false;
 
   void _setPressed(bool v) => setState(() => _pressed = v);
@@ -461,7 +459,7 @@ class _SignInPillState extends State<_SignInPill> {
         constraints: const BoxConstraints(minHeight: _kPillMinHeight),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: _pillFill,
+          color: ArulTokens.overMediaInkFill,
           borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
           border: Border.all(
             color: _pressed ? ArulTokens.gold : ArulTokens.goldBorder50,

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../core/haptics/arul_haptics.dart';
-import '../../../theme/arul_tokens.dart';
+import '../../../app/widgets/arul_dialog.dart';
 
 /// The dialog only RESOLVES the answer — `true` on confirm, `false` or `null` on cancel.
 /// The CALLER runs the real action (logout, delete account) on `true`.
@@ -12,215 +11,25 @@ Future<bool?> showArulConfirmDialog(
   required String message,
   required String confirmLabel,
   String? cancelLabel,
-}) {
-  // The route is built on the ROOT navigator, under the app's theme; unlike `showDialog`,
-  // `showGeneralDialog` carries none of the caller's. /premium pins light at its route, so without
-  // the capture a dark phone got a dark card over the light paywall.
-  final themes = InheritedTheme.capture(
-    from: context,
-    to: Navigator.of(context, rootNavigator: true).context,
-  );
-  return showGeneralDialog<bool>(
-    context: context,
-    barrierDismissible: true,
-    barrierLabel: title,
-    barrierColor: ArulTokens.dialogOverlay,
-    transitionDuration: ArulTokens.dialogEnter,
-    pageBuilder: (context, _, _) => themes.wrap(
-      _ConfirmDialog(
-        title: title,
-        message: message,
-        confirmLabel: confirmLabel,
-        cancelLabel: cancelLabel,
-      ),
+}) => showArulDialog<bool>(
+  context,
+  barrierLabel: title,
+  builder: (context) => ArulDialogCard(
+    title: title,
+    message: message,
+    cancel: ArulDialogButton(
+      // A dialog whose ACTION is a cancel must name its way out differently, or both buttons
+      // read "cancel".
+      label: cancelLabel ?? AppLocalizations.of(context).cancel,
+      filled: false,
+      identifier: 'arul_confirm_cancel',
+      onTap: () => Navigator.of(context).pop(false),
     ),
-    transitionBuilder: (context, anim, _, child) {
-      final t = CurvedAnimation(parent: anim, curve: ArulTokens.sheetCurve);
-      return Opacity(
-        opacity: t.value,
-        child: Transform.translate(
-          offset: Offset(0, (1 - t.value) * 24),
-          child: child,
-        ),
-      );
-    },
-  );
-}
-
-class _ConfirmDialog extends StatelessWidget {
-  const _ConfirmDialog({
-    required this.title,
-    required this.message,
-    required this.confirmLabel,
-    this.cancelLabel,
-  });
-
-  final String title;
-  final String message;
-  final String confirmLabel;
-
-  /// Defaults to the shared "Cancel". A dialog whose ACTION is a cancel must name its way out
-  /// differently, or both buttons read "cancel".
-  final String? cancelLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // The light variant is spec-unspecified -> it mirrors the dark: white card, maroon-tinted border.
-    final cardColor = isDark
-        ? ArulTokens.darkSheetSurface
-        : ArulTokens.cardBgLight;
-    final borderColor = isDark
-        ? ArulTokens.goldBorder35
-        : ArulTokens.maroonBorder18;
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final messageColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    // Cancel outline "ivory 25%" equals [ArulTokens.grabberColorDark] exactly — the only such token.
-    final cancelBorder = isDark
-        ? ArulTokens.grabberColorDark
-        : ArulTokens.maroonBorder18;
-    final cancelText = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 24),
-            decoration: BoxDecoration(
-              color: cardColor,
-              border: Border.all(color: borderColor),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: ArulTokens.sheetTitle.copyWith(
-                    fontSize: 18,
-                    color: titleColor,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: ArulTokens.body.copyWith(color: messageColor),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _DialogButton(
-                        label:
-                            cancelLabel ?? AppLocalizations.of(context).cancel,
-                        filled: false,
-                        borderColor: cancelBorder,
-                        textColor: cancelText,
-                        identifier: 'arul_confirm_cancel',
-                        onTap: () => Navigator.of(context).pop(false),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _DialogButton(
-                        label: confirmLabel,
-                        filled: true,
-                        identifier: 'arul_confirm_ok',
-                        onTap: () => Navigator.of(context).pop(true),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogButton extends StatefulWidget {
-  const _DialogButton({
-    required this.label,
-    required this.filled,
-    required this.onTap,
-    required this.identifier,
-    this.borderColor,
-    this.textColor,
-  });
-
-  final String label;
-  final bool filled;
-  final VoidCallback onTap;
-  final Color? borderColor;
-  final Color? textColor;
-
-  final String identifier;
-
-  @override
-  State<_DialogButton> createState() => _DialogButtonState();
-}
-
-class _DialogButtonState extends State<_DialogButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final textColor = widget.filled
-        ? ArulTokens.ivory
-        : (widget.textColor ?? ArulTokens.darkText);
-    // Cancel answers the finger too: a faint tint of its own ink while pressed, and the fill's own
-    // alpha-0 at rest — never `Colors.transparent`, which is transparent BLACK.
-    final bg = widget.filled
-        ? (_pressed ? ArulTokens.maroonHover : ArulTokens.maroon)
-        : textColor.withValues(alpha: _pressed ? 0.10 : 0);
-
-    return Semantics(
-      button: true,
-      label: widget.label,
-      identifier: widget.identifier,
-      child: GestureDetector(
-        // The FILLED button is the destructive one here -> the heaviest beat; Cancel is ordinary.
-        onTapDown: (_) {
-          ArulHaptics.fire(
-            widget.filled ? ArulHapticStyle.heavy : ArulHapticStyle.tap,
-          );
-          setState(() => _pressed = true);
-        },
-        onTapUp: (_) => setState(() => _pressed = false),
-        onTapCancel: () => setState(() => _pressed = false),
-        onTap: widget.onTap,
-        child: Container(
-          height: ArulTokens.dialogButtonHeight,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            border: widget.filled
-                ? null
-                : Border.all(
-                    color: widget.borderColor ?? ArulTokens.grabberColorDark,
-                  ),
-            borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
-          ),
-          child: Text(
-            widget.label,
-            style: ArulTokens.button.copyWith(
-              fontSize: 14.5,
-              fontWeight: widget.filled ? FontWeight.w600 : FontWeight.w500,
-              color: textColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+    confirm: ArulDialogButton(
+      label: confirmLabel,
+      filled: true,
+      identifier: 'arul_confirm_ok',
+      onTap: () => Navigator.of(context).pop(true),
+    ),
+  ),
+);

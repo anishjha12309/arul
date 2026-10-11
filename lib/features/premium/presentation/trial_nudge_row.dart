@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/trial_nudge_provider.dart';
@@ -31,7 +32,7 @@ class TrialNudgeRow extends ConsumerWidget {
     if (premium == null) return const SizedBox.shrink();
 
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -69,17 +70,13 @@ class TrialNudgeRow extends ConsumerWidget {
                       Text(
                         l10n.trialNudgeRow,
                         style: ArulTokens.rowTitleTracked.copyWith(
-                          color: isDark
-                              ? ArulTokens.ivory
-                              : ArulTokens.lightText,
+                          color: p.text,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         l10n.premiumCtaTrial,
-                        style: ArulTokens.caption.copyWith(
-                          color: isDark ? ArulTokens.gold : ArulTokens.maroon,
-                        ),
+                        style: ArulTokens.caption.copyWith(color: p.accent),
                       ),
                     ],
                   ),
@@ -99,9 +96,7 @@ class TrialNudgeRow extends ConsumerWidget {
                       child: Icon(
                         Icons.close_rounded,
                         size: 18,
-                        color: isDark
-                            ? ArulTokens.darkMuted
-                            : ArulTokens.lightSecondary,
+                        color: p.textMuted,
                       ),
                     ),
                   ),

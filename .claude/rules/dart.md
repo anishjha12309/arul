@@ -22,7 +22,7 @@ Style, strict typing and `const` are lint-enforced (`analysis_options.yaml`); `d
   `setState`/`ref.watch` sit in the subtree that changes; the static subtree goes in
   `AnimatedBuilder.child`; long lists are `.builder`/slivers; no `operator ==` on a widget; no
   `Clip.antiAliasWithSaveLayer`. A new fade is `FadeTransition`, never an `Opacity` rebuilt per tick
-  (the shell, `arul_sheet` and `confirm_dialog` fades are not precedent). `ShaderMask`, blur:
+  (the shell's fade is not precedent). `ShaderMask`, blur:
   [theming.md](theming.md).
 - Tests use hand-written fakes and provider overrides; there is no mocking package.
 - **Lints left OFF** — enable one only with every site fixed in the same change:

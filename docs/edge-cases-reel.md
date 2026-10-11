@@ -39,3 +39,8 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] One status per page, no peek; the box is the clip's own shape, whole, on a 320 dp phone too
 - [ ] The status chips stay on every page; nothing folds or hides them on a swipe
 - [ ] Groups, WhatsApp and Status in the status share sheet all wear the WhatsApp logo
+
+## Status uploads — [status-clips.md](status-clips.md), [architecture.md](architecture.md) §Uploads
+- [ ] A status presigns only as an MP4 ≤10 MB; confirm-upload deletes one off the status rule
+- [ ] Upload's category is ONE select field and sheet in every kind; a kind switch drops file and category
+- [ ] Upload's Status languages never fetch the status catalog before the Status tab has

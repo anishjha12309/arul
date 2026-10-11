@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/shell/app_shell.dart';
 import '../../../app/widgets/cta_button.dart';
-import '../../../app/widgets/gopuram_mark.dart';
+import '../../../app/widgets/gopuram_art.dart';
 import '../../../app/widgets/skeleton.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import 'ringtones_screen.dart';
 
@@ -37,7 +38,7 @@ class _SkeletonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final scaler = MediaQuery.textScalerOf(context);
 
     // One line of each style -> the common case a real row renders. RingtoneRow.innerHeightFor
@@ -59,13 +60,9 @@ class _SkeletonRow extends StatelessWidget {
       height: RingtoneRow.extentFor(scaler),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight,
+        color: p.card,
         borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
-        border: Border.all(
-          color: isDark
-              ? ArulTokens.cardBorderDark09
-              : ArulTokens.cardBorderLight,
-        ),
+        border: Border.all(color: p.borderQuiet),
       ),
       child: Row(
         children: [
@@ -156,8 +153,8 @@ class RingtonesEmpty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
+    final accent = p.accent;
 
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
@@ -180,7 +177,7 @@ class RingtonesEmpty extends StatelessWidget {
                     children: [
                       _hairline(accent, leading: true),
                       const SizedBox(width: 12),
-                      GopuramMark(size: 40, color: accent),
+                      GopuramArt(height: GopuramArt.stateHeight, color: accent),
                       const SizedBox(width: 12),
                       _hairline(accent, leading: false),
                     ],
@@ -198,16 +195,14 @@ class RingtonesEmpty extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: ArulTokens.screenTitle.copyWith(
                     fontSize: 20,
-                    color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
+                    color: p.text,
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   l10n.ringtonesEmptyBody,
                   textAlign: TextAlign.center,
-                  style: ArulTokens.body.copyWith(
-                    color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
-                  ),
+                  style: ArulTokens.body.copyWith(color: p.textMuted),
                 ),
               ],
             ),
@@ -246,7 +241,7 @@ class RingtonesError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final title = offline ? l10n.offlineTitle : l10n.ringtonesErrorTitle;
     final body = offline ? l10n.offlineBody : l10n.feedErrorBody;
     return Padding(
@@ -261,25 +256,19 @@ class RingtonesError extends StatelessWidget {
           Icon(
             offline ? Icons.cloud_off_rounded : Icons.music_off_rounded,
             size: 34,
-            color: (isDark ? ArulTokens.ivory : ArulTokens.lightText)
-                .withValues(alpha: 0.35),
+            color: p.text.withValues(alpha: 0.35),
           ),
           const SizedBox(height: 12),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: ArulTokens.screenTitle.copyWith(
-              fontSize: 20,
-              color: isDark ? ArulTokens.ivory : ArulTokens.lightText,
-            ),
+            style: ArulTokens.screenTitle.copyWith(fontSize: 20, color: p.text),
           ),
           const SizedBox(height: 12),
           Text(
             body,
             textAlign: TextAlign.center,
-            style: ArulTokens.body.copyWith(
-              color: isDark ? ArulTokens.darkMuted : ArulTokens.lightBody,
-            ),
+            style: ArulTokens.body.copyWith(color: p.textMuted),
           ),
           const SizedBox(height: 20),
           CtaButton(

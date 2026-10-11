@@ -255,7 +255,11 @@ class _Tick extends StatelessWidget {
             : Border.all(color: ArulTokens.paywallBorderControl, width: 1.5),
       ),
       child: on
-          ? const Icon(Icons.check_rounded, size: 15, color: Colors.white)
+          ? const Icon(
+              Icons.check_rounded,
+              size: 15,
+              color: ArulTokens.paywallOnGold,
+            )
           : null,
     );
   }

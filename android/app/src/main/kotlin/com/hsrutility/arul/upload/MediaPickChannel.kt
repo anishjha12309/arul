@@ -54,7 +54,11 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
         // otherwise block every later pick -> the newer call always wins, the older reads as dismissed.
         pending?.success(null)
         pending = result
-        val intent = if (kind == "audio") audioIntent() else visualMediaIntent()
+        val intent = when (kind) {
+            "audio" -> audioIntent()
+            "video" -> visualMediaIntent(PickVisualMedia.VideoOnly)
+            else -> visualMediaIntent(PickVisualMedia.ImageAndVideo)
+        }
         try {
             activity.startActivityForResult(intent, REQUEST_PICK)
         } catch (e: Exception) {
@@ -64,9 +68,9 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
         }
     }
 
-    private fun visualMediaIntent(): Intent {
+    private fun visualMediaIntent(type: PickVisualMedia.VisualMediaType): Intent {
         val request = PickVisualMediaRequest.Builder()
-            .setMediaType(PickVisualMedia.ImageAndVideo)
+            .setMediaType(type)
             .build()
         return PickVisualMedia().createIntent(activity, request)
     }

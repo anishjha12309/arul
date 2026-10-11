@@ -83,8 +83,6 @@ abstract final class ArulTokens {
 
   static const Color goldBorder40 = Color.fromRGBO(212, 160, 23, 0.40);
 
-  static const Color goldBorderSolid = gold;
-
   static const Color lightText = Color(0xFF2B1116);
 
   /// 6.74:1 on ivory (WCAG AA) — evening installs read this over glare.
@@ -284,6 +282,17 @@ abstract final class ArulTokens {
   /// NOT a shadow: a shadow bleeds outside its object onto the wallpaper; this is contained by the disc.
   static const Color overMediaInkFill = Color.fromRGBO(20, 9, 12, 0.55);
 
+  /// An idle feed chip over the wallpaper: [darkSurface] at `.42`, lighter than [overMediaInkFill]
+  /// because the top scrim already sits under the chip row.
+  static const Color overMediaChipFill = Color.fromRGBO(20, 9, 12, 0.42);
+
+  /// Ivory type over media at `.92`: an idle chip's label, a step below the selected one's.
+  static const Color ivoryText92 = Color.fromRGBO(250, 245, 236, 0.92);
+
+  /// [gold] at alpha 0 — where a gold sweep fades out. Never `Colors.transparent`: that is
+  /// transparent BLACK, and a gradient through it greys the gold on the way.
+  static const Color goldClear = Color.fromRGBO(212, 160, 23, 0);
+
   // Typography — Spec > Typography. UI is the system stack, `fontFamily` null.
   // The bundled 'Marcellus' serif is for the Latin wordmark, titles, numerals and hero headings ONLY.
   // NEVER a localized string.
@@ -353,12 +362,6 @@ abstract final class ArulTokens {
     fontSize: 28,
     height: 1.15,
     letterSpacing: 1.12,
-  );
-
-  static const TextStyle heroHeading = TextStyle(
-    fontFamily: serif,
-    fontSize: 21,
-    height: 1.2,
   );
 
   static const TextStyle priceNumeral = TextStyle(
@@ -460,6 +463,11 @@ abstract final class ArulTokens {
   /// List-row corner. 15 — tighter than [cardRadius]; a 66-tall row at 20 reads as a lozenge.
   static const double rowRadius = 15;
 
+  /// A grid thumbnail's corner: [cardRadius] is visibly bulbous on a 190×338 tile.
+  static const double tileRadius = 12;
+
+  static const double buttonRadius = 16;
+
   static const double coverRadius = 13;
 
   static const double dockRadius = 26;
@@ -502,10 +510,6 @@ abstract final class ArulTokens {
 
   static const double ctaHeight52 = 52;
 
-  static const double ctaHeight54 = 54;
-
-  static const double signInPillHeight = 56;
-
   static const double dialogButtonHeight = minHitTarget;
 
   /// Minimum interactive hit target. 48.
@@ -517,6 +521,116 @@ abstract final class ArulTokens {
   /// Where a gap is drawn NEXT to one of these boxes it must be written as `gap - slack`, never as
   /// a literal, or the box's growth eats the gap — `RingtoneRow.controlGap` is the worked example.
   static const double minHitTarget = 48;
+
+  // Forms — one field look in every form; the edit-name field is the reference.
+
+  /// Every form field and select field is this tall, so a form's rows line up.
+  static const double fieldHeight = 54;
+
+  /// A field's rim, idle and focused: focus changes the colour, never the width, so nothing shifts.
+  static const double fieldBorderWidth = 1.5;
+
+  /// The label over a field: 13px w500, secondary ink.
+  static const TextStyle fieldLabel = TextStyle(
+    fontSize: 13,
+    height: 1.3,
+    fontWeight: FontWeight.w500,
+  );
+
+  /// What a field holds, typed or chosen. w400: the label above carries the weight.
+  static const TextStyle fieldText = TextStyle(fontSize: 15, height: 1.35);
+
+  /// The light theme's dashed pick-zone rim, `rgba(122,30,51,.45)`.
+  static const Color maroonBorder45 = Color.fromRGBO(122, 30, 51, 0.45);
+
+  /// Error ink on DARK: maroon dies on the dark ground. The legacy ladder's `danger`, by value.
+  static const Color dangerInkDark = Color(0xFFE08A6E);
+
+  // The destructive voice (delete account, logout): maroon at fixed alphas, and on dark a warm pale
+  // ink, because maroon type dies on the dark ground.
+
+  /// `Color.lerp(ivory, maroon, .14)` — the logout pill's and the delete row's ink on dark.
+  static const Color destructiveInkDark = Color(0xFFE8D7D2);
+  static const Color maroonBorder35 = Color.fromRGBO(122, 30, 51, 0.35);
+  static const Color maroonBorder55 = Color.fromRGBO(122, 30, 51, 0.55);
+  static const Color maroonTintFill14 = Color.fromRGBO(122, 30, 51, 0.14);
+  static const Color maroonTintFill35 = Color.fromRGBO(122, 30, 51, 0.35);
+
+  // Overlays — sheets, dialogs, toasts and the preparing card are ONE kind of surface.
+
+  /// The lift under a floating surface on LIGHT; on dark a shadow is invisible, so none is drawn.
+  /// Kept tight: a blur's cost grows with its radius, and a toast repaints it on every frame of its
+  /// entrance.
+  static const List<BoxShadow> overlayShadowLight = [
+    BoxShadow(
+      offset: Offset(0, 8),
+      blurRadius: 20,
+      color: Color.fromRGBO(43, 17, 22, 0.16),
+    ),
+  ];
+
+  /// The lamp-lit top edge of a dark raised surface: clear at the corners, gold across the middle.
+  /// It replaces a full-width 1 px line, which the rounded corners cut into a stray stroke.
+  static const LinearGradient litEdgeDark = LinearGradient(
+    colors: [
+      Color.fromRGBO(212, 160, 23, 0),
+      Color.fromRGBO(212, 160, 23, 0.6),
+      Color.fromRGBO(212, 160, 23, 0),
+    ],
+  );
+
+  /// A dialog's corners match a sheet's top, so the two read as one family.
+  static const double dialogRadius = sheetTopRadius;
+
+  static const double dialogMaxWidth = 400;
+
+  /// A dialog's title: the sheet title a step up, centred over its message.
+  static const TextStyle dialogTitle = TextStyle(
+    fontSize: 18,
+    height: 1.3,
+    fontWeight: FontWeight.w600,
+  );
+
+  /// A dialog's committing button: maroon lit from the top, the paywall CTA's depth in app colours.
+  static const LinearGradient dialogConfirmFill = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [maroonHover, maroon],
+  );
+
+  /// The temple crest over a dialog's title: gold rules fading in to a floret either side of the
+  /// gopuram, the premium dialogs' ornament at app scale.
+  static const double crestRuleWidth = 28;
+  static const double crestFloretSize = 8;
+  static const double crestGap = 7;
+  static const double crestArtHeight = 26;
+
+  /// A round premium badge: a gold ring around premium line art, as the paywall's medallions.
+  static const double medallionSize = iconChipSize;
+  static const double medallionRing = 1.25;
+  static const double medallionArtHeight = 23;
+
+  // Toast — one floating pill, dark in both themes (the inverse surface), above the dock.
+
+  static const double toastRadius = buttonRadius;
+  static const double toastMaxWidth = 520;
+  static const double toastBadgeSize = 28;
+  static const double toastIconSize = 17;
+  static const double toastRimAlpha = 0.45;
+  static const double toastBadgeAlpha = 0.16;
+
+  /// The gap between a toast and whatever it floats over: the dock's top, the keyboard, the edge.
+  static const double toastGap = 12;
+
+  static const TextStyle toastText = TextStyle(fontSize: 14, height: 1.35);
+
+  /// A switch's thumb when on: pure white on the accent track, as the platform draws it.
+  static const Color thumbOn = Color(0xFFFFFFFF);
+
+  /// A QR code is black on white, always: scanners threshold on luminance, and a brand colour buys
+  /// nothing but a lower read rate on a cheap camera.
+  static const Color qrPaper = Color(0xFFFFFFFF);
+  static const Color qrInk = Color(0xFF000000);
 
   // Floating dock geometry — constraints in docs/ui-direction.md §Dock; these values are the record.
   // The dock OVERLAYS the branch content -> these are also what a scrolling list must clear.
@@ -559,13 +673,7 @@ abstract final class ArulTokens {
 
   // Motion — Spec > Motion. Transform and opacity ONLY: never blur, never ShaderMask.
 
-  static const Duration chromeRecedeOut = Duration(milliseconds: 150);
-
   static const Duration chromeSettleIn = Duration(milliseconds: 250);
-
-  static const Duration sheetEnter = Duration(milliseconds: 300);
-
-  static const Duration dialogEnter = Duration(milliseconds: 250);
 
   static const Duration skeletonLoop = Duration(milliseconds: 1800);
 
@@ -577,10 +685,6 @@ abstract final class ArulTokens {
   static const Duration diyaFlicker = Duration(milliseconds: 1100);
 
   static const Curve settleCurve = Curves.easeOut;
-
-  static const Curve sheetCurve = Curves.ease;
-
-  static const Curve loopCurve = Curves.linear;
 
   static const double hairlineWidth = 120;
   static const double hairlineHeight = 2;
@@ -648,6 +752,9 @@ abstract final class ArulTokens {
   static const Color paywallOnCta = Color(0xFFFBF3DE);
 
   static const Color paywallOnBadge = Color(0xFFF6E7C8);
+
+  /// The tick on a chosen UPI option's gold disc.
+  static const Color paywallOnGold = Color(0xFFFFFFFF);
 
   static const Color paywallBorderSoft = Color(0xFFE6D9BD);
   static const Color paywallBorderControl = Color(0xFFD9C9A5);
@@ -1317,4 +1424,18 @@ abstract final class ArulTokens {
   static const double premiumCelebrateLotusClearance = 12;
 
   static const double premiumCelebrateDismissTop = 6;
+}
+
+/// The spacing scale: every gap, inset and padding new code writes is one of these.
+/// Named by value, so a swap from the legacy `Gap` ladder (whose `md` is 12) can never misread.
+/// [ArulTokens.screenPadding] and [ArulTokens.contentGap] are [s16].
+abstract final class ArulSpace {
+  static const double s4 = 4;
+  static const double s8 = 8;
+  static const double s12 = 12;
+  static const double s16 = 16;
+  static const double s20 = 20;
+  static const double s24 = 24;
+  static const double s32 = 32;
+  static const double s48 = 48;
 }

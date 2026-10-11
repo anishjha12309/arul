@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../app/widgets/cta_button.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 
 Future<String?> showEditNameSheet(BuildContext context, String current) {
@@ -54,19 +55,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final subColor = isDark
-        ? ArulTokens.darkTextSecondary
-        : ArulTokens.lightSecondary;
-    final focusBorder = isDark ? ArulTokens.gold : ArulTokens.maroon;
-    final fieldBg = isDark ? ArulTokens.cardBgDark05 : ArulTokens.cardBgLight;
-    final textColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final counterColor = isDark ? ArulTokens.darkFaint : ArulTokens.lightFaint;
-    // The mock's field is always ringed (that IS its focused state) -> hairline only if focus is lost.
-    final idleBorder = isDark
-        ? ArulTokens.cardBorderDark14
-        : ArulTokens.cardBorderLight;
+    final p = ArulPalette.of(context);
 
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
 
@@ -80,37 +69,42 @@ class _EditNameSheetState extends State<_EditNameSheet> {
           children: [
             Text(
               l10n.settingsEditNameTitle,
-              style: ArulTokens.sheetTitle.copyWith(color: titleColor),
+              style: ArulTokens.sheetTitle.copyWith(color: p.text),
             ),
             const SizedBox(height: 4),
             Text(
               l10n.settingsEditNameSub,
               textAlign: TextAlign.center,
-              style: ArulTokens.rowSub.copyWith(fontSize: 13, color: subColor),
+              style: ArulTokens.rowSub.copyWith(
+                fontSize: 13,
+                color: p.textSecondary,
+              ),
             ),
             const SizedBox(height: 16),
             AnimatedBuilder(
               animation: _focus,
               builder: (context, _) => Container(
-                height: 54,
+                height: ArulTokens.fieldHeight,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: fieldBg,
+                  color: p.field,
+                  // The mock's field is always ringed (that IS its focused state) -> hairline only
+                  // if focus is lost.
                   border: Border.all(
-                    color: _focus.hasFocus ? focusBorder : idleBorder,
-                    width: 1.5,
+                    color: _focus.hasFocus ? p.accent : p.border,
+                    width: ArulTokens.fieldBorderWidth,
                   ),
                   borderRadius: BorderRadius.circular(ArulTokens.inputRadius),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.person, size: 20, color: focusBorder),
+                    Icon(Icons.person, size: 20, color: p.accent),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _controller,
                         focusNode: _focus,
-                        cursorColor: focusBorder,
+                        cursorColor: p.accent,
                         maxLength: _maxChars,
                         maxLengthEnforcement: MaxLengthEnforcement.enforced,
                         textInputAction: TextInputAction.done,
@@ -120,7 +114,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
                         ],
                         style: ArulTokens.rowTitle.copyWith(
                           fontWeight: FontWeight.w400,
-                          color: textColor,
+                          color: p.text,
                         ),
                         decoration: const InputDecoration(
                           isCollapsed: true,
@@ -140,7 +134,7 @@ class _EditNameSheetState extends State<_EditNameSheet> {
                 '${_controller.text.characters.length} / $_maxChars',
                 style: ArulTokens.caption.copyWith(
                   fontSize: 11.5,
-                  color: counterColor,
+                  color: p.textFaint,
                 ),
               ),
             ),

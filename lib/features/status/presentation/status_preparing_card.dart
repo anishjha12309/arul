@@ -5,7 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/theme/motion.dart';
+import '../../../app/widgets/arul_dialog.dart';
 import '../../../app/widgets/arul_spinner.dart';
+import '../../../app/widgets/arul_surface.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/status_action_provider.dart';
 
@@ -22,21 +25,12 @@ class StatusPreparingCard {
   }) async {
     // Root navigator, like the sheet that follows: the dim covers the header and the dock, so the
     // clip being prepared cannot be swiped or tabbed away from under it.
-    final themes = InheritedTheme.capture(
-      from: context,
-      to: Navigator.of(context, rootNavigator: true).context,
-    );
-    final reduceMotion = context.reduceMotion;
-    final closedItself = await showGeneralDialog<bool>(
-      context: context,
+    final closedItself = await showArulDialog<bool>(
+      context,
+      dismissible: false,
       // The share sheet's own scrim -> card to sheet reads as one modal moment, not two.
       barrierColor: ArulTokens.sheetOverlay,
-      transitionDuration: reduceMotion ? Duration.zero : ArulTokens.dialogEnter,
-      pageBuilder: (_, _, _) => themes.wrap(_PreparingCard(until: until)),
-      transitionBuilder: (_, anim, _, child) => FadeTransition(
-        opacity: anim.drive(CurveTween(curve: ArulTokens.sheetCurve)),
-        child: child,
-      ),
+      builder: (_) => _PreparingCard(until: until),
     );
     return closedItself ?? false;
   }
@@ -78,7 +72,7 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final busy = ref.watch(
       statusActionProvider.select(
         (s) => switch (s) {
@@ -95,9 +89,6 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
       StatusActionStage.saving => l10n.statusPrepSaving,
     };
 
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
-    final textColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-
     final reduceMotion = context.reduceMotion;
     final body = Column(
       mainAxisSize: MainAxisSize.min,
@@ -105,7 +96,7 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
       children: [
         Row(
           children: [
-            ArulSpinner(size: 22, color: accent),
+            ArulSpinner(size: 22, color: p.accent),
             const SizedBox(width: 14),
             Expanded(
               child: AnimatedSwitcher(
@@ -119,7 +110,7 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
                   liveRegion: true,
                   child: Text(
                     line,
-                    style: ArulTokens.rowTitle.copyWith(color: textColor),
+                    style: ArulTokens.rowTitle.copyWith(color: p.text),
                   ),
                 ),
               ),
@@ -135,9 +126,7 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
               value: progress,
               minHeight: 3,
               color: ArulTokens.gold,
-              backgroundColor: isDark
-                  ? ArulTokens.goldTintFill14
-                  : ArulTokens.maroonTintFill07,
+              backgroundColor: p.accentTint,
             ),
           ),
         ],
@@ -151,20 +140,9 @@ class _PreparingCardState extends ConsumerState<_PreparingCard> {
           constraints: const BoxConstraints(maxWidth: 320),
           child: Material(
             type: MaterialType.transparency,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? ArulTokens.darkSheetSurface
-                    : ArulTokens.cardBgLight,
-                border: Border.all(
-                  color: isDark
-                      ? ArulTokens.goldBorder35
-                      : ArulTokens.maroonBorder18,
-                ),
-                borderRadius: BorderRadius.circular(ArulTokens.cardRadius),
-              ),
+            child: ArulSurface(
+              borderRadius: BorderRadius.circular(ArulTokens.dialogRadius),
+              padding: const EdgeInsets.all(ArulSpace.s20),
               // The bar arrives with the first byte of a real transfer -> the card eases to it. A
               // zero-length AnimatedSize asserts mid-layout, so reduced motion takes the end size.
               child: reduceMotion

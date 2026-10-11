@@ -1180,6 +1180,84 @@ abstract class AppLocalizations {
   /// **'Upload is coming soon.'**
   String get uploadComingSoonToast;
 
+  /// The third upload kind: a short video with music for WhatsApp Status. Same word as the Status tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get uploadKindStatus;
+
+  /// Pick-zone title when the Status kind is selected.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a video'**
+  String get uploadPickZoneTitleVideo;
+
+  /// One line under the Status pick-zone title. The app converts and trims the clip on the phone.
+  ///
+  /// In en, this message translates to:
+  /// **'Any video with sound. We trim it to 30 seconds.'**
+  String get uploadPickZoneSubVideo;
+
+  /// Placeholder in the optional title field for a status video.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Thaipusam special'**
+  String get uploadTitleHintStatus;
+
+  /// Footnote under the submit button for the Status kind.
+  ///
+  /// In en, this message translates to:
+  /// **'Approved status videos appear in the Status tab with your name'**
+  String get uploadFootnoteStatus;
+
+  /// Share-moment sheet body after a status video is submitted.
+  ///
+  /// In en, this message translates to:
+  /// **'We\'ll review your status video shortly. While you wait — know someone who would enjoy Arul?'**
+  String get uploadShareMomentBodyStatus;
+
+  /// Shown in the file card while the phone converts a picked video. {percent} is 0–100.
+  ///
+  /// In en, this message translates to:
+  /// **'Getting your video ready… {percent}%'**
+  String uploadPreparingVideo(int percent);
+
+  /// Error toast: a status video was picked that has no audio track.
+  ///
+  /// In en, this message translates to:
+  /// **'This video has no sound. A status needs music.'**
+  String get uploadVideoNoSound;
+
+  /// Error toast: the phone is too old to convert a video, and the clip is not already in the right format.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing videos needs Android 12 or newer.'**
+  String get uploadVideoNeedsAndroid12;
+
+  /// Error toast: converting the picked video failed on the phone.
+  ///
+  /// In en, this message translates to:
+  /// **'We couldn\'t prepare this video. Try another one.'**
+  String get uploadVideoFailed;
+
+  /// Error toast: the server's media check refused the uploaded file (type, size, length or format).
+  ///
+  /// In en, this message translates to:
+  /// **'This file didn\'t pass our checks. Try another one.'**
+  String get uploadFileRejected;
+
+  /// Error toast: the person already has the maximum number of submissions awaiting moderation.
+  ///
+  /// In en, this message translates to:
+  /// **'You have uploads waiting for review. Try again once they\'re reviewed.'**
+  String get uploadTooManyPending;
+
+  /// Button on the file card that picks a different file.
+  ///
+  /// In en, this message translates to:
+  /// **'Change'**
+  String get uploadChangeFile;
+
   /// No description provided for @premiumNavTitle.
   ///
   /// In en, this message translates to:

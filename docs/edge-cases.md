@@ -75,7 +75,7 @@ each heading's docs.
 
 ## Upload — [architecture.md](architecture.md) §Uploads
 - [ ] confirm-upload QCs bytes against the submitted KIND's role; idempotent on unique `file_key`
-- [ ] A category is required for both kinds, from that kind's OWN list
+- [ ] A category is required for every kind, from that kind's OWN list
 - [ ] Moderation never ships an off-spec video as-is
 - [ ] ONE picker per app (guard the call); no permission, no `resolveActivity` pre-flight
 

@@ -10,7 +10,7 @@ import '../../../app/widgets/arul_pushed_header.dart';
 import '../../../app/widgets/arul_spinner.dart';
 import '../../../app/widgets/state_views.dart';
 import '../../../core/config/app_config.dart';
-import '../../../theme/arul_tokens.dart';
+import '../../../theme/arul_palette.dart';
 
 /// The three legal documents the app links to, and where each one lives.
 ///
@@ -150,13 +150,7 @@ class _PolicyScreenState extends State<PolicyScreen> {
     final brightness = Theme.of(context).brightness;
     if (brightness == _brightness) return;
     _brightness = brightness;
-    unawaited(
-      _controller.setBackgroundColor(
-        _brightness == Brightness.dark
-            ? ArulTokens.darkSurface
-            : ArulTokens.ivory,
-      ),
-    );
+    unawaited(_controller.setBackgroundColor(ArulPalette.of(context).surface));
     if (!_loading) unawaited(_applyAppChrome());
   }
 
@@ -278,10 +272,7 @@ class _PolicyScreenState extends State<PolicyScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
-    final textPrimary = isDark ? ArulTokens.darkText : ArulTokens.lightText;
-    final accent = isDark ? ArulTokens.gold : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
 
     return PopScope(
       // Intercepted only when there is in-page history -> an ordinary read keeps predictive back.
@@ -290,13 +281,13 @@ class _PolicyScreenState extends State<PolicyScreen> {
         if (!didPop) unawaited(_back());
       },
       child: Scaffold(
-        backgroundColor: bg,
+        backgroundColor: p.surface,
         body: SafeArea(
           child: Column(
             children: [
               ArulPushedHeader(
                 title: widget.doc.title(l10n),
-                color: textPrimary,
+                color: p.text,
                 onBack: () => unawaited(_back()),
                 identifier: 'arul_policy_back',
               ),
@@ -323,7 +314,7 @@ class _PolicyScreenState extends State<PolicyScreen> {
                               child: ArulSpinner(
                                 size: 36,
                                 strokeWidth: 2.4,
-                                color: accent,
+                                color: p.accent,
                               ),
                             ),
                         ],

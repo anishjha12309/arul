@@ -21,10 +21,10 @@ approving a user submission copies the object into that category's prefix. The s
 | Ringtone (audio) | ringtones/&lt;category&gt;/{uuid}.mp3 | MP3/M4A/AAC | MP3 (libmp3lame), ≤40 s recommended | 15 MB |
 | Status clip | statuses/&lt;category&gt;/{uuid}.mp4 + REQUIRED poster | MP4 with audio | **its source's shape on the video rule** (1024 wide, e.g. 1024×1536) H.264 + AAC at −14 LUFS, **≤30 s** — [status-clips.md](status-clips.md) | **10 MB** |
 
-**Those "Max" figures are the IMPORT PIPELINE's, not the Worker's.** The static 10 MB cap is enforced
-on both paths, but the Worker's server-side ceiling for `video/mp4` is far higher — so a
-user-submitted MP4 well over 15 MB passes server-side validation. Only `verify.mjs` enforces the
-bulk-import figure.
+**Those "Max" figures are the IMPORT PIPELINE's, not the Worker's.** The static and status 10 MB caps
+are enforced on both paths, but the Worker's server-side ceiling for any other `video/mp4` is far
+higher — so a user-submitted live wallpaper well over 15 MB passes server-side validation. Only
+`verify.mjs` enforces the bulk-import figure.
 
 **There is no ringtone cover role** — row art is bundled in-app ([ringtones.md](ringtones.md) §Row art).
 The canonical sweep still reads `cover_key` (null on every row) into its keep-set; leave that as it is.
@@ -127,3 +127,9 @@ ffmpeg -i in.m4a -c:a libmp3lame -q:a 4 out/<uuid>.mp3
   — a whole catalogue once had to be re-encoded, which worked only because masters existed.
 - Moderation queue: **never approve a user-submitted video whose dimensions fail the rule** — the
   approve flow copies bytes verbatim. Re-encode with the recipe above, or reject.
+- **A user STATUS submission must already be on the status rule** — H.264 MP4 with sound, ≤30 s,
+  ≤10 MB, video-rule dimensions: confirm-upload's QC deletes anything else
+  ([status-clips.md](status-clips.md)).
+- **The app converts a picked status or live video on the phone first** ([architecture.md](architecture.md)
+  §Uploads): live → 1024×1824 H.264, muted, cut at 10 s, ~8 Mbps (a hardware encoder has no CRF). A clip
+  already on its rule goes up untouched.

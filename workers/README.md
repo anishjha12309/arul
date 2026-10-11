@@ -28,8 +28,8 @@ catalog build: [docs/architecture.md](../docs/architecture.md) · crons:
 | POST | /me/profile | Bearer | Display-name edit |
 | DELETE | /me | Bearer | Revoke mandate(s) → trial tombstone → cascade → denylist |
 | POST | /media/signed-url | Bearer | **Live premium check** → presigned R2 GET; kind ∈ {wallpaper, ringtone, status}; bumps the popularity counter (status: `share_count` / `download_count` per action) |
-| POST | /media/upload-url | Bearer | Presigned PUT under `user/<sub>/submissions/…` only |
-| POST | /media/confirm-upload | Bearer | Record a submission — byte-QC'd against its KIND's role, ≤10 pending, upsert on `file_key` |
+| POST | /media/upload-url | Bearer | Presigned PUT under `user/<sub>/submissions/…` only; a `kind: status` claim must be `video/mp4` ≤10 MB |
+| POST | /media/confirm-upload | Bearer | Record a submission — kind ∈ {wallpaper, ringtone, status}, byte-QC'd against its KIND's role, ≤10 pending, upsert on `file_key` |
 | POST | /payments/initiate · status · cancel · abandon | Bearer | Mandate lifecycle; 409 `setup_in_progress` ≠ `already_subscribed` |
 | POST | /payments/webhook | SHA256(user:pass) | S2S callback, deduped on (event, orderId) |
 | GET | /payments/callback | — | Post-mandate browser redirect |

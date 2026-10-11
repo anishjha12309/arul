@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/arul_palette.dart';
 import '../../theme/arul_tokens.dart';
 import 'arul_icon_tap.dart';
 
@@ -66,7 +67,7 @@ class ArulScreenHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
     return Padding(
       // The trailing action's spare target width is laid out INTO the gutter, never translated
@@ -118,9 +119,7 @@ class ArulScreenHeader extends StatelessWidget {
                         style: (titleStyle ?? ArulTokens.screenHeaderTitle).copyWith(
                           // Gold on dark, not ivory -> the header reads as brand, not as a page
                           // label. Light keeps its ink — gold on ivory has nothing to carry it.
-                          color: isDark
-                              ? ArulTokens.gold
-                              : ArulTokens.lightText,
+                          color: p.chromeInk,
                         ),
                       ),
                     ),

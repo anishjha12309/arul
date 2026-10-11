@@ -49,12 +49,26 @@ to `cacheDir/upload_picks/`, swept whole at every pick; Dart only sees the copy.
 the widget: the pick zone is a bare `GestureDetector`, and a double tap opened a second picker over the
 first.
 
-upload-url presigns PUT under `user/<sub>/submissions/…` only. confirm-upload takes kind `wallpaper` or
-`ringtone` and byte-QCs against THAT kind's role — a fixed role rejected every ringtone; ≤10 pending per
-user. **A category is required for both kinds, and the two draw from DIFFERENT sets** — the wrong set
-files a row under a chip that tab never renders ([ringtones.md](ringtones.md)); `ringtones.category` is
-NOT NULL, so the CMS vets it before copying. Moderation never ships a dimension-violating video: approve
-copies bytes verbatim ([media-conventions.md](media-conventions.md)).
+**A picked status or live-wallpaper video is converted on the phone** (`VideoPrepService` →
+`VideoPrepChannel`, Media3 Transformer), because nothing transcodes server-side. Dart plans every number
+(`video_plan.dart`); native only probes and exports. Android 12+ only (Media3 touches `LogSessionId`
+unguarded below 31) and ONE export at a time: it holds a decoder and an encoder from the feed's budget.
+Outputs sit in `cacheDir/upload_prepared/`, swept at engine start.
+
+upload-url presigns PUT under `user/<sub>/submissions/…` only, and refuses a `kind: status` claim that is
+not `video/mp4` or is over 10 MB before the bytes travel. confirm-upload takes kind `wallpaper`,
+`ringtone` or `status` and byte-QCs against THAT kind's role — a fixed role rejected every ringtone; ≤10
+pending per user.
+
+**Deploy the CMS first whenever confirm-upload gains a kind (`status` included).** CMS approve refuses a
+kind its `userUploadKinds` lacks, so the row can only be rejected or expire after 30 days, pinning its
+bytes and one of the user's 10 pending slots until then.
+
+**A category is required for every kind, each from its OWN set** (status: the languages, such as
+`tamil`) — the wrong set files a row under a chip that tab never renders ([ringtones.md](ringtones.md));
+`ringtones.category` and `statuses.category` are NOT NULL, so the CMS vets the category before copying.
+Moderation never ships a dimension-violating video: approve copies bytes verbatim
+([media-conventions.md](media-conventions.md)).
 
 ## Catalog generation
 

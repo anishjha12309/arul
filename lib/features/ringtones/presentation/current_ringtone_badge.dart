@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/l10n/app_localizations.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 
 /// The gold "Current" pill on the ringtone row the phone is actually ringing with.
@@ -25,7 +26,7 @@ class CurrentRingtoneBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -43,7 +44,7 @@ class CurrentRingtoneBadge extends StatelessWidget {
           style: ArulTokens.chipActive.copyWith(
             fontSize: _fontSize,
             // Gold is the accent, but gold TYPE does not carry on the light card -> ink, not fill.
-            color: isDark ? ArulTokens.gold : ArulTokens.goldInkLight,
+            color: p.goldInk,
           ),
         ),
       ),

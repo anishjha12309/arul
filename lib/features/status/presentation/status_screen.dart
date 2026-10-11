@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/theme/tokens.dart';
 import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_icon_tap.dart';
@@ -24,6 +23,7 @@ import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../wallpapers/presentation/feed_states.dart';
@@ -307,7 +307,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+    final p = ArulPalette.of(context);
 
     if (ref.watch(statusCatalogProvider) case AsyncData(:final value)) {
       _maybeOpenDeepLink(value);
@@ -331,7 +331,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-        backgroundColor: frameColor,
+        backgroundColor: p.surface,
         body: SafeArea(
           child: Column(
             children: [
@@ -414,7 +414,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     final busy = ref.watch(
       statusActionProvider.select((s) => s is! StatusActionIdle),
     );
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     // One status per page, the whole reel (Shubh's status view): the clip's box is the largest of
     // its own shape inside the page, centred — no peek of the next clip, nothing beside the picture.
     final box = _pageInset.deflateSize(reel);
@@ -430,7 +430,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
             return ref.read(statusCatalogProvider.notifier).refresh();
           },
           color: ArulTokens.gold,
-          backgroundColor: isDark ? ArulTokens.darkSurface : ArulTokens.ivory,
+          backgroundColor: p.surface,
           child: PageView.builder(
             controller: _pagerFor(),
             scrollDirection: Axis.vertical,
@@ -522,7 +522,7 @@ class StatusMedia extends StatelessWidget {
     // The card IS the clip's shape (FeedCardGeometry.contain) -> fill is lossless: the whole
     // picture, edge to edge, nothing trimmed and nothing of ours beside it.
     return ColoredBox(
-      color: ArulColors.ink,
+      color: ArulTokens.darkSurface,
       child: Stack(
         fit: StackFit.expand,
         children: [

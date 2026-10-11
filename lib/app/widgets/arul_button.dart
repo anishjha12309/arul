@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 
 import '../../core/haptics/arul_haptics.dart';
+import '../../theme/arul_tokens.dart';
 import '../theme/motion.dart';
-import '../theme/tokens.dart';
 import 'button_content.dart';
 import 'button_kind.dart';
 
@@ -95,10 +95,10 @@ class _ArulButtonState extends State<ArulButton>
             child: Container(
               width: widget.expand ? double.infinity : null,
               height: 54,
-              padding: const EdgeInsets.symmetric(horizontal: Gap.xl),
+              padding: const EdgeInsets.symmetric(horizontal: ArulSpace.s24),
               decoration: BoxDecoration(
                 color: bg,
-                borderRadius: Radii.buttonShape,
+                borderRadius: BorderRadius.circular(ArulTokens.buttonRadius),
               ),
               child: ButtonContent(
                 label: widget.label,

@@ -24,6 +24,7 @@ import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../data/models/ringtone.dart';
 import '../../../data/models/wallpaper.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../data/ringtone_set_service.dart';
@@ -229,7 +230,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
 
     final offline = ref.watch(isOnlineProvider).value == false;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final frameColor = isDark ? ArulTokens.darkSurface : ArulTokens.ivory;
+    final p = ArulPalette.of(context);
     final setState_ = ref.watch(ringtoneSetProvider);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -243,7 +244,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
         systemNavigationBarContrastEnforced: false,
       ),
       child: Scaffold(
-        backgroundColor: frameColor,
+        backgroundColor: p.surface,
         body: SafeArea(
           // The list runs full-bleed under the dock, and its own inset covers the gesture bar.
           // A SafeArea pad here would only double that up.
@@ -291,9 +292,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
                             return _refresh();
                           },
                           color: ArulTokens.gold,
-                          backgroundColor: isDark
-                              ? ArulTokens.darkSheetSurface
-                              : ArulTokens.cardBgLight,
+                          backgroundColor: p.sheet,
                           child: _buildBody(value),
                         ),
                         AsyncError() => RingtonesError(
@@ -404,10 +403,7 @@ class _ChipsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fill = isDark
-        ? ArulTokens.cardBgDark045
-        : ArulTokens.maroonTintFill08;
+    final p = ArulPalette.of(context);
     return SizedBox(
       height: _RingtoneChips._height,
       child: Row(
@@ -421,7 +417,7 @@ class _ChipsSkeleton extends StatelessWidget {
               // the catalog landed, which is the jump this skeleton exists to prevent.
               height: ArulChip.categoryHeight,
               decoration: BoxDecoration(
-                color: fill,
+                color: p.tile,
                 borderRadius: BorderRadius.circular(ArulTokens.pillRadius),
               ),
             ),
@@ -443,7 +439,7 @@ class _SetProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final label = switch (state.stage) {
       RingtoneSetStage.checkingPermission ||
       RingtoneSetStage.fetchingUrl => l10n.ringtoneSetPreparing,
@@ -466,11 +462,7 @@ class _SetProgress extends StatelessWidget {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               label,
-              style: ArulTokens.caption.copyWith(
-                color: isDark
-                    ? ArulTokens.darkMuted
-                    : ArulTokens.lightSecondary,
-              ),
+              style: ArulTokens.caption.copyWith(color: p.textMuted),
             ),
           ),
         ],
@@ -542,7 +534,7 @@ class RingtoneRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
 
     final preview = ref.watch(ringtonePreviewProvider);
     // A plain read, not a watch -> the NOTIFIER reference itself never changes, so grabbing it here
@@ -571,18 +563,12 @@ class RingtoneRow extends ConsumerWidget {
       height: extentFor(MediaQuery.textScalerOf(context)),
       padding: const EdgeInsets.symmetric(horizontal: _padH, vertical: _padV),
       decoration: BoxDecoration(
-        color: lit
-            ? ArulTokens.goldTintFill10
-            : (isDark ? ArulTokens.cardBgDark045 : ArulTokens.cardBgLight),
+        color: lit ? ArulTokens.goldTintFill10 : p.card,
         borderRadius: BorderRadius.circular(ArulTokens.rowRadius),
         border: Border.all(
           // Explicit so [extent] and this can never disagree.
           width: _borderWidth,
-          color: lit
-              ? ArulTokens.goldBorder52
-              : (isDark
-                    ? ArulTokens.cardBorderDark09
-                    : ArulTokens.cardBorderLight),
+          color: lit ? ArulTokens.goldBorder52 : p.borderQuiet,
         ),
       ),
       child: Row(
@@ -606,11 +592,7 @@ class RingtoneRow extends ConsumerWidget {
                   ringtone.title,
                   maxLines: _titleMaxLines,
                   style: ArulTokens.rowTitleTracked.copyWith(
-                    color: lit
-                        ? (isDark
-                              ? ArulTokens.gold
-                              : ArulTokens.nowPlayingTitleLight)
-                        : (isDark ? ArulTokens.ivory : ArulTokens.lightText),
+                    color: lit ? p.goldInk : p.text,
                   ),
                 ),
                 // The deity name — the only place in the app that names the god a track is to.
@@ -627,9 +609,7 @@ class RingtoneRow extends ConsumerWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: ArulTokens.caption.copyWith(
-                              color: isDark
-                                  ? ArulTokens.darkMuted
-                                  : ArulTokens.lightSecondary,
+                              color: p.textMuted,
                             ),
                           ),
                         ),
@@ -702,18 +682,12 @@ class _PlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = ArulPalette.of(context);
     final lit = playing || buffering;
 
-    final fill = lit
-        ? ArulTokens.gold
-        : (isDark ? const Color(0x00000000) : ArulTokens.cardBgLight);
-    final border = lit
-        ? ArulTokens.gold
-        : (isDark ? ArulTokens.ivoryBorder22 : ArulTokens.maroonBorder18);
-    final glyph = lit
-        ? ArulTokens.darkSurface
-        : (isDark ? ArulTokens.ivory : ArulTokens.lightText);
+    final fill = lit ? ArulTokens.gold : p.controlFill;
+    final border = lit ? ArulTokens.gold : p.controlRim;
+    final glyph = lit ? ArulTokens.darkSurface : p.text;
 
     return Semantics(
       button: true,
@@ -1040,11 +1014,7 @@ class _SetPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final border = isDark
-        ? ArulTokens.ivoryBorder22
-        : ArulTokens.maroonBorder18;
-    final fg = isDark ? ArulTokens.ivoryText86 : ArulTokens.maroon;
+    final p = ArulPalette.of(context);
     final disabled = onTap == null;
     return Semantics(
       button: true,
@@ -1083,12 +1053,16 @@ class _SetPill extends StatelessWidget {
                       borderRadius: BorderRadius.circular(
                         ArulTokens.pillRadius,
                       ),
-                      border: Border.all(color: border),
+                      border: Border.all(color: p.controlRim),
                     ),
                     child: Center(
                       widthFactor: 1,
                       child: busy
-                          ? ArulSpinner(size: 16, strokeWidth: 2, color: fg)
+                          ? ArulSpinner(
+                              size: 16,
+                              strokeWidth: 2,
+                              color: p.controlInk,
+                            )
                           : Transform.translate(
                               offset: Offset(
                                 0,
@@ -1108,7 +1082,7 @@ class _SetPill extends StatelessWidget {
                                     context,
                                   ).clamp(maxScaleFactor: 1.0),
                                   style: ArulTokens.chipActive.copyWith(
-                                    color: fg,
+                                    color: p.controlInk,
                                   ),
                                 ),
                               ),

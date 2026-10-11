@@ -581,6 +581,55 @@ class AppLocalizationsKn extends AppLocalizations {
   String get uploadComingSoonToast => 'ಅಪ್‌ಲೋಡ್ ಶೀಘ್ರದಲ್ಲೇ ಬರುತ್ತದೆ.';
 
   @override
+  String get uploadKindStatus => 'ಸ್ಟೇಟಸ್';
+
+  @override
+  String get uploadPickZoneTitleVideo => 'ವೀಡಿಯೊ ಆರಿಸಿ';
+
+  @override
+  String get uploadPickZoneSubVideo =>
+      'ಧ್ವನಿ ಇರುವ ಯಾವುದೇ ವೀಡಿಯೊ. ಅದನ್ನು 30 ಸೆಕೆಂಡುಗಳಿಗೆ ಕತ್ತರಿಸುತ್ತೇವೆ.';
+
+  @override
+  String get uploadTitleHintStatus => 'ಉದಾ. ತೈಪೂಸಂ ವಿಶೇಷ';
+
+  @override
+  String get uploadFootnoteStatus =>
+      'ನಾವು ಒಪ್ಪಿದ ಸ್ಟೇಟಸ್ ವೀಡಿಯೊಗಳು ನಿಮ್ಮ ಹೆಸರಿನೊಂದಿಗೆ ಸ್ಟೇಟಸ್ ಟ್ಯಾಬ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತವೆ';
+
+  @override
+  String get uploadShareMomentBodyStatus =>
+      'ನಿಮ್ಮ ಸ್ಟೇಟಸ್ ವೀಡಿಯೊವನ್ನು ಬೇಗ ಪರಿಶೀಲಿಸುತ್ತೇವೆ. ಅಷ್ಟರಲ್ಲಿ — Arul ಇಷ್ಟಪಡುವ ಯಾರಾದರೂ ಗೊತ್ತೇ?';
+
+  @override
+  String uploadPreparingVideo(int percent) {
+    return 'ನಿಮ್ಮ ವೀಡಿಯೊ ಸಿದ್ಧವಾಗುತ್ತಿದೆ… $percent%';
+  }
+
+  @override
+  String get uploadVideoNoSound =>
+      'ಈ ವೀಡಿಯೊದಲ್ಲಿ ಧ್ವನಿ ಇಲ್ಲ. ಸ್ಟೇಟಸ್‌ಗೆ ಸಂಗೀತ ಬೇಕು.';
+
+  @override
+  String get uploadVideoNeedsAndroid12 =>
+      'ವೀಡಿಯೊಗಳನ್ನು ಸಿದ್ಧಪಡಿಸಲು Android 12 ಅಥವಾ ಹೊಸ ಆವೃತ್ತಿ ಬೇಕು.';
+
+  @override
+  String get uploadVideoFailed =>
+      'ಈ ವೀಡಿಯೊವನ್ನು ಸಿದ್ಧಪಡಿಸಲು ಆಗಲಿಲ್ಲ. ಬೇರೆಯದನ್ನು ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get uploadFileRejected =>
+      'ಈ ಫೈಲ್ ನಮ್ಮ ಪರಿಶೀಲನೆಯಲ್ಲಿ ಪಾಸ್ ಆಗಲಿಲ್ಲ. ಬೇರೆಯದನ್ನು ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get uploadTooManyPending =>
+      'ನಿಮ್ಮ ಅಪ್‌ಲೋಡ್‌ಗಳು ಪರಿಶೀಲನೆಗಾಗಿ ಕಾಯುತ್ತಿವೆ. ಅವು ಪರಿಶೀಲನೆಯಾದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get uploadChangeFile => 'ಬದಲಿಸಿ';
+
+  @override
   String get premiumNavTitle => 'ಚಂದಾದಾರಿಕೆ';
 
   @override

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../app/widgets/arul_sheet.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../providers/theme_mode_provider.dart';
 
@@ -57,9 +58,7 @@ class _ThemeSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final selected = ref.watch(themeModeProvider);
-    final titleColor = isDark ? ArulTokens.darkText : ArulTokens.lightText;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 26),
@@ -69,7 +68,9 @@ class _ThemeSheet extends ConsumerWidget {
         children: [
           Text(
             l10n.settingsTheme,
-            style: ArulTokens.sheetTitle.copyWith(color: titleColor),
+            style: ArulTokens.sheetTitle.copyWith(
+              color: ArulPalette.of(context).text,
+            ),
           ),
           const SizedBox(height: 14),
           for (final (i, o) in _options(l10n).indexed) ...[
