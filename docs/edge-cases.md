@@ -80,7 +80,7 @@ each heading's docs.
 - [ ] ONE picker per app (guard the call); no permission, no `resolveActivity` pre-flight
 
 ## Push — [push.md](push.md), [push-registry.md](push-registry.md), [notifications.md](notifications.md)
-- [ ] Two channels, created at launch; campaigns only through the CMS; retired reminders cleared
+- [ ] Two channels at launch; CMS campaigns + [win-back](winback-push.md); old reminders cleared
 - [ ] The campaign channel copies a blocked or lowered `arul_updates_v1` once, and is never created natively
 - [ ] Campaigns ring the bell (`_v2`) at v1's level; a blocked v1 stays
 - [ ] Every campaign to a build >= `HEADSUP_MIN_BUILD` is data-only; a premium campaign stays PRIVATE on the lock screen

@@ -4,6 +4,7 @@
 library;
 
 import '../../../core/deeplink/deep_link_target.dart';
+import '../../premium/domain/cancel_offer.dart';
 
 const _kDestWallpaper = 'wallpaper';
 const _kDestRingtone = 'ringtone';
@@ -27,8 +28,8 @@ String? pushCampaignId(Map<String, Object?> data) {
 
 /// The target a campaign payload names, or null for "just open the app".
 ///
-/// `id` is required for the two content destinations and IGNORED for the rest: a category push whose
-/// slug went missing still belongs on the feed, and the premium screen never had an id.
+/// `id` is required for the two content destinations and optional elsewhere: a category push whose
+/// slug went missing still belongs on the feed, and premium reads it only as the win-back offer.
 DeepLinkTarget? pushTargetFor(Map<String, Object?> data) {
   // Read, never cast. FCM requires string data values, so a non-string can only come from a payload
   // nobody here composed — and a cast that throws would be an unreadable payload turning into a
@@ -51,7 +52,10 @@ DeepLinkTarget? pushTargetFor(Map<String, Object?> data) {
           ? null
           : CategoryLinkTarget(id.toLowerCase(), source: DeepLinkSource.push);
     case _kDestPremium:
-      return const PremiumLinkTarget(source: DeepLinkSource.push);
+      return PremiumLinkTarget(
+        source: DeepLinkSource.push,
+        offer: id.toLowerCase() == kWinbackOffer ? kWinbackOffer : null,
+      );
     default:
       return null;
   }

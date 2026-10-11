@@ -9,7 +9,7 @@ Android-only Flutter app, package `com.hsrutility.arul`: South Indian devotional
 and live), ringtones and status clips (video with music), premium via PhonePe UPI Autopay. Dock:
 Wallpapers · Ringtones · Status, all three fixed (never gated on the remote config); **Settings
 is a pushed route from the header gear, never a dock branch.** No screen promises a push or a
-reminder — campaign pushes come only from the CMS through the Worker.
+reminder — campaign pushes come only from the CMS through the Worker, bar one: `docs/winback-push.md`.
 
 - **All content is premium** (apply, share, set, save); browse and preview are free and media keys are
   public by design. The gate is the Worker's live entitlement read, whose rule has ONE home,

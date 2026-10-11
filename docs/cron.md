@@ -54,7 +54,8 @@ Pass D: [autopay-debits.md](autopay-debits.md).
 Its own invocation for the same reason: a large drain must never share a wall clock with the catalog
 rebuild. Claims NOTHING unless `PUSH_ENABLED` is exactly `"true"`, and logs nothing on an idle minute —
 at 1,440 ticks a day a line per tick buries everything else. The registry prune an idle tick runs logs
-only when it deleted something. Rules: [push.md](push.md).
+only when it deleted something. Rules: [push.md](push.md). The win-back resolver runs first in the same chain —
+SQL only, isolated by a `.catch` — and feeds that drain ([winback-push.md](winback-push.md)).
 
 ## `30 21 * * *` — daily backstop (21:30 UTC = 03:00 IST, off-peak)
 

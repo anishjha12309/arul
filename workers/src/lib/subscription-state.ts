@@ -14,6 +14,7 @@ import {
 } from "./posthog.js";
 import { OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE } from "./pricing.js";
 import { grantReferralReward } from "./referral.js";
+import { type WinbackRecord, withWinbackRecord } from "./winback-push.js";
 
 type Sql = postgres.Sql;
 type Fragment = postgres.PendingQuery<postgres.Row[]>;
@@ -360,13 +361,14 @@ export async function parkSubscription(
   where: Fragment,
   status: "cancelled" | "paused",
   reason: SubscriptionCancelReason = "revoked_at_phonepe",
+  winback: WinbackRecord | null = null,
 ): Promise<{ user_id: string; prior_status: string | null }[]> {
   const from =
     status === "paused"
       ? sql`s.status IN ('trialing', 'active')`
       : sql`s.status IN ('trialing', 'active', 'paused')`;
   // Self-join so the PRIOR status rides back with the write -> `prior` is the pre-update row under Postgres SET semantics
-  const rows = (await sql`
+  const update = sql`
     UPDATE subscriptions AS s
     SET status        = ${status},
         next_debit_at = NULL,
@@ -377,7 +379,10 @@ export async function parkSubscription(
       AND prior.id = s.id
       AND ${from}
     RETURNING s.user_id, s.merchant_subscription_id, s.price_paise, prior.status AS prior_status, s.updated_at
-  `) as unknown as {
+  `;
+  const rows = (await (status === "cancelled"
+    ? withWinbackRecord(sql, update, winback)
+    : update)) as unknown as {
     user_id: string;
     merchant_subscription_id: string | null;
     price_paise: number | string | null;

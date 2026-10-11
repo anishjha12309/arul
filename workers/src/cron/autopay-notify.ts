@@ -5,6 +5,7 @@ import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { grantReferralReward } from "../lib/referral.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
 import { parkSubscription } from "../lib/subscription-state.js";
+import { type WinbackRecord, winbackRecordFor } from "../lib/winback-push.js";
 import { runHourlySweeps } from "./autopay-sweeps.js";
 import {
   notifyRedemption,
@@ -187,7 +188,14 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           // It is then re-selected every tick, forever, for a mandate PhonePe already retired
           // A terminal state is a FINAL answer -> reconcile the row instead of re-asking
           if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
-            await parkMandate(env, sql, row.id as string, "cancelled");
+            await parkMandate(
+              env,
+              sql,
+              row.id as string,
+              "cancelled",
+              "revoked_at_phonepe",
+              winbackRecordFor(subStatus.state, "pass_a"),
+            );
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
                 `marked cancelled, next_debit_at cleared (access kept to current_period_end)`,
@@ -485,7 +493,14 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           try {
             const subStatus = await getSubscriptionStatus(env, merchantSubId);
             if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
-              await parkMandate(env, sql, outcomeRow.id, "cancelled");
+              await parkMandate(
+                env,
+                sql,
+                outcomeRow.id,
+                "cancelled",
+                "revoked_at_phonepe",
+                winbackRecordFor(subStatus.state, "pass_b"),
+              );
               console.warn(
                 `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
                   `marked cancelled, debit abandoned (access kept to current_period_end)`,
@@ -558,7 +573,14 @@ export async function runAutopayNotify(env: Env): Promise<void> {
             );
           } else if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
             // Paused then killed -> the same park Pass B uses -> access still runs to current_period_end
-            await parkMandate(env, sql, subscriptionId, "cancelled");
+            await parkMandate(
+              env,
+              sql,
+              subscriptionId,
+              "cancelled",
+              "revoked_at_phonepe",
+              winbackRecordFor(subStatus.state, "pass_d"),
+            );
             cancelled += 1;
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} is ${subStatus.state} at PhonePe — ` +
@@ -831,8 +853,9 @@ async function parkMandate(
   subscriptionId: string,
   status: "cancelled" | "paused",
   reason: SubscriptionCancelReason = "revoked_at_phonepe",
+  winback: WinbackRecord | null = null,
 ): Promise<void> {
-  await parkSubscription(env, sql, sql`s.id = ${subscriptionId}`, status, reason);
+  await parkSubscription(env, sql, sql`s.id = ${subscriptionId}`, status, reason, winback);
 }
 
 function addOneMonth(date: Date): Date {

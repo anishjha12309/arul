@@ -25,6 +25,7 @@ import {
   releaseClaim,
   type SetupGrant,
 } from "../lib/subscription-state.js";
+import { winbackRecordFor } from "../lib/winback-push.js";
 
 type Sql = ReturnType<typeof getDb>;
 
@@ -353,7 +354,14 @@ async function reconcileLegacyMandates(env: Env, sql: Sql, budget: SweepBudget):
     try {
       const st = await getSubscriptionStatus(env, row.merchant_subscription_id);
       if (ENDED_MANDATE_STATES.has(st.state)) {
-        await parkSubscription(env, sql, target, "cancelled", "revoked_at_phonepe");
+        await parkSubscription(
+          env,
+          sql,
+          target,
+          "cancelled",
+          "revoked_at_phonepe",
+          winbackRecordFor(st.state, "legacy_reconcile"),
+        );
         tally.cancelled += 1;
         return;
       }

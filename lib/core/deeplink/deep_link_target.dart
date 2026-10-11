@@ -205,7 +205,10 @@ final class CategoryLinkTarget extends DeepLinkTarget {
 /// It is a PUSHED route over the shell, not a dock branch, so it has no tab of its own; [tab] answers
 /// Wallpapers only because the sealed contract needs an answer for the shell underneath.
 final class PremiumLinkTarget extends DeepLinkTarget {
-  const PremiumLinkTarget({super.source = DeepLinkSource.appLink});
+  const PremiumLinkTarget({super.source = DeepLinkSource.appLink, this.offer});
+
+  /// The offer whose sheet opens on arrival (`kWinbackOffer`); null opens the plain screen.
+  final String? offer;
 
   @override
   ArulTab get tab => ArulTab.wallpapers;
@@ -215,13 +218,16 @@ final class PremiumLinkTarget extends DeepLinkTarget {
 
   @override
   bool operator ==(Object other) =>
-      other is PremiumLinkTarget && other.source == source;
+      other is PremiumLinkTarget &&
+      other.source == source &&
+      other.offer == offer;
 
   @override
-  int get hashCode => Object.hash(PremiumLinkTarget, source);
+  int get hashCode => Object.hash(PremiumLinkTarget, source, offer);
 
   @override
-  String toString() => 'PremiumLinkTarget(${source.key})';
+  String toString() =>
+      'PremiumLinkTarget(${source.key}${offer == null ? '' : ', $offer'})';
 }
 
 class _DeepLinkNotifier extends ChangeNotifier {

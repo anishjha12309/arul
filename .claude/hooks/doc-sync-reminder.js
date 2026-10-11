@@ -48,6 +48,15 @@ const ROUTES = [
       "docs/edge-cases.md §Premium / payments",
     ],
   },
+  // The win-back resolver is a cron AND a push, and its lib file sits under the catch-all: it outranks all three rows.
+  {
+    when: [
+      "workers/src/lib/winback-push.ts",
+      "workers/src/cron/winback-push.ts",
+      "db/schema/35_winback_push.sql",
+    ],
+    docs: ["docs/winback-push.md", "docs/edge-cases.md §Push"],
+  },
   // Push is a cron too, so it must outrank the generic cron row.
   {
     when: [

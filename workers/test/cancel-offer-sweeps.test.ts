@@ -108,7 +108,8 @@ const HEAL_CANDIDATE =
   /^SELECT COALESCE\(s\.superseded_mandate_id, s\.merchant_subscription_id\) AS mandate_id/;
 const HEAL = /^UPDATE subscriptions AS s SET status = \?, merchant_subscription_id = COALESCE/;
 const NOTE_RETRY = /^UPDATE subscriptions SET revoke_retry_mandate_id = \?/;
-const PARK = /^UPDATE subscriptions AS s SET status = \?, next_debit_at = NULL, notified_at = NULL/;
+const PARK =
+  /^(WITH c AS \(\()?UPDATE subscriptions AS s SET status = \?, next_debit_at = NULL, notified_at = NULL/;
 const CLEAR_ORDER =
   /^UPDATE subscriptions SET redemption_order_id = NULL, notified_at = NULL WHERE id = \? AND redemption_order_id = \?/;
 const CLEAR_OFFER =
@@ -710,7 +711,13 @@ describe("7i — the legacy merchant's mandates (it sends no webhook)", () => {
       const { calls } = fakePhonePe({ mandate: () => state });
       const { db } = await sweep({ legacy: [legacyRow] }, (t) => (PARK.test(t) ? parked : undefined));
       expect(without(db)).toEqual(["park"]);
-      expect(db.ran(PARK)[0].values).toEqual(["cancelled", "l1"]);
+      // REVOKED is the payer's act in the UPI app -> a queued win-back; CANCELLED is a merchant cancel -> recorded only
+      expect(db.ran(PARK)[0].values).toEqual(
+        state === "REVOKED"
+          ? ["cancelled", "l1", "REVOKED", "legacy_reconcile", "queued", null]
+          : ["cancelled", "l1", "CANCELLED", "legacy_reconcile", "skipped", "merchant_cancel"],
+      );
+      expect(db.ran(PARK)[0].text).toContain("INSERT INTO winback_pushes");
       expect(reads(calls)).toEqual([["legacy", LEGACY_199]]);
       expect(reportPostHogSubscriptionCancel).toHaveBeenCalledWith(
         expect.anything(),

@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:arul/features/premium/domain/cancel_offer.dart';
 import 'package:arul/features/push/data/push_tap_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -119,6 +120,43 @@ void main() {
       expect(location(), '/premium?source=push');
       expect(ArulDeepLink.pendingTarget, isNull);
     });
+
+    testWidgets('a win-back tap opens the paywall carrying its offer', (
+      tester,
+    ) async {
+      await pumpApp(tester, initial: '/ringtones');
+
+      taps.open(
+        const PremiumLinkTarget(
+          source: DeepLinkSource.push,
+          offer: kWinbackOffer,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(location(), '/premium?source=push&offer=winback_99');
+      expect(ArulDeepLink.pendingTarget, isNull);
+    });
+
+    testWidgets('a win-back tap over an open paywall adds the offer to it', (
+      tester,
+    ) async {
+      await pumpApp(tester);
+      taps.open(const PremiumLinkTarget(source: DeepLinkSource.push));
+      await tester.pumpAndSettle();
+      expect(location(), '/premium?source=push');
+
+      taps.open(
+        const PremiumLinkTarget(
+          source: DeepLinkSource.push,
+          offer: kWinbackOffer,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(location(), '/premium?source=push&offer=winback_99');
+      expect(find.text('premium'), findsOneWidget);
+    });
   });
 
   group('during the launch', () {
@@ -216,8 +254,14 @@ void main() {
       '/premium?source=push',
     );
     expect(
-      PushTapRouter.locationFor(const StatusLinkTarget('s')),
-      '/status',
+      PushTapRouter.locationFor(
+        const PremiumLinkTarget(
+          source: DeepLinkSource.push,
+          offer: kWinbackOffer,
+        ),
+      ),
+      '/premium?source=push&offer=winback_99',
     );
+    expect(PushTapRouter.locationFor(const StatusLinkTarget('s')), '/status');
   });
 }

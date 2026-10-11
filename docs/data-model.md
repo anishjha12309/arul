@@ -112,4 +112,5 @@ deliberately no counter-only fallback to hide a missed migration.
 
 User uploads live under `user/<sub>/submissions/…`; approval copies to a canonical key, then deletes the
 original. `content_submissions.file_key` is unique, so confirm-upload retries are idempotent.
-Campaign push tables: [push.md](push.md).
+Campaign push tables: [push.md](push.md). `winback_pushes` (one row per revoked mandate, written in the park's
+own statement) and `push_campaigns.auto_key`: [winback-push.md](winback-push.md).

@@ -1,4 +1,5 @@
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:arul/features/premium/domain/cancel_offer.dart';
 import 'package:arul/features/push/domain/push_payload.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -35,6 +36,42 @@ void main() {
     test('premium opens the premium screen and needs no id', () {
       expect(pushTargetFor({'dest': 'premium'}), isA<PremiumLinkTarget>());
     });
+
+    test('the win-back push carries its offer to the premium screen', () {
+      const winback = PremiumLinkTarget(
+        source: DeepLinkSource.push,
+        offer: kWinbackOffer,
+      );
+      // The Worker's literal: an automated campaign row's `dest_id`.
+      expect(pushTargetFor({'dest': 'premium', 'id': 'winback_99'}), winback);
+      expect(pushTargetFor({'dest': 'premium', 'id': ' WINBACK_99 '}), winback);
+    });
+
+    test(
+      'any other premium id opens the plain screen, never another offer',
+      () {
+        final payloads = <Map<String, Object?>>[
+          {'dest': 'premium'},
+          {'dest': 'premium', 'id': ''},
+          {'dest': 'premium', 'id': 'cancel_99'},
+          {'dest': 'premium', 'id': 'winback_199'},
+          {'dest': 'premium', 'id': wallpaperId},
+          {'dest': 'premium', 'id': 99},
+        ];
+        for (final payload in payloads) {
+          expect(
+            () => pushTargetFor(payload),
+            returnsNormally,
+            reason: '$payload must never throw',
+          );
+          expect(
+            pushTargetFor(payload),
+            const PremiumLinkTarget(source: DeepLinkSource.push),
+            reason: '$payload must open the premium screen with no offer',
+          );
+        }
+      },
+    );
 
     test(
       'home is null — the app is already opening, that IS the destination',

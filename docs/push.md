@@ -14,7 +14,8 @@ phone → tap → getInitialMessage()/onMessageOpenedApp → target → POST /me
 ```
 
 **No topics, no Queues:** the audiences are one join away in the registry and not expressible as topics,
-so topics would be a second code path buying nothing. **Its own cron trigger** ([cron.md](cron.md)): a
+so topics would be a second code path buying nothing. **One automated author:** the win-back push writes
+month rows (`auto_key`) this same dispatcher drains ([winback-push.md](winback-push.md)). **Its own cron trigger** ([cron.md](cron.md)): a
 send that stops halfway is invisible — nobody reports a notification that never arrived.
 
 ## Notification messages for older builds — never a Dart background handler

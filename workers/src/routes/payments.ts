@@ -44,6 +44,7 @@ import {
   merchantSubscriptionIdOf,
   phonePeSubscriptionIdOf,
 } from "../lib/phonepe.js";
+import { claimInAppCancel, winbackRecordFor, withWinbackRecord } from "../lib/winback-push.js";
 
 const KV_TXN_TTL = 30 * 24 * 60 * 60; // 30 days — covers PhonePe's retry window
 
@@ -526,7 +527,14 @@ async function offerMandateGate(
   }
   if (state === "ACTIVE") return "ok";
   if (state === "CANCELLED" || state === "REVOKED") {
-    await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "cancelled", "revoked_at_phonepe");
+    await parkSubscription(
+      env,
+      sql,
+      sql`s.user_id = ${sub}`,
+      "cancelled",
+      "revoked_at_phonepe",
+      winbackRecordFor(state, "offer_gate"),
+    );
   } else if (state === "PAUSED") {
     await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "paused");
   }
@@ -895,18 +903,28 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         sql,
         sql`s.merchant_subscription_id = ${merchantSubId} AND s.superseded_mandate_id IS NOT NULL`,
       );
+      // Root-level payload.state is PhonePe's own answer; the event name stands in only when a payload omits it
+      const winback = winbackRecordFor(
+        pp.state ?? (event === "subscription.revoked" ? "REVOKED" : "CANCELLED"),
+        "webhook",
+      );
       const parked = released.length
         ? []
-        : ((await sql`
-            UPDATE subscriptions AS s
-            SET status        = 'cancelled',
-                next_debit_at  = NULL,
-                notified_at    = NULL,
-                updated_at     = now()
-            FROM subscriptions AS prior
-            WHERE s.merchant_subscription_id = ${merchantSubId} AND prior.id = s.id
-            RETURNING s.user_id, prior.status AS prior_status, s.updated_at, s.price_paise
-          `) as unknown as {
+        : ((await withWinbackRecord(
+            sql,
+            sql`
+              UPDATE subscriptions AS s
+              SET status        = 'cancelled',
+                  next_debit_at  = NULL,
+                  notified_at    = NULL,
+                  updated_at     = now()
+              FROM subscriptions AS prior
+              WHERE s.merchant_subscription_id = ${merchantSubId} AND prior.id = s.id
+              RETURNING s.user_id, s.merchant_subscription_id, prior.status AS prior_status, s.updated_at,
+                        s.price_paise
+            `,
+            winback,
+          )) as unknown as {
             user_id: string;
             prior_status: string | null;
             updated_at?: Date | string | null;
@@ -1044,7 +1062,14 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
         const subStatus = await getSubscriptionStatus(env, liveMandateId);
         phonePeStatus = phonePeStatus ?? { state: subStatus.state };
         if (subStatus.state === "CANCELLED" || subStatus.state === "REVOKED") {
-          await parkSubscription(env, sql, sql`s.user_id = ${sub}`, "cancelled", "revoked_at_phonepe");
+          await parkSubscription(
+            env,
+            sql,
+            sql`s.user_id = ${sub}`,
+            "cancelled",
+            "revoked_at_phonepe",
+            winbackRecordFor(subStatus.state, "status_route"),
+          );
           row.status = "cancelled";
           // Mirror the write onto the response row -> otherwise it claims a debit is still coming on a revoked mandate
           row.next_debit_at = null;
@@ -1178,6 +1203,9 @@ export async function handleCancel(c: Context<{ Bindings: Env }>): Promise<Respo
     if (!merchantSubId) {
       return errorResponse(409, "no_mandate", "Subscription has no PhonePe mandate to revoke");
     }
+
+    // BEFORE PhonePe: our own cancel's webhook can land ahead of the UPDATE below and read a live row
+    await claimInAppCancel(sql, sub, [merchantSubId, parkedMandateId]);
 
     // Tolerates the already-inactive case -> a user who revoked in their UPI app is already at the desired end state
     // Only a mandate PhonePe still reports LIVE is a genuine failure worth asking the user to retry

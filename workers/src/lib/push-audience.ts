@@ -157,9 +157,7 @@ export function audienceQuery(
   { includeWaiting = false }: AudienceOptions = {},
 ): postgres.PendingQuery<postgres.Row[]> {
   const base = sql`SELECT d.fid FROM push_devices d LEFT JOIN users u ON u.id = d.user_id`;
-  const reachable = sql`
-    NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL
-  `;
+  const reachable = reachableDevice(sql);
   const eligible = includeWaiting
     ? reachable
     : sql`${reachable} AND NOT (d.user_id IS NULL AND coalesce(d.android_sdk, 0) >= 33)`;
@@ -191,6 +189,13 @@ export function audienceQuery(
       return sql`${base} WHERE ${where}`;
     }
   }
+}
+
+/** A phone a send can reach, over `push_devices d LEFT JOIN users u` -> the win-back sender reuses it, never a copy. */
+export function reachableDevice(sql: postgres.Sql): postgres.PendingQuery<postgres.Row[]> {
+  return sql`
+    NOT coalesce(u.email ILIKE '%@cloudtestlabaccounts.com', false) AND d.token IS NOT NULL
+  `;
 }
 
 /**

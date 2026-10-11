@@ -66,6 +66,8 @@ builds post `{offer_declined:true}`, and it must still cancel.
 
 ## The winback — a paid re-setup at ₹99
 
+A payer who revokes in the UPI app never sees this sheet, so they get it as ONE push ([winback-push.md](winback-push.md)).
+
 - `winbackOfferEligible` (GET /me `winback_offer_eligible`, initiate, re-checked under the lock): `trial_end` set
   (trialled or paid before), status `cancelled`/`expired`/`pending`, nothing parked — a parked mandate is a live plan
   still billing. A new user (no row, `trial_end` NULL) keeps the free trial then ₹199; trialing/active keep the switch.

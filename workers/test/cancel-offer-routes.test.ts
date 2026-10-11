@@ -110,7 +110,8 @@ function routedSql(route: Route = () => undefined) {
 const CLAIM_READ = /AS winback_eligible, \(.*\) AS offer_eligible FROM subscriptions AS s WHERE/;
 const LOCK = /^SELECT 1 FROM users WHERE id = \? FOR UPDATE$/;
 const CLAIM = /^INSERT INTO subscriptions \( user_id, status, plan/;
-const PARK = /^UPDATE subscriptions AS s SET status = \?, next_debit_at = NULL, notified_at = NULL/;
+const PARK =
+  /^(WITH c AS \(\()?UPDATE subscriptions AS s SET status = \?, next_debit_at = NULL, notified_at = NULL/;
 const RELEASE = /AS released_mandate_id/;
 const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
 const HONOUR = /^UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
@@ -125,7 +126,11 @@ const STATUS_READ = /^SELECT id, user_id, status, plan, merchant_subscription_id
 const CANCEL_READ = /^SELECT merchant_subscription_id, superseded_mandate_id, offer_mandate_id/;
 const CANCEL_WRITE = /^UPDATE subscriptions AS s SET status = 'cancelled', merchant_subscription_id = CASE/;
 const ABANDON_READ = /^SELECT status, merchant_subscription_id FROM subscriptions WHERE user_id = \?/;
-const WEBHOOK_CANCEL = /^UPDATE subscriptions AS s SET status = 'cancelled', next_debit_at = NULL/;
+const WEBHOOK_CANCEL =
+  /^(WITH c AS \(\()?UPDATE subscriptions AS s SET status = 'cancelled', next_debit_at = NULL/;
+const WINBACK_ROW = /\), w AS \( INSERT INTO winback_pushes/;
+const WINBACK_CLAIM =
+  /^INSERT INTO winback_pushes \(mandate_id, user_id, detected_by, state, skip_reason, resolved_at\)/;
 const CLEAR_IDS = /^UPDATE subscriptions SET superseded_mandate_id = CASE WHEN superseded_mandate_id = \?/;
 const UNWATCH = /^UPDATE subscriptions SET offer_mandate_id = NULL WHERE offer_mandate_id = \?/;
 const SETTLE = /^UPDATE subscriptions AS s SET status = 'active', merchant_subscription_id = \?/;
@@ -136,6 +141,7 @@ const LABELS: [string, RegExp][] = [
   ["claim", CLAIM],
   ["attach", /^UPDATE subscriptions SET phonepe_order_id = \?/],
   ["park", PARK],
+  ["winback-claim", WINBACK_CLAIM],
   ["release", RELEASE],
   ["switch", SWITCH],
   ["honour", HONOUR],
@@ -497,7 +503,12 @@ describe("POST /payments/initiate {offer: 'cancel_99'}", () => {
     expect(errorCode(body)).toBe("offer_unavailable");
     expect(order(db)).toEqual(["claim-read", "park"]);
     const park = db.ran(PARK)[0];
-    expect(park.values).toEqual([parked, USER_ID]);
+    expect(park.values).toEqual(
+      parked === "cancelled"
+        ? [parked, USER_ID, state, "offer_gate", "skipped", "in_app_cancel"]
+        : [parked, USER_ID],
+    );
+    expect(WINBACK_ROW.test(park.text)).toBe(parked === "cancelled");
     expect(park.text).toContain("WHERE (s.user_id = ?) AND prior.id = s.id");
     expect(park.text).toContain(scope);
   });
@@ -1069,11 +1080,29 @@ describe("POST /payments/webhook — the switch, releases and late approvals", (
         : undefined,
     );
     expect(db.ran(RELEASE)).toHaveLength(1);
-    expect(db.ran(WEBHOOK_CANCEL)).toHaveLength(1);
+    const cancelled = db.ran(WEBHOOK_CANCEL);
+    expect(cancelled).toHaveLength(1);
+    expect(cancelled[0].text).toMatch(WINBACK_ROW);
+    expect(cancelled[0].text).toContain(
+      "RETURNING s.user_id, s.merchant_subscription_id, prior.status AS prior_status",
+    );
+    expect(cancelled[0].values).toEqual([HSR_99, "REVOKED", "webhook", "queued", null]);
     expect(reportPostHogSubscriptionCancel).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ reason: "webhook_revoked", merchantSubId: HSR_99, pricePaise: 9900 }),
     );
+  });
+
+  it("a cancelled live mandate is our own merchant cancel -> recorded as skipped, never queued", async () => {
+    fakePhonePe();
+    const { db } = await deliver(stateEvent("subscription.cancelled", HSR_99, "CANCELLED"), () => undefined);
+    expect(db.ran(WEBHOOK_CANCEL)[0].values).toEqual([
+      HSR_99,
+      "CANCELLED",
+      "webhook",
+      "skipped",
+      "merchant_cancel",
+    ]);
   });
 
   it("a revoked id held only as a watched ₹99 or a revoke retry just clears that column", async () => {
@@ -1299,11 +1328,44 @@ describe("POST /payments/cancel — the extra mandates, and no per-person record
     fakePhonePe();
     const { res, db } = await cancel(liveRow(), opts);
     expect(res.status).toBe(200);
-    expect(db.stmts).toHaveLength(2);
+    expect(db.stmts).toHaveLength(3);
+    const claim = db.ran(WINBACK_CLAIM);
+    expect(claim.map((c) => c.values)).toEqual([[LEGACY_199, USER_ID]]);
+    expect(claim[0].text).toContain("VALUES (?, ?, 'in_app_cancel', 'skipped', 'in_app_cancel', now())");
     const write = db.ran(CANCEL_WRITE)[0];
     expect(write.text).not.toContain("users");
     expect(write.text).toContain("RETURNING s.updated_at, s.price_paise, s.merchant_subscription_id");
     expect(write.values).toEqual([19900, true, true, true, USER_ID]);
+  });
+
+  it("claims every id it may revoke BEFORE PhonePe hears of it, and a failed claim never blocks the cancel", async () => {
+    const { calls } = fakePhonePe();
+    const callsAtClaim: number[] = [];
+    const row = liveRow({
+      status: "pending",
+      offer_switch: true,
+      merchant_subscription_id: HSR_99,
+      superseded_mandate_id: LEGACY_199,
+    });
+    const { res, db } = await call(
+      handleCancel,
+      (t) => {
+        if (CANCEL_READ.test(t)) return [row];
+        if (WINBACK_CLAIM.test(t)) {
+          callsAtClaim.push(calls.length);
+          return new Error('relation "winback_pushes" does not exist');
+        }
+        if (CANCEL_WRITE.test(t)) {
+          return [{ updated_at: new Date(), price_paise: "19900", merchant_subscription_id: LEGACY_199 }];
+        }
+        return undefined;
+      },
+      { token },
+    );
+    expect(res.status).toBe(200);
+    expect(callsAtClaim).toEqual([0, 0]);
+    expect(db.ran(WINBACK_CLAIM).map((c) => c.values[0])).toEqual([HSR_99, LEGACY_199]);
+    expect(revokes(calls)).toContainEqual(["legacy", LEGACY_199]);
   });
 
   it("revokes a watched ₹99 and a revoke-retry ₹199 besides the live mandate, each at its merchant", async () => {

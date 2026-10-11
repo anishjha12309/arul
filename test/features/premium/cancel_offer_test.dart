@@ -20,7 +20,10 @@ import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/domain/trial_nudge.dart';
 import 'package:arul/features/premium/presentation/cancel_offer_sheet.dart';
+import 'package:arul/features/premium/presentation/member_view.dart';
+import 'package:arul/features/premium/presentation/paywall_view.dart';
 import 'package:arul/features/premium/presentation/premium_screen.dart';
+import 'package:arul/features/premium/presentation/resubscribe_view.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/premium/providers/premium_purchase_provider.dart';
 import 'package:arul/features/premium/providers/trial_conversion_catch_up.dart';
@@ -33,6 +36,8 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../l10n/support/load_real_fonts.dart';
 
 class _RecordingAnalytics implements AnalyticsService {
   final events = <(String, Map<String, Object?>?)>[];
@@ -81,6 +86,9 @@ class _FakeApi extends ApiClient {
 
   Map<String, dynamic> status = _statusRow('pending', 19900);
 
+  // Holds `/payments/status` open this long: a real reconcile is a round trip, not a microtask.
+  Duration? statusDelay;
+
   List<Map<String, dynamic>?> bodiesOf(String path) => [
     for (final (p, body) in posts)
       if (p == path) body,
@@ -101,6 +109,8 @@ class _FakeApi extends ApiClient {
         if (answer is Map<String, dynamic>) return answer;
         throw answer;
       case '/payments/status':
+        final delay = statusDelay;
+        if (delay != null) await Future<void>.delayed(delay);
         return status;
       case '/payments/abandon':
         return {'settled': false};
@@ -769,6 +779,387 @@ void main() {
 
       expect(find.text('Special offer'), findsNothing);
       expect(eventsNamed('cancel_offer_shown'), isEmpty);
+    });
+  });
+
+  // The win-back push opens `/premium?…&offer=winback_99` with `go`, and the ₹99 sheet must already
+  // be up: the same sheet a Resubscribe tap opens, never a purchase nobody tapped.
+  group('the win-back push', () {
+    const landing = '/premium?source=push&offer=winback_99';
+
+    // A lapsed period lands on the paywall, laid out for its own faces; the box glyphs overflow it.
+    setUpAll(loadRealFonts);
+
+    SubscriptionModel row({
+      SubscriptionStatus status = SubscriptionStatus.cancelled,
+      bool winback = true,
+      bool trialSpent = true,
+    }) => SubscriptionModel(
+      id: 'sub_1',
+      userId: 'u_1',
+      status: status,
+      merchantOrderId: 'DKS_ORIGINAL',
+      trialEnd: trialSpent ? DateTime(2026, 9, 1) : null,
+      currentPeriodEnd: DateTime(2026, 10, 13, 12),
+      winbackOfferEligible: winback,
+    );
+
+    // A cancelled row with its period still running: the Resubscribe home.
+    Entitlement resubscribe({bool winback = true}) =>
+        Entitlement(isPremium: true, subscription: row(winback: winback));
+
+    // The period has ended: the Worker says no premium, and the screen is the paywall.
+    Entitlement lapsed({bool trialSpent = true}) => Entitlement(
+      isPremium: false,
+      subscription: row(
+        status: SubscriptionStatus.expired,
+        trialSpent: trialSpent,
+      ),
+    );
+
+    // Opens `location` (after `warmFirst`, if given) the way a tap's `go` does. `me` answers
+    // `GET /me` in order and repeats its last answer; `meFails` makes every answer fail. Without
+    // `settle`, it stops on the landing's first visible frame: the loading face spins, so settling
+    // would pump straight through a slow reconcile.
+    Future<GoRouter> land(
+      WidgetTester tester, {
+      List<Entitlement> me = const [],
+      bool meFails = false,
+      String location = landing,
+      String? warmFirst,
+      List<UpiApp> apps = const [_phonePe],
+      bool settle = true,
+    }) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      SharedPreferences.setMockInitialValues(const {});
+      prefs = await SharedPreferences.getInstance();
+      PremiumPurchase.clock = () => tester.binding.clock.now();
+      addTearDown(() => PremiumPurchase.clock = DateTime.now);
+      cancelOfferClock = () => tester.binding.clock.now();
+      addTearDown(() => cancelOfferClock = DateTime.now);
+      mockChannels(tester);
+      api.initiate = {
+        'merchantOrderId': 'DKS_WIN_1',
+        'intentUrl': 'upi://mandate?tr=DKS_WIN_1&am=99',
+        'trialEligible': false,
+        'amountPaise': 9900,
+      };
+
+      final answers = [...me];
+      final router = GoRouter(
+        initialLocation: warmFirst ?? location,
+        routes: [
+          GoRoute(
+            path: '/premium',
+            builder: (_, state) => PremiumScreen(
+              source: state.uri.queryParameters['source'] ?? 'unknown',
+              offer: state.uri.queryParameters['offer'],
+            ),
+          ),
+          // The feed reads `/me` before the tap: the cached answer the premium screen opens on.
+          GoRoute(
+            path: '/browse',
+            builder: (_, _) => Consumer(
+              builder: (_, ref, _) {
+                ref.watch(entitlementDetailProvider);
+                return const SizedBox();
+              },
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ProviderScope(
+          // A failed `/me` stays failed: Riverpod's retry timers would outlive the test.
+          retry: meFails ? (_, _) => null : null,
+          overrides: [
+            ...baseOverrides(),
+            entitlementDetailProvider.overrideWith((ref) async {
+              if (meFails) {
+                throw const ApiException(
+                  status: 503,
+                  code: 'unavailable',
+                  message: 'down',
+                );
+              }
+              return answers.length > 1 ? answers.removeAt(0) : answers.single;
+            }),
+            installedUpiAppsProvider.overrideWith(
+              (ref) async => UpiScan(apps: apps, otherPackages: const []),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: ArulTheme.light(),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            routerConfig: router,
+          ),
+        ),
+      );
+      if (warmFirst != null) {
+        await tester.pumpAndSettle();
+        router.go(location);
+      }
+      if (settle) {
+        await tester.pumpAndSettle();
+      } else {
+        // A page pushed by `go` sits offstage for its first frame while heroes are measured.
+        for (
+          var i = 0;
+          i < 3 && find.byType(PremiumScreen).evaluate().isEmpty;
+          i++
+        ) {
+          await tester.pump();
+        }
+      }
+      return router;
+    }
+
+    // Nothing the arrival is about to replace may paint while it waits on `/me`.
+    void expectLoadingFace() {
+      expect(find.byType(ArulPaywallLoading), findsOneWidget);
+      expect(find.byType(ArulPaywallView), findsNothing);
+      expect(find.byType(ArulMemberView), findsNothing);
+      expect(find.byType(ArulResubscribeView), findsNothing);
+      expect(find.text('Special offer'), findsNothing);
+    }
+
+    Future<void> closeSheet(WidgetTester tester) async {
+      await tester.tap(find.byKey(const ValueKey('cancel-offer-close')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('the tap lands on the ₹99 sheet, and accepting is ₹99 through '
+        'the chosen app', (tester) async {
+      await land(tester, me: [resubscribe()]);
+
+      expect(find.text('Special offer'), findsOneWidget);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+      // Opened by the push, not by the button: no `resubscribe_tapped`.
+      expect(eventsNamed('resubscribe_tapped'), isEmpty);
+      final shown = eventsNamed('cancel_offer_shown').single!;
+      expect(shown['offer'], 'winback_99');
+      expect(shown['flow'], 'winback');
+      expect(shown['entry'], 'push');
+
+      await tester.tap(find.text('Get 50% discount'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final body = api.bodiesOf('/payments/initiate').single!;
+      expect(body['offer'], 'winback_99');
+      expect(body['targetApp'], 'com.phonepe.app');
+      expect(eventsNamed('cancel_offer_accepted').single?['entry'], 'push');
+      expect(
+        eventsNamed('checkout_started').single?['paywall_source'],
+        'winback_offer',
+      );
+
+      api.status = _statusRow('active', 9900);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 500));
+      }
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('it opens once: closed, it stays closed, and the button\'s own '
+        'sheet carries no entry', (tester) async {
+      await land(tester, me: [resubscribe()]);
+      await closeSheet(tester);
+
+      expect(find.text('Special offer'), findsNothing);
+      expect(find.text('Resubscribe'), findsOneWidget);
+      final declined = eventsNamed('cancel_offer_declined').single!;
+      expect(declined['via'], 'close');
+      expect(declined['entry'], 'push');
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+
+      await tester.tap(find.text('Resubscribe'));
+      await tester.pumpAndSettle();
+      expect(find.text('Special offer'), findsOneWidget);
+      final shown = eventsNamed('cancel_offer_shown');
+      expect(shown, hasLength(2));
+      expect(shown.last!.containsKey('entry'), isFalse);
+      expect(eventsNamed('resubscribe_tapped'), hasLength(1));
+    });
+
+    testWidgets('a period that has ended opens it over the paywall', (
+      tester,
+    ) async {
+      await land(tester, me: [lapsed()]);
+
+      expect(find.text('Special offer'), findsOneWidget);
+      expect(find.text('Resubscribe'), findsNothing);
+      expect(eventsNamed('cancel_offer_shown').single?['entry'], 'push');
+      await closeSheet(tester);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+    });
+
+    testWidgets('with no UPI app, accepting is the ₹99 QR', (tester) async {
+      await land(tester, me: [resubscribe()], apps: const []);
+      expect(find.text('Special offer'), findsOneWidget);
+
+      await tester.tap(find.text('Get 50% discount'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      final body = api.bodiesOf('/payments/initiate').single!;
+      expect(body['offer'], 'winback_99');
+      expect(body['mode'], 'qr');
+      // Past the QR's own deadline and watch.
+      await tester.pump(const Duration(minutes: 20));
+      await tester.pumpAndSettle();
+    });
+
+    // The plan the app read before the revoke in the UPI app: still trialing, so no offer.
+    Entitlement stale() => Entitlement(
+      isPremium: true,
+      subscription: row(status: SubscriptionStatus.trialing, winback: false),
+    );
+
+    Future<void> reconcile(WidgetTester tester) async {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+    }
+
+    // Frame by frame until the sheet is up: no frame may paint the cached plan, and the sheet only
+    // ever rises over the fresh page, never over the loading face.
+    Future<void> pumpUntilSheet(WidgetTester tester) async {
+      for (var frames = 0; find.text('Special offer').evaluate().isEmpty;) {
+        expect(++frames, lessThan(60), reason: 'the sheet never opened');
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.byType(ArulMemberView), findsNothing);
+      }
+      expect(find.byType(ArulPaywallLoading), findsNothing);
+      expect(find.byType(ArulResubscribeView), findsOneWidget);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'a /me cached before the revoke never paints: the loading face '
+      'holds through the reconcile, then the sheet rises over the fresh page',
+      (tester) async {
+        api.statusDelay = const Duration(seconds: 1);
+        await land(
+          tester,
+          warmFirst: '/browse',
+          me: [stale(), resubscribe()],
+          settle: false,
+        );
+        expectLoadingFace();
+        await tester.pump(const Duration(milliseconds: 900));
+        expectLoadingFace();
+
+        await pumpUntilSheet(tester);
+
+        expect(eventsNamed('cancel_offer_shown').single?['entry'], 'push');
+        expect(api.bodiesOf('/payments/status'), hasLength(1));
+      },
+    );
+
+    testWidgets('a reconcile that hangs releases the loading face at 5 s; the '
+        'sheet still waits for it', (tester) async {
+      api.statusDelay = const Duration(seconds: 30);
+      await land(
+        tester,
+        warmFirst: '/browse',
+        me: [stale(), resubscribe()],
+        settle: false,
+      );
+      await tester.pump(const Duration(milliseconds: 4900));
+      expectLoadingFace();
+
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(ArulPaywallLoading), findsNothing);
+      expect(
+        find.byType(ArulMemberView),
+        findsOneWidget,
+        reason: 'whatever /me says by then: the plan cached before the revoke',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Special offer'),
+        findsNothing,
+        reason: 'the sheet is decided on the reconciled /me only',
+      );
+
+      await tester.pump(const Duration(seconds: 25));
+      await tester.pumpAndSettle();
+      expect(find.byType(ArulResubscribeView), findsOneWidget);
+      expect(find.text('Special offer'), findsOneWidget);
+      expect(eventsNamed('cancel_offer_shown').single?['entry'], 'push');
+    });
+
+    testWidgets('a tap while the screen is already up re-arms it: the loading '
+        'face, a fresh /me, then the sheet', (tester) async {
+      api.statusDelay = const Duration(seconds: 1);
+      // Up since before the revoke: its open-time reconcile still read the live plan.
+      final router = await land(
+        tester,
+        me: [stale(), stale(), resubscribe()],
+        location: '/premium?source=push',
+      );
+      await reconcile(tester);
+      expect(find.byType(ArulMemberView), findsOneWidget);
+      expect(find.text('Special offer'), findsNothing);
+      final screen = tester.state(find.byType(PremiumScreen));
+
+      router.go(landing);
+      await tester.pump();
+      expectLoadingFace();
+
+      await pumpUntilSheet(tester);
+
+      expect(
+        tester.state(find.byType(PremiumScreen)),
+        same(screen),
+        reason: 'go_router keeps the State, so didUpdateWidget must arm it',
+      );
+      expect(eventsNamed('cancel_offer_shown').single?['entry'], 'push');
+      expect(api.bodiesOf('/payments/status'), hasLength(2));
+    });
+
+    void expectNothingOpened() {
+      expect(find.text('Special offer'), findsNothing);
+      expect(eventsNamed('cancel_offer_shown'), isEmpty);
+      expect(api.bodiesOf('/payments/initiate'), isEmpty);
+    }
+
+    testWidgets('an ineligible arrival ends on its own page, with no loading '
+        'face left', (tester) async {
+      api.statusDelay = const Duration(seconds: 1);
+      await land(tester, me: [resubscribe(winback: false)], settle: false);
+      expectLoadingFace();
+
+      await reconcile(tester);
+
+      expect(find.byType(ArulPaywallLoading), findsNothing);
+      expect(find.byType(ArulResubscribeView), findsOneWidget);
+      expect(find.text('Resubscribe'), findsOneWidget);
+      expectNothingOpened();
+    });
+
+    testWidgets('nothing opens for a trial-eligible row — the trial is the '
+        'better deal', (tester) async {
+      await land(tester, me: [lapsed(trialSpent: false)]);
+      expectNothingOpened();
+      expect(find.byType(ArulPaywallLoading), findsNothing);
+      expect(find.byType(ArulPaywallView), findsOneWidget);
+    });
+
+    testWidgets('a /me that fails ends on the paywall, not the loading face', (
+      tester,
+    ) async {
+      await land(tester, meFails: true);
+      expectNothingOpened();
+      expect(find.byType(ArulPaywallLoading), findsNothing);
+      expect(find.byType(ArulPaywallView), findsOneWidget);
+    });
+
+    testWidgets('nothing opens without the offer in the link', (tester) async {
+      await land(tester, me: [resubscribe()], location: '/premium?source=push');
+      expectNothingOpened();
     });
   });
 

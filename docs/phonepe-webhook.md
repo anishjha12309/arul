@@ -37,6 +37,8 @@ failed debit. Never let the webhook become the only path to a correct row.
   (PhonePe expiring it, or our revoke racing the release): it runs the release. Cancelling it stranded the
   parked mandate — never billed, never revoked again. The same event for a parked, watched ₹99 or
   retry-revoke id only clears that column.
+- **REVOKED is the payer's act, CANCELLED the merchant API's (only ours)**: a REVOKED live row queues the win-back
+  push in the park's own statement, a CANCELLED one is recorded only ([winback-push.md](winback-push.md)).
 - **Order events nest the ids under `payload.paymentFlow`**; state-change events keep them top-level.
   Read through `merchantSubscriptionIdOf()` — the flat read acked every real redemption webhook as
   "Missing merchantSubscriptionId".

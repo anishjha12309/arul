@@ -504,7 +504,9 @@ export async function runPushTest(
   }
 }
 
-export async function sweepPush(env: Env): Promise<{ deliveries: number; devices: number; images: number }> {
+export async function sweepPush(
+  env: Env,
+): Promise<{ deliveries: number; devices: number; images: number; winbacks: number }> {
   const sql = getDb(env);
   try {
     const deliveries = (await sql`
@@ -517,7 +519,13 @@ export async function sweepPush(env: Env): Promise<{ deliveries: number; devices
       DELETE FROM push_devices WHERE last_seen_at < now() - interval '270 days' RETURNING fid
     `) as unknown as unknown[];
     const images = await sweepPushImages(sql, env);
-    return { deliveries: deliveries.length, devices: devices.length, images };
+    // A per-person log the owner allowed for measuring only -> a queued row waits for its due time, never purged
+    const winbacks = (await sql`
+      DELETE FROM winback_pushes
+      WHERE state <> 'queued' AND resolved_at < now() - interval '90 days'
+      RETURNING mandate_id
+    `) as unknown as unknown[];
+    return { deliveries: deliveries.length, devices: devices.length, images, winbacks: winbacks.length };
   } finally {
     await sql.end().catch(() => {});
   }

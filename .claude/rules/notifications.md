@@ -10,7 +10,7 @@ paths:
   - "android/app/src/main/res/layout/quick_bar_*"
 ---
 
-Campaign pushes come only from the CMS through the Worker. No reminders; local posts are one-offs on
+Campaign pushes come only from the CMS through the Worker, bar the win-back (docs/winback-push.md). No reminders; local posts are one-offs on
 `arul_updates_v1`. No screen promises a notification. The one setting and the one ongoing post is the
 Quick Access bar — a plain post, never a foreground service ([docs/quick-bar.md](../../docs/quick-bar.md)).
 

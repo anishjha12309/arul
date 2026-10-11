@@ -47,7 +47,10 @@ class PushTapRouter {
   }
 
   static String locationFor(DeepLinkTarget target) => switch (target) {
-    PremiumLinkTarget() => '/premium?source=push',
+    PremiumLinkTarget(:final offer) => Uri(
+      path: '/premium',
+      queryParameters: {'source': 'push', 'offer': ?offer},
+    ).toString(),
     _ => switch (target.tab) {
       ArulTab.wallpapers => '/browse',
       ArulTab.ringtones => '/ringtones',

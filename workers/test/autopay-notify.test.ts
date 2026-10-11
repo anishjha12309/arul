@@ -885,3 +885,64 @@ describe("Pass A — a permanent rejection of a mandate PhonePe once confirmed a
     expect(passA?.text).toContain("current_period_end");
   });
 });
+
+describe("Win-back record — only the payer's own revoke queues a push (docs/push.md §Win-back)", () => {
+  const WINBACK = "WITH c AS (?), w AS ( INSERT INTO winback_pushes";
+  /** [state, source, row state, skip reason] the park's CTE bound, or undefined when the park carried none. */
+  const record = (executed: Executed[]) =>
+    executed.find((e) => e.text.startsWith(WINBACK))?.values.slice(1, 5);
+  const dueForNotify = () => ({
+    id: "row-a",
+    user_id: "user-a",
+    merchant_subscription_id: SUB,
+    next_debit_at: new Date(Date.now() + 2 * HOUR).toISOString(),
+    current_period_end: new Date(Date.now() + 2 * HOUR).toISOString(),
+    phonepe_subscription_id: null,
+    debit_count: 0,
+  });
+
+  it.each([
+    ["REVOKED", ["REVOKED", "pass_a", "queued", null]],
+    ["CANCELLED", ["CANCELLED", "pass_a", "skipped", "merchant_cancel"]],
+    ["EXPIRED", undefined],
+    ["FAILED", undefined],
+  ])("Pass A: a %s mandate parks with %j", async (state, want) => {
+    const { sql, executed } = makeSql([], [], [dueForNotify()]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(updates(executed).some((u) => u.values[0] === "cancelled")).toBe(true);
+    expect(record(executed)).toEqual(want);
+  });
+
+  it("Pass B: a redeem refused on a REVOKED mandate queues it", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getOrderStatus.mockResolvedValue({ state: "NOTIFIED", expireAt: Date.now() + 24 * HOUR });
+    phonepe.executeRedemption.mockRejectedValue(
+      new FakePhonePeApiError("PhonePe execute error 400: mandate revoked", 400, "{}"),
+    );
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state: "REVOKED" });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(record(executed)).toEqual(["REVOKED", "pass_b", "queued", null]);
+  });
+
+  it("Pass D: a paused mandate found REVOKED queues it", async () => {
+    atTick(0);
+    try {
+      const { sql, executed } = makeSql([], [pausedRow()]);
+      db.getDb.mockReturnValue(sql);
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "REVOKED" });
+
+      await runAutopayNotify(makeEnv());
+
+      expect(record(executed)).toEqual(["REVOKED", "pass_d", "queued", null]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

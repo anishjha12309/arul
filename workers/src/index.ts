@@ -47,6 +47,7 @@ import { sweepSubmissions } from "./cron/sweep-submissions.js";
 import { sweepCanonical } from "./cron/sweep-canonical.js";
 import { runAutopayNotify } from "./cron/autopay-notify.js";
 import { runPushDispatch, sweepPush } from "./cron/push-dispatch.js";
+import { runWinbackPushes } from "./cron/winback-push.js";
 import { claimCronSlot, pruneCronRuns } from "./lib/cron-claim.js";
 
 const app = new Hono<{ Bindings: Env }>();
@@ -196,7 +197,15 @@ const worker: WorkerType = {
 
     if (event.cron === "* * * * *") {
       ctx.waitUntil(
-        runPushDispatch(env)
+        // The win-back resolver first, isolated: its deliveries drain in this same tick, and its failure never stops a campaign
+        runWinbackPushes(env, new Date(event.scheduledTime))
+          .then((winback) => {
+            if (winback.resolved > 0) console.log("[cron] Win-back:", JSON.stringify(winback));
+          })
+          .catch((err: unknown) => {
+            console.error("[cron] Win-back resolver failed:", err);
+          })
+          .then(() => runPushDispatch(env))
           .then((result) => {
             // The disabled state still gets ONE line an hour, so a dark switch leaves a breadcrumb
             // rather than looking identical to a cron that never fires.

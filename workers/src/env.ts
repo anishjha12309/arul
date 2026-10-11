@@ -70,6 +70,9 @@ export interface Env {
    */
   PUSH_ENABLED?: string;
 
+  /** The win-back push's own switch, under PUSH_ENABLED -> wrangler.toml [vars]; off, due rows resolve as `disabled`. */
+  WINBACK_PUSH_ENABLED?: string;
+
   /**
    * PostHog project API key (phc_…) — write-only and already shipped in the APK, yet kept out of the repo.
    * Absent -> capture is skipped, never thrown -> analytics must not fail a payment (fail-open)

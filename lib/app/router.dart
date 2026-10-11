@@ -108,6 +108,7 @@ final router = GoRouter(
           data: ArulTheme.light(),
           child: PremiumScreen(
             source: state.uri.queryParameters['source'] ?? 'unknown',
+            offer: state.uri.queryParameters['offer'],
           ),
         ),
       ),

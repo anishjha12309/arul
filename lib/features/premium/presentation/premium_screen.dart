@@ -169,9 +169,12 @@ String? _formatDate(AppLocalizations l10n, DateTime? d) =>
 /// THE premium screen — paywall and plan home in ONE route.
 /// This is also the only route that can reach `POST /payments/cancel`.
 class PremiumScreen extends ConsumerStatefulWidget {
-  const PremiumScreen({super.key, required this.source});
+  const PremiumScreen({super.key, required this.source, this.offer});
 
   final String source;
+
+  /// [kWinbackOffer] opens that offer's sheet on arrival, if `/me` still offers it.
+  final String? offer;
 
   @override
   ConsumerState<PremiumScreen> createState() => _PremiumScreenState();
@@ -228,6 +231,15 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   // Whatever the switch's outcome opens next waits for the offer or retry sheet to go: a route
   // pushed first would be the one its closing pop takes.
   Future<CancelOfferChoice?>? _offerSheet;
+
+  // Bumped per push arrival, so a newer arrival retires an older one still waiting on `/me`.
+  int _offerArrival = 0;
+
+  // The loading face while an arrival waits on `/me`: the cached page would flash a plan the
+  // reconcile is about to replace. Capped, so a slow reconcile never holds a blank screen.
+  bool _arrivalPending = false;
+  Timer? _arrivalCap;
+  static const _kArrivalCap = Duration(seconds: 5);
 
   /// Whether the sell on screen is the TRIAL variant. Only that one gets the return page — its clip
   /// pitches the ₹2 trial, which a spent-trial ₹199 sell cannot offer. Written by the build that
@@ -315,15 +327,30 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     _selectedUpiPackage = ref
         .read(sharedPreferencesProvider)
         .getString(_kUpiAppKey);
-    _reconcileOnOpen();
+    final reconciled = _reconcileOnOpen();
+    if (widget.offer == kWinbackOffer) {
+      unawaited(_openOfferOnArrival(reconciled));
+    }
     _warmOnboardingVideo();
     // A deferred delivery can report the ad's language seconds after launch, past a fast user.
     // Re-target the SURVIVING player rather than rebuilding the decoder.
     ref.listenManual(localeProvider, (_, _) => _retargetOnboardingVideo());
   }
 
+  // go_router keeps this State when a push lands while /premium is already up, so the new offer
+  // is a new arrival, with its own reconcile: the `/me` on screen may predate the revoke.
+  @override
+  void didUpdateWidget(PremiumScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.offer == oldWidget.offer || widget.offer != kWinbackOffer) {
+      return;
+    }
+    unawaited(_openOfferOnArrival(_reconcileOnOpen()));
+  }
+
   @override
   void dispose() {
+    _arrivalCap?.cancel();
     _reportPaywallExit();
     _releaseUpdateHold();
     WidgetsBinding.instance.removeObserver(this);
@@ -433,6 +460,69 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       await ref.read(premiumPurchaseProvider.notifier).refreshStatus();
     } catch (_) {
       // Offline or server fault — leave the screen exactly as it was.
+    }
+  }
+
+  // The win-back push's ₹99 sheet, opened ONCE per arrival as the sell's own CTA would open it. It
+  // waits for the `/me` the arrival's reconcile re-reads: a row cached before the UPI-app revoke
+  // still reads as a live plan.
+  Future<void> _openOfferOnArrival(Future<void> reconciled) async {
+    final arrival = ++_offerArrival;
+    _arrivalPending = true;
+    _arrivalCap?.cancel();
+    _arrivalCap = Timer(_kArrivalCap, () => _endArrivalWait(arrival));
+    await reconciled;
+    if (!mounted || arrival != _offerArrival) return;
+    try {
+      await ref.read(entitlementDetailProvider.future);
+      if (!mounted) return;
+      await ref.read(installedUpiAppsProvider.future);
+    } catch (_) {
+      // No `/me`, no verdict: the screen shows what it has, and its CTA still offers ₹99.
+      _endArrivalWait(arrival);
+      return;
+    }
+    if (!mounted || arrival != _offerArrival) return;
+    // The fresh page paints first, so the sheet rises over the screen it belongs to.
+    _endArrivalWait(arrival);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || arrival != _offerArrival) return;
+    // The same read `_startPaid` makes, so an ineligible row can never fall through to a ₹199 start
+    // nobody tapped.
+    final me = ref.read(entitlementDetailProvider);
+    final sub = me.asData?.value.subscription;
+    final upiAsync = ref.read(installedUpiAppsProvider);
+    if (me.isLoading ||
+        sub == null ||
+        !sub.winbackOfferEligible ||
+        sub.trialEnd == null ||
+        !upiAsync.hasValue ||
+        ref.read(premiumPurchaseProvider) is! PurchaseIdle ||
+        _offerSheet != null ||
+        _qrSheet != null ||
+        !(ModalRoute.of(context)?.isCurrent ?? false)) {
+      return;
+    }
+    final upiScan = upiAsync.asData?.value ?? const UpiScan.empty();
+    final upiApps = _orderedUpiApps(upiScan.apps);
+    _startPaid(
+      _resolvedUpiPackage(upiApps),
+      trialEligible: false,
+      asQr: upiApps.isEmpty && upiAsync.hasValue,
+      entry: 'push',
+    );
+  }
+
+  // A superseded arrival leaves the wait alone: the newer one owns it.
+  void _endArrivalWait(int arrival) {
+    if (arrival != _offerArrival) return;
+    _arrivalCap?.cancel();
+    _arrivalCap = null;
+    if (!_arrivalPending) return;
+    if (mounted) {
+      setState(() => _arrivalPending = false);
+    } else {
+      _arrivalPending = false;
     }
   }
 
@@ -801,6 +891,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     String? targetApp, {
     required bool trialEligible,
     bool asQr = false,
+    String? entry,
   }) {
     final sub = ref.read(entitlementDetailProvider).asData?.value.subscription;
     if (trialEligible || sub == null || !sub.winbackOfferEligible) {
@@ -811,15 +902,19 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       }
       return;
     }
-    unawaited(_winbackFirst(sub, targetApp: targetApp, asQr: asQr));
+    unawaited(
+      _winbackFirst(sub, targetApp: targetApp, asQr: asQr, entry: entry),
+    );
   }
 
   // Accept = ₹99 through the same app or QR the tap chose; the link = the full price, as tapped; the X,
   // back or scrim leave them on the screen, where the next tap is a fresh 10:00.
+  // [entry] names what opened the sheet when no tap did; `via` already means how they left it.
   Future<void> _winbackFirst(
     SubscriptionModel sub, {
     required String? targetApp,
     required bool asQr,
+    String? entry,
   }) async {
     if (_offerSheet != null) return;
     void track(String event, [Map<String, Object> extra = const {}]) =>
@@ -827,7 +922,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
           event,
           sub,
           offerId: kWinbackOffer,
-          extra: {'flow': 'winback', ...extra},
+          extra: {'flow': 'winback', 'entry': ?entry, ...extra},
         );
     track('cancel_offer_shown');
     final choice = await _holdOfferSheet(
@@ -980,7 +1075,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // covers the trial clip, so the clip does not start talking in the meantime.
     final holdClip = purchase is PurchaseProcessing;
 
-    final entitlementAsync = ref.watch(entitlementDetailProvider);
+    // Still watched under an arrival's loading face, so the wait's end paints the fresh `/me`.
+    final watched = ref.watch(entitlementDetailProvider);
+    final entitlementAsync = _arrivalPending
+        ? const AsyncLoading<Entitlement>()
+        : watched;
     // This route is LIGHT, always (owner's call) — the paywall is designed against ivory only.
     // Sheets and dialogs inherit theme from this screen's context, above anything this build wraps.
     // So the light theme is pinned at the ROUTE level (router.dart), never here.

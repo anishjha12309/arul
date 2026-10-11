@@ -99,7 +99,7 @@ property, a `register()` super property or a person property — [analytics-sign
   `first_open`/`session_start` are the "opened the app" record.
 - `Posthog().setup()` is not awaited — native init stays off the first-frame path.
 - **The cancel funnel is on the list** (owner exception): `cancel_tapped`, `cancel_offer_*`,
-  `cancel_confirmed`/`_kept`, `resubscribe_tapped`; `flow: winback` = a comeback.
+  `cancel_confirmed`/`_kept`, `resubscribe_tapped`; `flow: winback` = a comeback, `entry: push` = push-opened.
   `_accepted` = the tap; `_switched` = ₹99 live.
 - **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
   risk; `deep_link_opened` stays off too and must never feed an optimiser.
