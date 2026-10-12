@@ -113,6 +113,9 @@ export interface SetupGrant {
   price_paise: number | string;
   /** The mandate this grant replaced -> revoke it off the response path. */
   stale_mandate_id: string | null;
+  /** The mandate it granted on, and when -> the win-back sale's PostHog key. */
+  mandate_id?: string | null;
+  updated_at?: Date | string | null;
 }
 
 /**
@@ -200,7 +203,8 @@ async function grantSetup(
       AND prior.id = s.id
       AND s.status = 'pending'
       AND NOT s.offer_switch
-    RETURNING s.user_id, s.status, s.price_paise, prior.superseded_mandate_id AS stale_mandate_id
+    RETURNING s.user_id, s.status, s.price_paise, prior.superseded_mandate_id AS stale_mandate_id,
+              s.merchant_subscription_id AS mandate_id, s.updated_at
   `) as unknown as Omit<SetupGrant, "kind">[];
   return rows[0] ? { kind: "grant", ...rows[0] } : null;
 }

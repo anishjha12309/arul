@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../src/lib/posthog.js";
+import {
+  reportPostHogFirstConversion,
+  reportPostHogSubscriptionCancel,
+  reportPostHogWinbackPaid,
+} from "../src/lib/posthog.js";
 import type { Env } from "../src/env.js";
 
 function makeEnv(overrides: Partial<Record<string, unknown>> = {}): Env {
@@ -290,5 +294,54 @@ describe("phonepe_merchant — the second merchant is one additive property, not
       priorStatus: "trialing",
     });
     expect(sent().properties).toMatchObject({ phonepe_merchant: merchant, merchant_subscription_id: msid });
+  });
+});
+
+describe("reportPostHogWinbackPaid", () => {
+  const GRANT = {
+    user_id: "user-1",
+    price_paise: "9900",
+    mandate_id: "DKS_HS_W1",
+    updated_at: "2026-10-13T06:30:00.000Z",
+  };
+
+  it("captures a ₹99 win-back grant as winback_paid on the user's distinct_id", async () => {
+    await reportPostHogWinbackPaid(makeEnv(), GRANT);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.event).toBe("winback_paid");
+    expect(body.distinct_id).toBe("user-1");
+    expect(body.timestamp).toBe("2026-10-13T06:30:00.000Z");
+    expect(body.properties).toMatchObject({
+      plan: "monthly",
+      value: 99,
+      currency: "INR",
+      price_paise: 9900,
+      offer: "winback_99",
+      $geoip_disable: true,
+    });
+  });
+
+  it("a ₹199 resubscribe is not a win-back sale -> nothing sent", async () => {
+    await reportPostHogWinbackPaid(makeEnv(), { ...GRANT, price_paise: 19900 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("no mandate to key the sale on -> nothing sent", async () => {
+    await reportPostHogWinbackPaid(makeEnv(), { ...GRANT, mandate_id: null });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("the webhook and the status poll both granting it -> one event", async () => {
+    const env = makeEnv();
+    await reportPostHogWinbackPaid(env, GRANT);
+    await reportPostHogWinbackPaid(env, GRANT);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("never throws — fetch failure", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"));
+    await expect(reportPostHogWinbackPaid(makeEnv(), GRANT)).resolves.toBeUndefined();
   });
 });

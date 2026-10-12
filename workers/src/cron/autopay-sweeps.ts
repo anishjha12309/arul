@@ -8,6 +8,7 @@
 import type { Env } from "../env.js";
 import { type getDb, toDate } from "../lib/db.js";
 import { recordOrderOutcome } from "../lib/order-outcomes.js";
+import { reportPostHogWinbackPaid } from "../lib/posthog.js";
 import {
   getOrderOutcome,
   getOrderStatus,
@@ -268,6 +269,7 @@ async function sweepPendingClaims(env: Env, sql: Sql, budget: SweepBudget): Prom
           await retireStale(env, sql, granted);
           if (granted.kind === "grant" && granted.status === "active") {
             await grantReferralReward(sql, granted.user_id);
+            await reportPostHogWinbackPaid(env, granted);
           }
         }
         return;

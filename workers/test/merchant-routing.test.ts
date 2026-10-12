@@ -18,6 +18,7 @@ vi.mock("../src/lib/referral.js", () => ({ grantReferralReward: vi.fn().mockReso
 vi.mock("../src/lib/posthog.js", () => ({
   reportPostHogFirstConversion: vi.fn().mockResolvedValue(undefined),
   reportPostHogSubscriptionCancel: vi.fn().mockResolvedValue(undefined),
+  reportPostHogWinbackPaid: vi.fn().mockResolvedValue(undefined),
 }));
 
 import {

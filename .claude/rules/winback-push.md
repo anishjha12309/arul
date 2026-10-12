@@ -14,9 +14,12 @@ paths:
   `35_winback_push.sql` lands before the Worker that writes it.
 - **`handleCancel` claims its live and parked ids before PhonePe**, best effort, never blocking the cancel.
 - **`now` is the tick's `scheduledTime`, bound — never `now()`**; quiet hours are IST 22:00–09:00.
-- **`disabled` stays after `no_phone`** (the dark-launch rows are the baseline); `stale` stays first.
+- **`disabled` stays after `no_phone`** (the dark-launch rows are the baseline); `series` (a paid row) then `stale`
+  stay first.
 - **Upsert the trial month row before the paid one, always** (deadlock); reopen only a `sent` auto row.
-- One win-back per phone per IST month across both groups. `WINBACK_MIN_BUILD` = the release that opens the
-  ₹99 sheet from `offer=winback_99`. Flipping `WINBACK_PUSH_ENABLED` is the owner's call.
+- **The series: one `winback_series` row per evaluated day** (its key is the race lock), `lapsed_at` bound
+  `::text::timestamptz` (a timestamptz param drops microseconds and the row refills every batch), day rows upserted in ascending order.
+- One win-back a day per person, revoke push and series alike (`pushedToday`). `WINBACK_MIN_BUILD` = the release
+  that opens the ₹99 sheet from `offer=winback_99`. Flipping `WINBACK_PUSH_ENABLED` is the owner's call.
 
 Read [docs/winback-push.md](../../docs/winback-push.md) before changing any of it.

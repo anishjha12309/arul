@@ -32,12 +32,12 @@ order). The catch-up marks BEFORE invalidating entitlement and fires only once i
 no-trial read or the checkout tap): a trial found on a reinstall or second phone is recorded, never
 fired — GA4 does not dedupe a custom event, and the copy would credit the reinstall's ad.
 
-`subscription_active` (first trial→paid settle) and `subscription_cancel` (one per mandate, from every
-channel that ends a LIVE row, with `reason`, `prior_status`, `during_trial`) are server-side and reach
-**PostHog only** — product analytics, never an attribution source; renewals reach nothing. A
-restore-to-cancelled after a failed re-setup is NOT a cancel. `subscription_active` carries
-`target_app` from `upi_target_app` — the SAME key `checkout_started` and `trial_started` carry, so
-"which UPI app starts, completes and expires a mandate" is one axis.
+`subscription_active` (first trial→paid settle), `winback_paid` (₹99 winback) and
+`subscription_cancel` (one per mandate, from every channel that ends a LIVE row, with `reason`,
+`prior_status`, `during_trial`) are server-side, **PostHog only** — never an attribution
+source; renewals reach nothing. A restore-to-cancelled after a failed re-setup is NOT a cancel.
+`subscription_active` carries `target_app` from `upi_target_app` — the key `checkout_started` and
+`trial_started` carry, so "which UPI app starts, completes and expires a mandate" is one axis.
 
 ## The sign-in diagnostics
 

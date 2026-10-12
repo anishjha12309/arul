@@ -20,6 +20,7 @@ vi.mock("../src/lib/referral.js", async (importOriginal) => ({
 vi.mock("../src/lib/posthog.js", () => ({
   reportPostHogFirstConversion: vi.fn().mockResolvedValue(undefined),
   reportPostHogSubscriptionCancel: vi.fn().mockResolvedValue(undefined),
+  reportPostHogWinbackPaid: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { runAutopayNotify } from "../src/cron/autopay-notify.js";

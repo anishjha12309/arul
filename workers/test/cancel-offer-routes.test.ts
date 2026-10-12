@@ -20,6 +20,7 @@ vi.mock("../src/lib/referral.js", async (importOriginal) => ({
 vi.mock("../src/lib/posthog.js", () => ({
   reportPostHogFirstConversion: vi.fn().mockResolvedValue(undefined),
   reportPostHogSubscriptionCancel: vi.fn().mockResolvedValue(undefined),
+  reportPostHogWinbackPaid: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../src/lib/google.js", async (importOriginal) => ({
   GoogleKeysUnavailableError: (await importOriginal<typeof import("../src/lib/google.js")>())
@@ -30,7 +31,11 @@ vi.mock("../src/lib/google.js", async (importOriginal) => ({
 import { verifyGoogleIdToken } from "../src/lib/google.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 import { merchantOf } from "../src/lib/phonepe.js";
-import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../src/lib/posthog.js";
+import {
+  reportPostHogFirstConversion,
+  reportPostHogSubscriptionCancel,
+  reportPostHogWinbackPaid,
+} from "../src/lib/posthog.js";
 import { grantReferralReward } from "../src/lib/referral.js";
 import { handleLogin } from "../src/routes/auth.js";
 import { handleDeleteAccount, handleMe, handleMeSubscription } from "../src/routes/me.js";
@@ -1240,7 +1245,15 @@ describe("POST /payments/status — the grant and release surfaces", () => {
           return [reads === 1 ? { ...winbackClaim } : { ...winbackClaim, status: "active" }];
         }
         if (GRANT.test(t))
-          return [{ user_id: USER_ID, status: "active", price_paise: "9900", stale_mandate_id: null }];
+          return [
+            {
+              user_id: USER_ID,
+              status: "active",
+              price_paise: "9900",
+              stale_mandate_id: null,
+              mandate_id: "OMS_99",
+            },
+          ];
         return undefined;
       },
       { token },
@@ -1249,6 +1262,11 @@ describe("POST /payments/status — the grant and release surfaces", () => {
     expect(body?.subscription).toMatchObject({ status: "active", price_paise: 9900 });
     expect(order(db).filter((l) => l === "switch" || l === "grant")).toEqual(["switch", "grant"]);
     expect(grantReferralReward).toHaveBeenCalledWith(expect.anything(), USER_ID);
+    // PostHog's subscription_active is the first trial->paid only -> the ₹99 sale reports itself
+    expect(reportPostHogWinbackPaid).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ user_id: USER_ID, price_paise: "9900", mandate_id: "OMS_99" }),
+    );
   });
 
   it.each([["FAILED"], ["EXPIRED"]])(

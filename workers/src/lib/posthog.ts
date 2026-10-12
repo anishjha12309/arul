@@ -8,7 +8,7 @@
 
 import type { Env } from "../env.js";
 import { merchantOf } from "./phonepe.js";
-import { offerOfPrice } from "./pricing.js";
+import { OFFER_PRICE_PAISE, offerOfPrice, WINBACK_OFFER } from "./pricing.js";
 
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
@@ -130,6 +130,65 @@ export async function reportPostHogFirstConversion(env: Env, purchase: FirstConv
   } catch (err) {
     // Analytics must never break a billing transition.
     console.error(`[posthog] subscription_active failed for txn=${purchase.transactionId}:`, err);
+  }
+}
+
+/** A setup grant's RETURNING row (`SetupGrant`), read structurally so this module imports nothing from billing. */
+interface WinbackPaid {
+  user_id: string;
+  price_paise: number | string;
+  /** The ₹99 mandate the setup granted on -> one per sale, so it seeds the dedupe key and the uuid. */
+  mandate_id?: string | null;
+  /** The grant's own `updated_at` -> a resend keeps PostHog's whole dedupe key. */
+  updated_at?: Date | string | null;
+}
+
+/**
+ * A ₹99 win-back setup that granted a paid month, as `winback_paid`. `subscription_active` is the first trial->paid
+ * only, so without this PostHog sees the ₹99 sheet's taps and never its sales. A grant at ₹99 is only ever a
+ * winback_99 setup: a cancel_99 goes through the offer switch, which grants no paid month
+ */
+export async function reportPostHogWinbackPaid(env: Env, paid: WinbackPaid): Promise<void> {
+  try {
+    const pricePaise = Number(paid.price_paise);
+    const mandateId = paid.mandate_id;
+    if (!env.POSTHOG_API_KEY || pricePaise !== OFFER_PRICE_PAISE || !mandateId) return;
+    const dedupeKey = `ph:winback_paid:${mandateId}`;
+    if (await env.KV.get(dedupeKey)) return;
+
+    const host = (env.POSTHOG_HOST || DEFAULT_HOST).replace(/\/+$/, "");
+    const res = await fetch(`${host}/i/v0/e`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        api_key: env.POSTHOG_API_KEY,
+        event: "winback_paid",
+        distinct_id: paid.user_id,
+        uuid: await deterministicUuid("winback_paid", mandateId),
+        timestamp: eventTimestamp(paid.updated_at),
+        properties: {
+          plan: "monthly",
+          value: pricePaise / 100,
+          currency: "INR",
+          price_paise: pricePaise,
+          offer: WINBACK_OFFER,
+          phonepe_merchant: merchantOf(mandateId),
+          $lib: "arul-worker",
+          $geoip_disable: true,
+        },
+      }),
+    });
+    if (res.ok) {
+      console.log(`[posthog] winback_paid captured mandate=${mandateId} user=${paid.user_id}`);
+      await env.KV.put(dedupeKey, "1", { expirationTtl: DEDUPE_TTL_SECONDS });
+    } else {
+      console.error(
+        `[posthog] winback_paid rejected (HTTP ${res.status}) for mandate=${mandateId}: ${await res.text()}`,
+      );
+    }
+  } catch (err) {
+    // Analytics must never break a billing transition.
+    console.error(`[posthog] winback_paid failed for mandate=${paid.mandate_id}:`, err);
   }
 }
 

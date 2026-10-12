@@ -1,11 +1,12 @@
-# Win-back push — one push after a payer revokes outside the app
+# Win-back push — the revoke push and the 14-day series
 
 Read before touching `workers/src/lib/winback-push.ts`, `workers/src/cron/winback-push.ts`, the revoke branches of
 `routes/payments.ts` or the parks in `cron/autopay-*.ts`. Sending: [push.md](push.md) · the ₹99 it sells:
 [cancel-offer.md](cancel-offer.md) §The winback · the webhook: [phonepe-webhook.md](phonepe-webhook.md).
 
 A revoke in the UPI app never opens the app, so it skips the in-app cancel offer, and most trial cancels are these.
-This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99 sheet.
+The Worker's ONE automated push family, both landing on the ₹99 sheet: a trial revoker's push 20 min after the
+revoke, and a daily series for everyone the app's ₹99 sheets reach (§The daily series).
 
 ## Only the payer's own revoke queues
 
@@ -32,13 +33,12 @@ This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99
 - Gates: `PUSH_ENABLED`, then IST quiet hours 22:00–09:00 (cron time is UTC, India keeps no DST), then the claim
   under `FOR UPDATE OF wp SKIP LOCKED` (the minute trigger has no `cron_runs` slot). `now` is the tick's
   `scheduledTime` bound into the SQL, never `now()`, so tests and `?time=` can pin it.
-- **Due = `greatest(revoked + 20 min, current_period_end − 24 h)`.** An accepted winback charges ₹99 on approval
-  and starts a fresh month that day (`grantSetup`), so a paid revoker asked early would throw paid days away; a
-  trial revoker is asked 20 min after the revoke.
-- First match wins: `stale` (due over 24 h ago: no backlog blast after a switch or an outage) · `live_again` (the
+- **Due = `greatest(revoked + 20 min, current_period_end − 24 h)`.** A paid row resolves `series` (owner): it still
+  has paid days, an accepted winback starts a fresh month that day (`grantSetup`), and the series asks once they run out.
+- First match wins: `series` · `stale` (due over 24 h ago: no backlog blast after a switch or an outage) · `live_again` (the
   same mandate live again: an in-flight debit settles with no status guard) · `new_setup` (another mandate, or
   `pending`) · `not_eligible` (`winbackOfferEligible`) · `no_phone` (`reachableDevice`, no build gate) ·
-  `disabled` · `old_build` · `capped` · `sent`.
+  `disabled` · `old_build` · `capped` (`pushedToday`) · `sent`.
 - **`disabled` sits after `no_phone` on purpose**: the dark-launch rows ARE the baseline, the same "eligible and
   reachable" group that later gets pushes.
 
@@ -51,10 +51,24 @@ This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99
   before paid, always: the upsert locks the row, and one order keeps overlapping ticks from deadlocking.
 - **Every tick reopens a `sent` auto row holding a pending delivery**: an overlapping drain can count zero, then
   flip the row just after an insert committed. Never a `failed` one: its `last_error` restarts the token count.
-- **One win-back per phone per IST month across BOTH groups** (`capped`): a trial revoker who came back on ₹99 and
-  revoked again already heard the offer (CCPA "nagging").
+- **One win-back a day per person, revoke push and series alike** (`pushedToday`: a sent row of either since IST
+  midnight). Fourteen asks after a no is the CCPA "nagging" risk the owner accepted; the brake is the switch.
 - `dest = premium` keeps it PRIVATE on the lock screen; `dest_id = winback_99` is what a new build reads to open the
   sheet; `expires_hours = 6`. Deliveries go with the 30-day campaign sweep; resolved `winback_pushes` at 90 days.
+
+## The daily series
+
+- **Who: the app's ₹99 rule** (`winbackReachable`): `winbackOfferEligible`, not `pending`, NOT `premiumPredicate`.
+  In-app cancellers and failed debits included (owner); a purchase or a new setup ends it.
+- **Day 0 = `lapsed_at` = `greatest(coalesce(current_period_end, trial_end), reward_premium_until)`**, day N at the
+  same time of day, for `SERIES_DAYS` = 14 (owner); a day in quiet hours goes at 09:00. A trial revoker keeps
+  premium until the trial ends, so their series follows the revoke push.
+- **Each evaluated day writes one `winback_series` row**, sent or skipped (`no_phone` · `disabled` · `old_build` ·
+  `capped`), so a day is decided once; its key is the race lock, and `disabled` days are the series' baseline.
+- **`lapsed_at` round-trips as TEXT, bound `::text::timestamptz`**: a timestamptz param drops the microseconds, so
+  the key misses its own row and that row refills every batch.
+- One campaign row per series day per IST month (`winback:day01:2026-10` … `day14`): the CMS shows which day still
+  pays. Upsert days in ascending order (deadlock).
 
 ## The app
 
@@ -72,7 +86,8 @@ This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99
 
 - No time and no "keep": the charge starts on approval, a paused row has no premium, and the 09:00 hold can land
   after the period ended. No countdown, no guilt, no "we noticed" (CCPA false urgency, confirm-shaming, nagging).
-  Six languages in `lib/winback-push.ts`, terms taken from the app's ARB files; the owner approves every word.
+  The series never says "autopay": a lapse can be a failed debit. Six languages in `lib/winback-push.ts`, terms
+  taken from the app's ARB files; the owner approves every word.
 - `WINBACK_PUSH_ENABLED` (`[vars]`, under `PUSH_ENABLED`): `"true"` and nothing else sends. Flipping it is the
   owner's call; until then due rows resolve `disabled`.
 
@@ -90,8 +105,9 @@ This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99
 
 ## Measure
 
-Read-only through `tools/prod-query.mjs`; compare the `disabled` weeks with the `sent`/`old_build`/`capped` weeks.
-"Came back" is the row now naming a newer live mandate — the table keeps no per-setup timestamp.
+Read-only via `tools/prod-query.mjs`; compare the `disabled` weeks with the `sent`/`old_build`/`capped` weeks.
+"Came back" is the row now naming a newer live mandate — the table keeps no per-setup timestamp. The series: per
+`day`, `disabled` vs `sent` rows whose user is on a live plan now. PostHog `winback_paid` is each ₹99 sale.
 
 ```sql
 SELECT date_trunc('week', wp.created_at AT TIME ZONE 'Asia/Kolkata')::date AS week,
@@ -109,8 +125,10 @@ GROUP BY 1, 2, 3, 4 ORDER BY 1 DESC, 2, 3, 4;
 - [ ] A REVOKED live mandate queues one row, whichever path saw it first; a redelivery adds nothing
 - [ ] CANCELLED, EXPIRED, FAILED, a pending claim's own id, an already-cancelled row: never a queued row
 - [ ] An in-app cancel never gets the push — mid-switch, and when its own webhook lands first
-- [ ] Trial: 20 min after the revoke; paid: a day before the period ends; nothing 22:00–09:00 IST
-- [ ] Came back, live again, ineligible, no phone, old build, switch off, stale, pushed this month: no push, and
+- [ ] Trial revoke: 20 min after; paid revoke: no push, the series instead; nothing 22:00–09:00 IST
+- [ ] Came back, live again, ineligible, no phone, old build, switch off, stale, pushed today: no push, and
   the reason is on the row
+- [ ] Series: one push a day for 14 days from the lapse, never while premium or mid-checkout, stopped by a purchase;
+  overlapping ticks send a day once
 - [ ] The tap opens the ₹99 sheet once — killed, backgrounded, already on /premium; the lock screen shows nothing
 - [ ] The month row's counters and language rows add up like any campaign's; a tap records an open

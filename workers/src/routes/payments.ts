@@ -9,7 +9,11 @@ import { requestSignal } from "../lib/request-signal.js";
 import { verifyAccessToken } from "../lib/jwt.js";
 import { getDb, toDate } from "../lib/db.js";
 import { grantReferralReward } from "../lib/referral.js";
-import { reportPostHogFirstConversion, reportPostHogSubscriptionCancel } from "../lib/posthog.js";
+import {
+  reportPostHogFirstConversion,
+  reportPostHogSubscriptionCancel,
+  reportPostHogWinbackPaid,
+} from "../lib/posthog.js";
 import { CANCEL_OFFER, OFFER_PRICE_PAISE, STANDARD_PRICE_PAISE, WINBACK_OFFER } from "../lib/pricing.js";
 import { allowRequest, tooManyRequests } from "../lib/ratelimit.js";
 import { rearmUnpausedSubscription } from "../lib/subscription-rearm.js";
@@ -708,6 +712,7 @@ export async function handleWebhook(c: Context<{ Bindings: Env }>): Promise<Resp
         if (granted.kind === "grant" && granted.status === "active") {
           // A repeat subscriber paid ₹199 at setup -> that IS a paid debit -> the referral reward applies here too
           await grantReferralReward(sql, granted.user_id);
+          await reportPostHogWinbackPaid(env, granted);
           // Audit -> a repeat subscriber's setup order must carry the REAL charge
           // amount=200 here means a stale PENNY_DROP order completed for a trial-consumed user
           if (typeof pp.amount === "number" && pp.amount < Number(granted.price_paise)) {
@@ -1034,6 +1039,7 @@ export async function handleStatus(c: Context<{ Bindings: Env }>): Promise<Respo
             if (granted.kind === "grant" && granted.status === "active") {
               // The same paid-debit semantics as the webhook path -> idempotent, so both landing is harmless
               await grantReferralReward(sql, granted.user_id);
+              await reportPostHogWinbackPaid(env, granted);
             }
             // The response is built from the SELECT taken BEFORE the grant -> re-read the one row it confirms
             Object.assign(row, await readStatusRow(sql, sub));

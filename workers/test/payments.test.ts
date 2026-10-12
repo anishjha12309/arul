@@ -28,6 +28,7 @@ vi.mock("../src/lib/referral.js", () => ({
 const posthog = vi.hoisted(() => ({
   reportPostHogFirstConversion: vi.fn().mockResolvedValue(undefined),
   reportPostHogSubscriptionCancel: vi.fn().mockResolvedValue(undefined),
+  reportPostHogWinbackPaid: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("../src/lib/posthog.js", () => posthog);
 
