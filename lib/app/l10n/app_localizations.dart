@@ -1834,6 +1834,12 @@ abstract class AppLocalizations {
   /// **'I don\'t want the offer'**
   String get cancelOfferDecline;
 
+  /// ₹99 win-back sheet opened from the long-press 'Uninstall' app shortcut: the full-width button under the offer that really goes on to uninstall (it opens the phone's App info page, where the Uninstall button is). Same weight as a destructive action, never a faint link.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall anyway'**
+  String get winbackUninstallAnyway;
+
   /// Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app.
   ///
   /// In en, this message translates to:

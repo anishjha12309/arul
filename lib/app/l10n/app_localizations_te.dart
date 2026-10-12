@@ -991,6 +991,9 @@ class AppLocalizationsTe extends AppLocalizations {
   String get cancelOfferDecline => 'నాకు ఈ ఆఫర్ వద్దు';
 
   @override
+  String get winbackUninstallAnyway => 'అయినా అన్‌ఇన్‌స్టాల్ చేయండి';
+
+  @override
   String get cancelOfferRetryTitle => 'పూర్తి కాలేదు';
 
   @override

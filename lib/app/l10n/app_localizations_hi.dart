@@ -985,6 +985,9 @@ class AppLocalizationsHi extends AppLocalizations {
   String get cancelOfferDecline => 'मुझे यह ऑफ़र नहीं चाहिए';
 
   @override
+  String get winbackUninstallAnyway => 'फिर भी अनइंस्टॉल करें';
+
+  @override
   String get cancelOfferRetryTitle => 'पूरा नहीं हुआ';
 
   @override

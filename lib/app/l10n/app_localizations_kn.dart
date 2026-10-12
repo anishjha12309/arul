@@ -986,6 +986,9 @@ class AppLocalizationsKn extends AppLocalizations {
   String get cancelOfferDecline => 'ನನಗೆ ಈ ಆಫರ್ ಬೇಡ';
 
   @override
+  String get winbackUninstallAnyway => 'ಆದರೂ ಅನ್‌ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ';
+
+  @override
   String get cancelOfferRetryTitle => 'ಪೂರ್ಣಗೊಳ್ಳಲಿಲ್ಲ';
 
   @override

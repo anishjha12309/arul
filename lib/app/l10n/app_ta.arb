@@ -287,6 +287,7 @@
   "cancelOfferEnded": "சலுகை முடிந்தது",
   "cancelOfferAccept": "50% தள்ளுபடியைப் பெறுங்கள்",
   "cancelOfferDecline": "எனக்கு இந்தச் சலுகை வேண்டாம்",
+  "winbackUninstallAnyway": "இருந்தாலும் நிறுவல் நீக்கு",
   "cancelOfferRetryTitle": "மாற்றம் நடைபெறவில்லை",
   "cancelOfferTryAgain": "மீண்டும் முயற்சிக்கவும்",
   "cancelOfferNothingChanged": "எதுவும் மாறவில்லை. நீங்கள் இன்னும் மாதம் {price} திட்டத்திலேயே இருக்கிறீர்கள்.",

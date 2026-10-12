@@ -790,6 +790,10 @@
   "@cancelOfferDecline": {
     "description": "Cancel-offer sheet underlined link under the button: turns the offer down. It opens the cancel confirmation, it does not cancel by itself."
   },
+  "winbackUninstallAnyway": "Uninstall anyway",
+  "@winbackUninstallAnyway": {
+    "description": "₹99 win-back sheet opened from the long-press 'Uninstall' app shortcut: the full-width button under the offer that really goes on to uninstall (it opens the phone's App info page, where the Uninstall button is). Same weight as a destructive action, never a faint link."
+  },
   "cancelOfferRetryTitle": "Didn't go through",
   "@cancelOfferRetryTitle": {
     "description": "Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app."

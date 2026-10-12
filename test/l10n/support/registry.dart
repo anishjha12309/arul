@@ -551,6 +551,32 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       ),
     ),
   ),
+  // The Uninstall shortcut's sheet: "Uninstall anyway" takes the decline link's place.
+  ScreenEntry(
+    id: 'premium.winback_uninstall_sheet',
+    build: () => SheetHost(
+      open: (context) => showCancelOfferSheet(
+        context,
+        offerPrice: '₹99',
+        onAccept: () async => false,
+        untilHandedOff: () async {},
+        uninstall: true,
+      ),
+    ),
+  ),
+  // `winback_reach.countdown: false`: the same sheet without the hold or its line.
+  ScreenEntry(
+    id: 'premium.winback_sheet_no_hold',
+    build: () => SheetHost(
+      open: (context) => showCancelOfferSheet(
+        context,
+        offerPrice: '₹99',
+        onAccept: () async => false,
+        untilHandedOff: () async {},
+        hold: false,
+      ),
+    ),
+  ),
   ScreenEntry(
     id: 'premium.cancel_confirm_dialog',
     build: () => SheetHost(

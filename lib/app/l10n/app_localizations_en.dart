@@ -985,6 +985,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelOfferDecline => 'I don\'t want the offer';
 
   @override
+  String get winbackUninstallAnyway => 'Uninstall anyway';
+
+  @override
   String get cancelOfferRetryTitle => 'Didn\'t go through';
 
   @override

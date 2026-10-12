@@ -36,8 +36,10 @@ import '../domain/cancel_offer.dart';
 import '../domain/entitlement.dart';
 import '../domain/onboarding_video.dart';
 import '../domain/subscription_repository.dart';
+import '../domain/winback_reach.dart';
 import '../providers/entitlement_provider.dart';
 import '../providers/premium_purchase_provider.dart';
+import '../providers/winback_reach_providers.dart';
 import 'cancel_offer_sheet.dart';
 import 'member_view.dart';
 import 'onboarding_video_card.dart';
@@ -207,6 +209,14 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   // Bumped per push arrival, so a newer arrival retires an older one still waiting on `/me`.
   int _offerArrival = 0;
 
+  /// The ₹99 door that opened this screen when no pay tap did.
+  WinbackEntry? get _entry =>
+      WinbackEntry.fromRoute(source: widget.source, offer: widget.offer);
+
+  // A sheet-only door paints nothing of its own until a purchase starts: the ₹99 sheet rises over
+  // the page the person was on, and only a real checkout needs the paywall under it.
+  bool _revealed = false;
+
   // The loading face while an arrival waits on `/me`: the cached page would flash a plan the
   // reconcile is about to replace. Capped, so a slow reconcile never holds a blank screen.
   bool _arrivalPending = false;
@@ -300,10 +310,14 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         .read(sharedPreferencesProvider)
         .getString(_kUpiAppKey);
     final reconciled = _reconcileOnOpen();
-    if (widget.offer == kWinbackOffer) {
+    final entry = _entry;
+    if (entry == WinbackEntry.push) {
       unawaited(_openOfferOnArrival(reconciled));
+    } else if (entry != null) {
+      unawaited(_openOfferAtOnce(entry));
     }
-    _warmOnboardingVideo();
+    // Those doors only open for someone who spent their trial, so the trial clip never plays.
+    if (entry == null || entry == WinbackEntry.push) _warmOnboardingVideo();
     // A deferred delivery can report the ad's language seconds after launch, past a fast user.
     // Re-target the SURVIVING player rather than rebuilding the decoder.
     ref.listenManual(localeProvider, (_, _) => _retargetOnboardingVideo());
@@ -314,7 +328,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   @override
   void didUpdateWidget(PremiumScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.offer == oldWidget.offer || widget.offer != kWinbackOffer) {
+    if (_entry != WinbackEntry.push ||
+        (widget.offer == oldWidget.offer &&
+            widget.source == oldWidget.source)) {
       return;
     }
     unawaited(_openOfferOnArrival(_reconcileOnOpen()));
@@ -481,8 +497,76 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       _resolvedUpiPackage(upiApps),
       trialEligible: false,
       asQr: upiApps.isEmpty && upiAsync.hasValue,
-      entry: 'push',
+      entry: WinbackEntry.push,
     );
+  }
+
+  // A premium tap, the daily sheet or the Uninstall shortcut: whoever opened the door already read
+  // `/me`, so no reconcile wait and no loading face. Never `_startPaid`, so no ₹199 start either.
+  Future<void> _openOfferAtOnce(WinbackEntry entry) async {
+    final arrival = ++_offerArrival;
+    Entitlement? me;
+    UpiScan? scan;
+    try {
+      me = await ref.read(entitlementDetailProvider.future);
+      if (!mounted) return;
+      scan = await ref.read(installedUpiAppsProvider.future);
+    } catch (_) {
+      // No verdict: a sheet-only door goes back where it came from, a premium tap keeps the page.
+    }
+    if (!mounted || arrival != _offerArrival) return;
+    await _routeSettled();
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || arrival != _offerArrival) return;
+    final sub = me?.subscription;
+    if (sub == null ||
+        scan == null ||
+        !winbackReachable(me) ||
+        ref.read(premiumPurchaseProvider) is! PurchaseIdle ||
+        _offerSheet != null ||
+        _qrSheet != null ||
+        !(ModalRoute.of(context)?.isCurrent ?? false)) {
+      _closeDoor(entry);
+      return;
+    }
+    final upiApps = _orderedUpiApps(scan.apps);
+    unawaited(
+      _winbackFirst(
+        sub,
+        targetApp: _resolvedUpiPackage(upiApps),
+        asQr: upiApps.isEmpty,
+        entry: entry,
+      ),
+    );
+  }
+
+  // The sheet rises over a page that has finished arriving, never over one still sliding in.
+  Future<void> _routeSettled() {
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.isCompleted) return Future<void>.value();
+    final settled = Completer<void>();
+    void onStatus(AnimationStatus status) {
+      if (status.isAnimating) return;
+      animation.removeStatusListener(onStatus);
+      if (!settled.isCompleted) settled.complete();
+    }
+
+    animation.addStatusListener(onStatus);
+    return settled.future;
+  }
+
+  // Where a door goes when its sheet did not open. "Uninstall" must still uninstall, so its door
+  // ends in App info; the daily one returns to where it rose; a premium tap keeps its paywall.
+  void _closeDoor(WinbackEntry entry) {
+    switch (entry) {
+      case WinbackEntry.uninstallShortcut:
+        unawaited(ref.read(uninstallShortcutChannelProvider).openAppInfo());
+        _leave();
+      case WinbackEntry.daily:
+        _leave();
+      case WinbackEntry.premiumTap || WinbackEntry.push:
+        break;
+    }
   }
 
   // A superseded arrival leaves the wait alone: the newer one owns it.
@@ -798,7 +882,9 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     switch (choice) {
       case CancelOfferChoice.accept:
         return;
-      case CancelOfferChoice.decline || CancelOfferChoice.close:
+      case CancelOfferChoice.decline ||
+          CancelOfferChoice.close ||
+          CancelOfferChoice.uninstall:
         _trackOffer(
           'cancel_offer_declined',
           sub,
@@ -863,7 +949,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     String? targetApp, {
     required bool trialEligible,
     bool asQr = false,
-    String? entry,
+    WinbackEntry? entry,
   }) {
     final sub = ref.read(entitlementDetailProvider).asData?.value.subscription;
     if (trialEligible || sub == null || !sub.winbackOfferEligible) {
@@ -879,30 +965,38 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  // Accept = ₹99 through the same app or QR the tap chose; the link = the full price, as tapped; the X,
-  // back or scrim leave them on the screen, where the next tap is a fresh 10:00.
+  // Accept = ₹99 through the app or QR the tap chose. The link starts the full price only on the pay
+  // button's own sheet (no [entry]): a door nobody tapped pay on only ever closes.
   // [entry] names what opened the sheet when no tap did; `via` already means how they left it.
   Future<void> _winbackFirst(
     SubscriptionModel sub, {
     required String? targetApp,
     required bool asQr,
-    String? entry,
+    WinbackEntry? entry,
   }) async {
     if (_offerSheet != null) return;
+    final ledger = ref.read(winbackLedgerProvider);
     void track(String event, [Map<String, Object> extra = const {}]) =>
         _trackOffer(
           event,
           sub,
           offerId: kWinbackOffer,
-          extra: {'flow': 'winback', 'entry': ?entry, ...extra},
+          extra: {'flow': 'winback', 'entry': ?entry?.key, ...extra},
         );
     track('cancel_offer_shown');
+    unawaited(ledger.noteShown());
     final choice = await _holdOfferSheet(
       showCancelOfferSheet(
         context,
         offerPrice: rupeesFromPaise(kCancelOfferPricePaise),
+        hold:
+            entry == null ||
+            entry == WinbackEntry.push ||
+            ref.read(winbackReachFlagsProvider).countdown,
+        uninstall: entry == WinbackEntry.uninstallShortcut,
         onAccept: () async {
           track('cancel_offer_accepted');
+          unawaited(ledger.noteAccepted());
           return _beginPaid(targetApp, asQr: asQr, offer: kWinbackOffer);
         },
         untilHandedOff: _untilOfferHandedOff,
@@ -916,11 +1010,26 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       'via': switch (choice) {
         CancelOfferChoice.decline => 'link',
         CancelOfferChoice.close => 'close',
+        CancelOfferChoice.uninstall => 'uninstall',
         _ => 'dismiss',
       },
     });
-    if (choice != CancelOfferChoice.decline) return;
-    _beginPaid(targetApp, asQr: asQr);
+    switch (entry) {
+      case null:
+        if (choice == CancelOfferChoice.decline) {
+          _beginPaid(targetApp, asQr: asQr);
+        }
+      case WinbackEntry.push || WinbackEntry.premiumTap:
+        break;
+      case WinbackEntry.daily:
+        unawaited(ledger.noteDailyDismissed());
+        _leave();
+      case WinbackEntry.uninstallShortcut:
+        if (choice == CancelOfferChoice.uninstall) {
+          unawaited(ref.read(uninstallShortcutChannelProvider).openAppInfo());
+        }
+        _leave();
+    }
   }
 
   // No `AppConfig.hasBackend` guard, like [_beginOffer]: this only runs once a Worker answered `/me`.
@@ -985,6 +1094,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // Feedback is REACTIVE -> the flow survives rebuilds while the SDK UI is up.
     // On success the invalidation flips this screen to the member view under the celebration sheet.
     ref.listen<PurchaseState>(premiumPurchaseProvider, (prev, next) {
+      if (next is! PurchaseIdle) _revealed = true;
       switch (next) {
         case PurchaseSuccess(offer: true):
           ref.read(premiumPurchaseProvider.notifier).reset();
@@ -1040,6 +1150,15 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
       }
     });
     final purchase = ref.watch(premiumPurchaseProvider);
+    // Still watched under an arrival's loading face, so the wait's end paints the fresh `/me`.
+    // A sheet-only door's empty frame needs it too: the open-time reconcile re-reads `/me`, and an
+    // unwatched provider never rebuilds for the door's own await on it.
+    final watched = ref.watch(entitlementDetailProvider);
+    if ((_entry?.sheetOnly ?? false) &&
+        !_revealed &&
+        purchase is PurchaseIdle) {
+      return const SizedBox.expand();
+    }
     final purchaseBusy =
         purchase is PurchaseLoading || purchase is PurchaseProcessing;
     final resumable = purchase is PurchaseResumable ? purchase : null;
@@ -1047,8 +1166,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     // covers the trial clip, so the clip does not start talking in the meantime.
     final holdClip = purchase is PurchaseProcessing;
 
-    // Still watched under an arrival's loading face, so the wait's end paints the fresh `/me`.
-    final watched = ref.watch(entitlementDetailProvider);
     final entitlementAsync = _arrivalPending
         ? const AsyncLoading<Entitlement>()
         : watched;

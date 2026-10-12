@@ -11,8 +11,9 @@ import 'paywall_ornaments.dart';
 import 'paywall_view.dart';
 
 /// How a cancel-offer sheet closed: `accept` only once the switch was handed off, `decline` = "I
-/// don't want the offer", `close` = the X. Back, scrim and drag answer null.
-enum CancelOfferChoice { accept, decline, close }
+/// don't want the offer", `close` = the X, `uninstall` = "Uninstall anyway". Back, scrim and drag
+/// answer null.
+enum CancelOfferChoice { accept, decline, close, uninstall }
 
 /// Picks the UPI route and starts the ₹99 switch; false when nothing started (the picker was closed).
 typedef CancelOfferStart = Future<bool> Function();
@@ -22,12 +23,17 @@ typedef CancelOfferStart = Future<bool> Function();
 DateTime Function() cancelOfferClock = DateTime.now;
 
 /// The ₹99 save offer, the first thing a Cancel tap opens. No way out of it cancels anything.
+///
+/// [hold] false drops the 10:00 hold and its "limited time" line together, so the price never
+/// expires. [uninstall] puts "Uninstall anyway" where the decline link was (the shortcut's sheet).
 Future<CancelOfferChoice?> showCancelOfferSheet(
   BuildContext context, {
   required String offerPrice,
   required CancelOfferStart onAccept,
   required Future<void> Function() untilHandedOff,
   VoidCallback? onExpired,
+  bool hold = true,
+  bool uninstall = false,
 }) => showArulSheet<CancelOfferChoice>(
   context,
   // The paywall's own ground, like every sheet /premium opens.
@@ -37,6 +43,8 @@ Future<CancelOfferChoice?> showCancelOfferSheet(
     onAccept: onAccept,
     untilHandedOff: untilHandedOff,
     onExpired: onExpired,
+    hold: hold,
+    uninstall: uninstall,
   ),
 );
 
@@ -161,12 +169,16 @@ class _CancelOfferBody extends StatefulWidget {
     required this.onAccept,
     required this.untilHandedOff,
     required this.onExpired,
+    required this.hold,
+    required this.uninstall,
   });
 
   final String offerPrice;
   final CancelOfferStart onAccept;
   final Future<void> Function() untilHandedOff;
   final VoidCallback? onExpired;
+  final bool hold;
+  final bool uninstall;
 
   @override
   State<_CancelOfferBody> createState() => _CancelOfferBodyState();
@@ -216,12 +228,14 @@ class _CancelOfferBodyState extends State<_CancelOfferBody>
                     style: ArulTokens.premiumMemberHeadline,
                   ),
                 ),
-                const SizedBox(height: ArulTokens.premiumMemberSublineGap),
-                Text(
-                  l10n.cancelOfferSubtitle,
-                  textAlign: TextAlign.center,
-                  style: ArulTokens.paywallLead,
-                ),
+                if (widget.hold) ...[
+                  const SizedBox(height: ArulTokens.premiumMemberSublineGap),
+                  Text(
+                    l10n.cancelOfferSubtitle,
+                    textAlign: TextAlign.center,
+                    style: ArulTokens.paywallLead,
+                  ),
+                ],
                 const SizedBox(height: 18),
                 Text(
                   l10n.cancelOfferDiscount,
@@ -236,10 +250,12 @@ class _CancelOfferBodyState extends State<_CancelOfferBody>
                   textAlign: TextAlign.center,
                   style: ArulTokens.premiumMemberBody.copyWith(fontSize: 14),
                 ),
-                const SizedBox(height: 16),
-                Center(
-                  child: _HoldPill(deadline: _deadline, onExpired: _expire),
-                ),
+                if (widget.hold) ...[
+                  const SizedBox(height: 16),
+                  Center(
+                    child: _HoldPill(deadline: _deadline, onExpired: _expire),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 ShrineCta(
                   label: l10n.cancelOfferAccept,
@@ -252,34 +268,48 @@ class _CancelOfferBodyState extends State<_CancelOfferBody>
                 const SizedBox(
                   height: ArulTokens.premiumCelebrateLotusClearance,
                 ),
-                TextButton(
-                  key: const ValueKey('cancel-offer-decline'),
-                  onPressed: _starting
-                      ? null
-                      : () => _leave(CancelOfferChoice.decline),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ArulTokens.paywallInkSecondary,
-                    minimumSize: const Size.fromHeight(ArulTokens.minHitTarget),
-                  ),
-                  child: Text(
-                    l10n.cancelOfferDecline,
-                    textAlign: TextAlign.center,
-                    // Flutter has no underline offset: the glyphs paint as a shadow 3 px up, so
-                    // the line sits clear of the descenders.
-                    style: ArulTokens.premiumMemberBody.copyWith(
-                      fontWeight: FontWeight.w500,
-                      color: Colors.transparent,
-                      shadows: const [
-                        Shadow(
-                          color: ArulTokens.paywallInkSecondary,
-                          offset: Offset(0, -3),
-                        ),
-                      ],
-                      decoration: TextDecoration.underline,
-                      decorationColor: ArulTokens.paywallInkSecondary,
+                // Someone who asked to uninstall gets that, as plainly as the offer: never a faint
+                // link (the CCPA's McAfee order), and still live after the hold runs out.
+                if (widget.uninstall)
+                  PremiumPlanCancelButton(
+                    busy: false,
+                    tapKey: 'cancel-offer-uninstall',
+                    label: l10n.winbackUninstallAnyway,
+                    onTap: _starting
+                        ? null
+                        : () => _leave(CancelOfferChoice.uninstall),
+                  )
+                else
+                  TextButton(
+                    key: const ValueKey('cancel-offer-decline'),
+                    onPressed: _starting
+                        ? null
+                        : () => _leave(CancelOfferChoice.decline),
+                    style: TextButton.styleFrom(
+                      foregroundColor: ArulTokens.paywallInkSecondary,
+                      minimumSize: const Size.fromHeight(
+                        ArulTokens.minHitTarget,
+                      ),
+                    ),
+                    child: Text(
+                      l10n.cancelOfferDecline,
+                      textAlign: TextAlign.center,
+                      // Flutter has no underline offset: the glyphs paint as a shadow 3 px up, so
+                      // the line sits clear of the descenders.
+                      style: ArulTokens.premiumMemberBody.copyWith(
+                        fontWeight: FontWeight.w500,
+                        color: Colors.transparent,
+                        shadows: const [
+                          Shadow(
+                            color: ArulTokens.paywallInkSecondary,
+                            offset: Offset(0, -3),
+                          ),
+                        ],
+                        decoration: TextDecoration.underline,
+                        decorationColor: ArulTokens.paywallInkSecondary,
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             PositionedDirectional(

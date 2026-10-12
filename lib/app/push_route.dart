@@ -44,6 +44,60 @@ class _ArulPushRoute<T> extends PageRoute<T>
   String get debugLabel => '${super.debugLabel}(${_page.name})';
 }
 
+/// A screen that only hosts a sheet over the page the person was on (the ₹99 doors no pay tap
+/// opened): see-through, no scrim and no motion of its own, so the sheet's rise is the only
+/// movement and nothing flashes behind it. Not a [MaterialRouteTransitionMixin], so the page below
+/// runs no exit animation either.
+class ArulOverlayPage<T> extends Page<T> {
+  const ArulOverlayPage({
+    required this.child,
+    super.key,
+    super.name,
+    super.arguments,
+    super.restorationId,
+  });
+
+  final Widget child;
+
+  @override
+  Route<T> createRoute(BuildContext context) =>
+      _ArulOverlayRoute<T>(page: this);
+}
+
+class _ArulOverlayRoute<T> extends PageRoute<T> {
+  _ArulOverlayRoute({required ArulOverlayPage<T> page}) : super(settings: page);
+
+  ArulOverlayPage<T> get _page => settings as ArulOverlayPage<T>;
+
+  @override
+  bool get opaque => false;
+
+  @override
+  Color? get barrierColor => null;
+
+  @override
+  String? get barrierLabel => null;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration => Duration.zero;
+
+  @override
+  Duration get reverseTransitionDuration => Duration.zero;
+
+  @override
+  Widget buildPage(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+  ) => _page.child;
+
+  @override
+  String get debugLabel => '${super.debugLabel}(${_page.name})';
+}
+
 /// [ArulPushPage]'s route for an IMPERATIVE push — a screen that belongs to the one below it and
 /// has no URL of its own (the paywall's return page). Same motion, same predictive back, because
 /// both share [_ArulPushMotion]; go_router pops it like any pageless route.

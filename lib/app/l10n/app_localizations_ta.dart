@@ -997,6 +997,9 @@ class AppLocalizationsTa extends AppLocalizations {
   String get cancelOfferDecline => 'எனக்கு இந்தச் சலுகை வேண்டாம்';
 
   @override
+  String get winbackUninstallAnyway => 'இருந்தாலும் நிறுவல் நீக்கு';
+
+  @override
   String get cancelOfferRetryTitle => 'மாற்றம் நடைபெறவில்லை';
 
   @override

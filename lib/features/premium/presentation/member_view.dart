@@ -431,17 +431,20 @@ class _RenewalReminder extends StatelessWidget {
 }
 
 /// The maroon "Cancel subscription" pill; null [onTap] draws it disabled without the spinner.
+/// [label] replaces its words for another commit that takes something away ("Uninstall anyway").
 class PremiumPlanCancelButton extends StatefulWidget {
   const PremiumPlanCancelButton({
     super.key,
     required this.busy,
     required this.onTap,
     this.tapKey = 'member-cancel-button',
+    this.label,
   });
 
   final bool busy;
   final VoidCallback? onTap;
   final String tapKey;
+  final String? label;
 
   @override
   State<PremiumPlanCancelButton> createState() =>
@@ -507,9 +510,10 @@ class _PremiumPlanCancelButtonState extends State<PremiumPlanCancelButton> {
                               ArulTokens.premiumMemberCancelFloretInset * 3,
                         ),
                         child: Text(
-                          AppLocalizations.of(
-                            context,
-                          ).premiumCancelSubscription,
+                          widget.label ??
+                              AppLocalizations.of(
+                                context,
+                              ).premiumCancelSubscription,
                           textAlign: TextAlign.center,
                           style: ArulTokens.premiumMemberCancelLabel,
                         ),

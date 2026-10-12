@@ -6,6 +6,7 @@ import '../core/deeplink/deep_link_target.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/presentation/splash_screen.dart';
 import '../features/legal/presentation/policy_screen.dart';
+import '../features/premium/domain/winback_reach.dart';
 import '../features/premium/presentation/premium_screen.dart';
 import '../features/ringtones/presentation/ringtones_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
@@ -100,26 +101,42 @@ final router = GoRouter(
     GoRoute(
       path: '/premium',
       // `ensurePremium` fires `${source}_blocked_premium` at the GATE before pushing -> never track here.
-      // Sheets and dialogs inherit theme from the SCREEN's context, above anything its build wraps.
-      // A Theme inside the screen left the UPI picker sheet dark -> pin LIGHT at the ROUTE level.
-      pageBuilder: (_, state) => _push(
-        state,
-        Theme(
-          data: ArulTheme.light(),
-          child: PremiumScreen(
-            source: state.uri.queryParameters['source'] ?? 'unknown',
-            offer: state.uri.queryParameters['offer'],
-          ),
-        ),
-      ),
+      pageBuilder: (_, state) => premiumPage(state),
     ),
   ],
 );
+
+/// `/premium`'s page: a ₹99 door that is only a sheet opens see-through over the page below.
+Page<void> premiumPage(GoRouterState state) {
+  final source = state.uri.queryParameters['source'] ?? 'unknown';
+  final offer = state.uri.queryParameters['offer'];
+  // Sheets and dialogs inherit theme from the SCREEN's context, above anything its build wraps.
+  // A Theme inside the screen left the UPI picker sheet dark -> pin LIGHT at the ROUTE level.
+  final screen = Theme(
+    data: ArulTheme.light(),
+    child: PremiumScreen(source: source, offer: offer),
+  );
+  final sheetOnly =
+      WinbackEntry.fromRoute(source: source, offer: offer)?.sheetOnly ?? false;
+  return sheetOnly ? _overlay(state, screen) : _push(state, screen);
+}
 
 /// go_router's own default page carries key, name, arguments and a restoration id -> a page built
 /// here owes the same four, or a route silently loses its restoration scope.
 ArulPushPage<void> _push(GoRouterState state, Widget child) =>
     ArulPushPage<void>(
+      key: state.pageKey,
+      name: state.name ?? state.path,
+      arguments: <String, String>{
+        ...state.pathParameters,
+        ...state.uri.queryParameters,
+      },
+      restorationId: state.pageKey.value,
+      child: child,
+    );
+
+ArulOverlayPage<void> _overlay(GoRouterState state, Widget child) =>
+    ArulOverlayPage<void>(
       key: state.pageKey,
       name: state.name ?? state.path,
       arguments: <String, String>{

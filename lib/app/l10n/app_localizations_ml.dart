@@ -996,6 +996,9 @@ class AppLocalizationsMl extends AppLocalizations {
   String get cancelOfferDecline => 'എനിക്ക് ഈ ഓഫർ വേണ്ട';
 
   @override
+  String get winbackUninstallAnyway => 'എന്നാലും അൺഇൻസ്റ്റാൾ ചെയ്യുക';
+
+  @override
   String get cancelOfferRetryTitle => 'പൂർത്തിയായില്ല';
 
   @override
