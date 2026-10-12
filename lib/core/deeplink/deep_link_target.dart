@@ -19,6 +19,9 @@ enum DeepLinkSource {
   /// A button on the always-on Quick Access bar (`docs/quick-bar.md`).
   quickBar,
 
+  /// The long-press "Uninstall" launcher shortcut (`docs/winback-reach.md`).
+  shortcut,
+
   debug;
 
   String get key => switch (this) {
@@ -28,6 +31,7 @@ enum DeepLinkSource {
     DeepLinkSource.meta => 'meta',
     DeepLinkSource.push => 'push',
     DeepLinkSource.quickBar => 'quick_bar',
+    DeepLinkSource.shortcut => 'shortcut',
     DeepLinkSource.debug => 'debug',
   };
 

@@ -98,8 +98,9 @@ while resumable). It drives one dismissible feed row and one reminder
   that confirm: a decline never cancels by itself. Only its "Cancel it" posts `/payments/cancel`; "Keep
   premium" keeps the plan. The retry sheet's cancel goes through the same confirm.
 - **A returning user's paid checkout opens the same sheet** (`winback_offer_eligible`): Resubscribe, the paid
-  sell and the picker's QR row all pass `_startPaid`. Accept = `winback_99` through the app or QR tapped, an
-  ordinary ₹99 sale (resumable, converts); the link = full price; X/back start nothing.
+  sell and the QR row pass `_startPaid`. Accept = `winback_99` via the app or QR tapped, an ordinary ₹99 sale
+  (resumable, converts); the link = full price on this sheet only ([winback-reach.md](winback-reach.md)); X/back
+  start nothing.
 - **The 10-minute hold is real, per sheet** (owner): "Offer ends in mm:ss" from 10:00; at 00:00 Get discount
   disables and the sheet says the offer expired, cancel and close still work; the next Cancel tap shows a fresh
   10:00. True for every visit on purpose: a countdown that lies is "false urgency" under India's CCPA dark-pattern

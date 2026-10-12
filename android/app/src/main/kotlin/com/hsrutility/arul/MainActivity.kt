@@ -42,6 +42,8 @@ import com.hsrutility.arul.payments.UpiIntentChannel
 import com.hsrutility.arul.quickbar.QuickBar
 import com.hsrutility.arul.quickbar.QuickBarChannel
 import com.hsrutility.arul.referral.MetaInstallReferrer
+import com.hsrutility.arul.shortcut.UninstallShortcut
+import com.hsrutility.arul.shortcut.UninstallShortcutChannel
 import com.hsrutility.arul.feedvideo.VideoThumbnailChannel
 import com.hsrutility.arul.share.DirectShareChannel
 import com.hsrutility.arul.share.ShareWatermarkChannel
@@ -141,6 +143,7 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         QuickBar.capture(intent)
+        UninstallShortcut.capture(this, intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -153,7 +156,10 @@ class MainActivity : FlutterFragmentActivity() {
             FacebookSdk.addLoggingBehavior(LoggingBehavior.APP_EVENTS)
         }
         // A restored task re-delivers its ORIGINAL root intent -> taking it again would replay an old tap.
-        if (savedInstanceState == null) QuickBar.capture(intent)
+        if (savedInstanceState == null) {
+            QuickBar.capture(intent)
+            UninstallShortcut.capture(this, intent)
+        }
         registerGoogleDeferredLinkListener()
         fetchMetaDeferredLink()
         // No BuildConfig signal separates an APK from an AAB (both are `release`) -> the installer package is the proxy.
@@ -397,6 +403,11 @@ class MainActivity : FlutterFragmentActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             QuickBarChannel.CHANNEL,
         ).setMethodCallHandler(QuickBarChannel(this))
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            UninstallShortcutChannel.CHANNEL,
+        ).setMethodCallHandler(UninstallShortcutChannel(this))
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -694,6 +705,7 @@ class MainActivity : FlutterFragmentActivity() {
         intent == null -> "other"
         intent.extras?.keySet()?.any { it.startsWith("google.message_id") || it.startsWith("gcm.") } == true -> "push"
         intent.action == Intent.ACTION_VIEW && intent.data != null -> "link"
+        intent.action == UninstallShortcut.ACTION -> "shortcut"
         intent.action == Intent.ACTION_MAIN -> "launcher"
         else -> "other"
     }

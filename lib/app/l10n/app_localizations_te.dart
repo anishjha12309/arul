@@ -994,6 +994,12 @@ class AppLocalizationsTe extends AppLocalizations {
   String get winbackUninstallAnyway => 'అయినా అన్‌ఇన్‌స్టాల్ చేయండి';
 
   @override
+  String get uninstallShortcutShort => 'అన్‌ఇన్‌స్టాల్';
+
+  @override
+  String get uninstallShortcutLong => 'Arul అన్‌ఇన్‌స్టాల్ చేయండి';
+
+  @override
   String get cancelOfferRetryTitle => 'పూర్తి కాలేదు';
 
   @override

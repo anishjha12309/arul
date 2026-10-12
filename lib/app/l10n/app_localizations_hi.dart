@@ -988,6 +988,12 @@ class AppLocalizationsHi extends AppLocalizations {
   String get winbackUninstallAnyway => 'फिर भी अनइंस्टॉल करें';
 
   @override
+  String get uninstallShortcutShort => 'अनइंस्टॉल';
+
+  @override
+  String get uninstallShortcutLong => 'Arul अनइंस्टॉल करें';
+
+  @override
   String get cancelOfferRetryTitle => 'पूरा नहीं हुआ';
 
   @override

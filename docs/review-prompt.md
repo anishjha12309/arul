@@ -55,7 +55,9 @@ the guard sees it. Every one of these skips this cold open:
 - this launch's update check still undecided (it waits) or prompted (it skips) — the update wins
   ([app-update.md](app-update.md));
 - the router not on `/browse`, known offline, the push-permission ask not yet spent, or an apply,
-  share or ringtone set still loading.
+  share or ringtone set still loading;
+- this launch's one unrequested surface already taken (`launchMomentProvider`: the push-permission ask
+  or the daily ₹99 sheet, which settles at 1.5 s and so wins). Checked right before `consume`: arm kept.
 
 ## Analytics
 

@@ -126,6 +126,8 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
     implementation("androidx.core:core-splashscreen:1.0.1")
+    // The Uninstall shortcut's ShortcutManagerCompat calls -> a floor at the version plugins already resolve.
+    implementation("androidx.core:core:1.18.0")
 
     // Every media3 artifact below must share one version -> mixed versions fail at runtime, not at build time.
     implementation("androidx.media3:media3-exoplayer:1.10.1")

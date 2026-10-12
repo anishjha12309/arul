@@ -145,6 +145,54 @@ final class UninstallShortcutChannelProvider
 String _$uninstallShortcutChannelHash() =>
     r'e2d8062794afef9fe83ce236742272ea534fe317';
 
+/// Mirrors the "Uninstall" shortcut onto the phone: published while `/me` says premium ran out on
+/// someone offered ₹99 and its switch is on, removed otherwise (sign-out included), labelled in the
+/// app's language. Listened at the root; a resume re-runs it, since a restored phone loses dynamic
+/// shortcuts.
+
+@ProviderFor(uninstallShortcutSync)
+final uninstallShortcutSyncProvider = UninstallShortcutSyncProvider._();
+
+/// Mirrors the "Uninstall" shortcut onto the phone: published while `/me` says premium ran out on
+/// someone offered ₹99 and its switch is on, removed otherwise (sign-out included), labelled in the
+/// app's language. Listened at the root; a resume re-runs it, since a restored phone loses dynamic
+/// shortcuts.
+
+final class UninstallShortcutSyncProvider
+    extends $FunctionalProvider<AsyncValue<void>, void, FutureOr<void>>
+    with $FutureModifier<void>, $FutureProvider<void> {
+  /// Mirrors the "Uninstall" shortcut onto the phone: published while `/me` says premium ran out on
+  /// someone offered ₹99 and its switch is on, removed otherwise (sign-out included), labelled in the
+  /// app's language. Listened at the root; a resume re-runs it, since a restored phone loses dynamic
+  /// shortcuts.
+  UninstallShortcutSyncProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'uninstallShortcutSyncProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$uninstallShortcutSyncHash();
+
+  @$internal
+  @override
+  $FutureProviderElement<void> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<void> create(Ref ref) {
+    return uninstallShortcutSync(ref);
+  }
+}
+
+String _$uninstallShortcutSyncHash() =>
+    r'd1d6402394051fb02d1073c96fc400ffc0052d76';
+
 @ProviderFor(winbackDailyController)
 final winbackDailyControllerProvider = WinbackDailyControllerProvider._();
 

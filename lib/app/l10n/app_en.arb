@@ -794,6 +794,14 @@
   "@winbackUninstallAnyway": {
     "description": "₹99 win-back sheet opened from the long-press 'Uninstall' app shortcut: the full-width button under the offer that really goes on to uninstall (it opens the phone's App info page, where the Uninstall button is). Same weight as a destructive action, never a faint link."
   },
+  "uninstallShortcutShort": "Uninstall",
+  "@uninstallShortcutShort": {
+    "description": "Label of the app's long-press launcher shortcut, shown only to people who can get the ₹99 win-back. Tapping it opens the ₹99 sheet with an 'Uninstall anyway' button. Android asks for 10 characters or fewer here; use the word the phone's own Uninstall uses."
+  },
+  "uninstallShortcutLong": "Uninstall Arul",
+  "@uninstallShortcutLong": {
+    "description": "The same long-press shortcut's longer label, shown when the launcher has room. Android asks for 25 characters or fewer. 'Arul' stays in Latin letters, as in other body copy."
+  },
   "cancelOfferRetryTitle": "Didn't go through",
   "@cancelOfferRetryTitle": {
     "description": "Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app."

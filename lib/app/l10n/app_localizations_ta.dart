@@ -1000,6 +1000,12 @@ class AppLocalizationsTa extends AppLocalizations {
   String get winbackUninstallAnyway => 'இருந்தாலும் நிறுவல் நீக்கு';
 
   @override
+  String get uninstallShortcutShort => 'நிறுவல் நீக்கு';
+
+  @override
+  String get uninstallShortcutLong => 'Arul-ஐ நிறுவல் நீக்கு';
+
+  @override
   String get cancelOfferRetryTitle => 'மாற்றம் நடைபெறவில்லை';
 
   @override

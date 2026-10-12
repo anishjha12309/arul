@@ -6,8 +6,8 @@ the Play-install gate and reading the data: [analytics-ops.md](analytics-ops.md)
 allow-list are exact sets pinned by tests — a typo drops silently.
 
 - **PostHog** — PLAY installs only, and **only the journey** (`login_success` → `trial_started` →
-  `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus the two exceptions below. Gated by
-  `AnalyticsCohort` (install in the panel?) and `AllowlistedAnalyticsService` (event on the list?).
+  `wallpaper_applied`/`wallpaper_shared` → `ringtone_set`) plus two exceptions below. Gated by
+  `AnalyticsCohort` and `AllowlistedAnalyticsService`.
 - **GA4** — **every event at 100%, from every install**, under its raw name, plus ★ events as GA4
   *standard* `login`/`begin_checkout`.
 - **Meta App Events** — ★ events only; installs and launches are auto-logged natively.
@@ -99,7 +99,7 @@ property, a `register()` super property or a person property — [analytics-sign
   `first_open`/`session_start` are the "opened the app" record.
 - `Posthog().setup()` is not awaited — native init stays off the first-frame path.
 - **The cancel funnel is on the list** (owner exception): `cancel_tapped`, `cancel_offer_*`,
-  `cancel_confirmed`/`_kept`, `resubscribe_tapped`; `flow: winback` = a comeback, `entry: push` = push-opened.
+  `cancel_confirmed`/`_kept`, `resubscribe_tapped`; `flow: winback` = a comeback, `entry` = its door ([winback-reach.md](winback-reach.md)).
   `_accepted` = the tap; `_switched` = ₹99 live.
 - **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
   risk; `deep_link_opened` stays off too and must never feed an optimiser.

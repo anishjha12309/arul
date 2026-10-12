@@ -48,6 +48,18 @@ const ROUTES = [
       "docs/edge-cases.md §Premium / payments",
     ],
   },
+  // The ₹99 doors no pay tap opens sit under the premium and push rows: they outrank both.
+  {
+    when: [
+      "lib/features/premium/domain/winback_*.dart",
+      "lib/features/premium/data/uninstall_shortcut_*.dart",
+      "lib/features/premium/providers/winback_reach_providers.dart",
+      "lib/features/premium/presentation/winback_daily_trigger.dart",
+      "lib/core/launch/**",
+      "android/**/shortcut/**",
+    ],
+    docs: ["docs/winback-reach.md", "docs/edge-cases.md §Premium / payments"],
+  },
   // The win-back resolver is a cron AND a push, and its lib file sits under the catch-all: it outranks all three rows.
   {
     when: [

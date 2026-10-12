@@ -999,6 +999,12 @@ class AppLocalizationsMl extends AppLocalizations {
   String get winbackUninstallAnyway => 'എന്നാലും അൺഇൻസ്റ്റാൾ ചെയ്യുക';
 
   @override
+  String get uninstallShortcutShort => 'അൺഇൻസ്റ്റാൾ';
+
+  @override
+  String get uninstallShortcutLong => 'Arul അൺഇൻസ്റ്റാൾ ചെയ്യുക';
+
+  @override
   String get cancelOfferRetryTitle => 'പൂർത്തിയായില്ല';
 
   @override

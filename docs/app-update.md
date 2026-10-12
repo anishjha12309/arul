@@ -40,7 +40,7 @@ its own.
 Both are Play overlays asked at a cold open, so the update wins the launch. `UpdateHolds.launch`
 starts `undecided` on a Play install. The review trigger waits for it to leave that state, and
 skips the whole launch (arm kept) if it is `prompted`. A sideload, a found-nothing check and any
-failure set it `clear`.
+failure set it `clear`. The daily ₹99 sheet yields the same way ([winback-reach.md](winback-reach.md)).
 
 ## Server knobs (no Worker change, no app release)
 

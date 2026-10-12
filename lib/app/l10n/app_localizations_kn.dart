@@ -989,6 +989,12 @@ class AppLocalizationsKn extends AppLocalizations {
   String get winbackUninstallAnyway => 'ಆದರೂ ಅನ್‌ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ';
 
   @override
+  String get uninstallShortcutShort => 'ಅನ್‌ಇನ್‌ಸ್ಟಾಲ್';
+
+  @override
+  String get uninstallShortcutLong => 'Arul ಅನ್‌ಇನ್‌ಸ್ಟಾಲ್ ಮಾಡಿ';
+
+  @override
   String get cancelOfferRetryTitle => 'ಪೂರ್ಣಗೊಳ್ಳಲಿಲ್ಲ';
 
   @override

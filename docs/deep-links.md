@@ -50,7 +50,8 @@ A **campaign push** delivers into the same slot with no URL: `CategoryLinkTarget
 reports a push as an ad click ([push.md](push.md)). Its handler selects the category BEFORE routing,
 so the feed's first build already filters — routing first flashes the previous chip. `deep_link_opened`
 fires on every landing and is GA4-only. A Quick Access bar tap takes the same slot through `PushTapRouter`,
-stamped `DeepLinkSource.quickBar` ([quick-bar.md](quick-bar.md)).
+stamped `DeepLinkSource.quickBar` ([quick-bar.md](quick-bar.md)). The long-press "Uninstall" shortcut lands
+through its own taps, stamped `DeepLinkSource.shortcut` ([winback-reach.md](winback-reach.md)).
 
 ## Language precedence
 

@@ -1840,6 +1840,18 @@ abstract class AppLocalizations {
   /// **'Uninstall anyway'**
   String get winbackUninstallAnyway;
 
+  /// Label of the app's long-press launcher shortcut, shown only to people who can get the ₹99 win-back. Tapping it opens the ₹99 sheet with an 'Uninstall anyway' button. Android asks for 10 characters or fewer here; use the word the phone's own Uninstall uses.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall'**
+  String get uninstallShortcutShort;
+
+  /// The same long-press shortcut's longer label, shown when the launcher has room. Android asks for 25 characters or fewer. 'Arul' stays in Latin letters, as in other body copy.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall Arul'**
+  String get uninstallShortcutLong;
+
   /// Title of the sheet shown when the ₹99 switch failed or was backed out of in the UPI app.
   ///
   /// In en, this message translates to:

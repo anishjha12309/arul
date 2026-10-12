@@ -988,6 +988,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get winbackUninstallAnyway => 'Uninstall anyway';
 
   @override
+  String get uninstallShortcutShort => 'Uninstall';
+
+  @override
+  String get uninstallShortcutLong => 'Uninstall Arul';
+
+  @override
   String get cancelOfferRetryTitle => 'Didn\'t go through';
 
   @override

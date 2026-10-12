@@ -21,7 +21,8 @@ a revenue bug in either direction.
   hand-set comps) is ORed in forever.
 - **`ensurePremium()` must AWAIT `entitlementProvider.future`** — a loading snapshot must never bounce
   a premium user. A blocked action tracks `${action}_blocked_premium` and routes STRAIGHT to
-  `/premium?source=`: no nudge, no teaser sheet, no interstitial.
+  `/premium?source=`: no nudge, no teaser sheet, no interstitial — bar the ₹99 win-back sheet a lapsed
+  returning user meets on it ([winback-reach.md](../../docs/winback-reach.md)).
 - Re-applying or re-sharing an already-cached file still calls `/media/signed-url` — a cache must
   never become a permanent licence. Offline with bytes on disk is the one allowed pass-through.
 

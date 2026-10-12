@@ -13,5 +13,7 @@ paths:
   skip keeps the arm. Arming never fails a set that already succeeded.
 - **The guard is `canPop()` up every navigator, never `ModalRoute.of`** (it subscribes the feed), plus
   `resumed` lifecycle and `ArulDeepLink.landedThisLaunch`.
+- **One unrequested surface per launch** (`launchMomentProvider`): already taken by the push ask or the
+  daily ₹99 sheet → `blocked`, arm kept.
 
 Read [docs/review-prompt.md](../../docs/review-prompt.md) before changing any of it.

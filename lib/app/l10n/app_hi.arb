@@ -288,6 +288,8 @@
   "cancelOfferAccept": "50% छूट पाएँ",
   "cancelOfferDecline": "मुझे यह ऑफ़र नहीं चाहिए",
   "winbackUninstallAnyway": "फिर भी अनइंस्टॉल करें",
+  "uninstallShortcutShort": "अनइंस्टॉल",
+  "uninstallShortcutLong": "Arul अनइंस्टॉल करें",
   "cancelOfferRetryTitle": "पूरा नहीं हुआ",
   "cancelOfferTryAgain": "फिर से कोशिश करें",
   "cancelOfferNothingChanged": "कुछ नहीं बदला। आप अभी भी {price}/माह वाले प्लान पर हैं।",

@@ -19,6 +19,8 @@ Read before touching `lib/app/widgets/arul_{toast,sheet,dialog,surface,pressable
 
 - Enter `Motion.overlayIn` (400 ms) on `Easing.emphasizedDecelerate`: ~90 % of the travel lands in the
   first 100 ms, then a long settle. Exit `Motion.overlayOut` (200 ms) on `emphasizedAccelerate`.
+- **A sheet that is the whole screen rides `ArulOverlayPage`** (the ₹99 doors no pay tap opened):
+  see-through and zero-length, so the sheet's rise stays the only motion ([winback-reach.md](winback-reach.md)).
 - **A sheet's ONLY motion is its route's rise** (`showModalBottomSheet(sheetAnimationStyle: Motion.sheet)`;
   custom curves need Flutter ≥ 3.44). Never fade inside the sheet as well: it slides translucent over the
   scrim, and an animated `Opacity` sends the whole sheet through an offscreen layer every frame.

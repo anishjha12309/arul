@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The long-press "Uninstall" shortcut: a bin in the paywall's maroon on its cream disc, the shape
+     Android's own shortcut icons take (docs/winback-reach.md). Referenced by R id, so R8 keeps it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#FFFDF8EC"
+        android:pathData="M24,2A22,22 0,1 1,23.99 2Z" />
+    <group
+        android:translateX="12"
+        android:translateY="12">
+        <path
+            android:pathData="M4.5,6.5H19.5"
+            android:strokeWidth="1.6"
+            android:strokeColor="#FF7A1F23"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M9.5,6.5V5A1,1 0,0 1,10.5 4H13.5A1,1 0,0 1,14.5 5V6.5"
+            android:strokeWidth="1.6"
+            android:strokeColor="#FF7A1F23"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M6.5,6.5L7.4,18.6A1.5,1.5 0,0 0,8.9 20H15.1A1.5,1.5 0,0 0,16.6 18.6L17.5,6.5"
+            android:strokeWidth="1.6"
+            android:strokeColor="#FF7A1F23"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M10.25,10.5V16.5M13.75,10.5V16.5"
+            android:strokeWidth="1.6"
+            android:strokeColor="#FF7A1F23"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

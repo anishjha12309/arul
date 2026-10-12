@@ -29,7 +29,8 @@ referral credit and hand-set comps, ORed in forever), so reward-only users were 
 
 **The app's side of the gate:** `ensurePremium()` AWAITS `entitlementProvider.future` — a loading
 snapshot must never bounce a premium user. A blocked action tracks `${action}_blocked_premium` and routes
-STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial. **A cached file is never a licence:**
+STRAIGHT to `/premium?source=` — no nudge, sheet or interstitial, bar the ₹99 win-back sheet a lapsed returning
+user meets there ([winback-reach.md](winback-reach.md)). **A cached file is never a licence:**
 re-applying or re-sharing bytes already on disk still calls `/media/signed-url`; offline with the bytes
 on disk is the one pass-through. The "Manage subscription" row shows only for premium with a
 `trialing`/`active`/`cancelled` row — the states `/premium` renders as a manage view; every other state

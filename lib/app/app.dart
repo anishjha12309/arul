@@ -14,6 +14,9 @@ import '../core/providers/locale_provider.dart';
 import '../features/app_update/providers/app_update_controller.dart';
 import '../features/auth/providers/auth_providers.dart';
 import '../features/notifications/providers/notification_providers.dart';
+import '../features/premium/data/uninstall_shortcut_taps.dart';
+import '../features/premium/providers/entitlement_provider.dart';
+import '../features/premium/providers/winback_reach_providers.dart';
 import '../features/push/data/push_open_handler.dart';
 import '../features/push/data/push_tap_router.dart';
 import '../features/push/providers/push_providers.dart';
@@ -73,6 +76,17 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     ref
       ..listenManual(quickBarSyncProvider, (_, _) {})
       ..listenManual(quickBarKillSwitchProvider, (_, _) {});
+
+    // The long-press "Uninstall" shortcut (docs/winback-reach.md): parked natively, landed on the
+    // ₹99 sheet or App info, and kept in step with `/me` by its sync.
+    _shortcutTaps = UninstallShortcutTaps(
+      channel: ref.read(uninstallShortcutChannelProvider),
+      router: router,
+      entitlement: () => ref.read(entitlementDetailProvider.future),
+      flags: () => ref.read(winbackReachFlagsProvider),
+      analytics: ref.read(analyticsServiceProvider),
+    )..start();
+    ref.listenManual(uninstallShortcutSyncProvider, (_, _) {});
 
     // A session that dies mid-use -> the wall, as a cold start with a dead session already gets.
     // The splash (`/`) routes on its own and the wall needs nothing; every other screen is signed-in
@@ -156,6 +170,7 @@ class _ArulAppState extends ConsumerState<ArulApp> {
   PushOpenHandler? _pushOpen;
   PushTapRouter? _pushTaps;
   QuickBarTaps? _quickBarTaps;
+  UninstallShortcutTaps? _shortcutTaps;
   late final SafeBackButtonDispatcher _backButton;
 
   @override
@@ -163,6 +178,7 @@ class _ArulAppState extends ConsumerState<ArulApp> {
     _pushOpen?.dispose();
     _pushTaps?.dispose();
     _quickBarTaps?.dispose();
+    _shortcutTaps?.dispose();
     super.dispose();
   }
 

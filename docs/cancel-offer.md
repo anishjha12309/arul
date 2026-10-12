@@ -62,11 +62,14 @@ with the ₹99 in `offer_mandate_id`, so a late approval there can only be revok
 Owner: either offer, as often as they like, and nothing records an answer — no users column, nothing on the trial
 tombstone. `price_paise = 19900` alone keeps a ₹99 subscriber off the switch; one whose ₹99 dies re-subscribes at
 ₹199 (every claim writes `price_paise`) and is offered it again. `/payments/cancel` never reads its body: fielded
-builds post `{offer_declined:true}`, and it must still cancel.
+builds post `{offer_declined:true}`, and it must still cancel. The one record is the daily sheet's ledger, on
+the phone only: how often the sheet may open by itself, never who is offered it.
 
 ## The winback — a paid re-setup at ₹99
 
 A payer who revokes in the UPI app never sees this sheet, so they get it as ONE push ([winback-push.md](winback-push.md)).
+The doors no pay tap opens (premium tap, daily sheet, "Uninstall" shortcut): [winback-reach.md](winback-reach.md).
+Their decline only closes; ₹199-on-decline is the pay button's sheet alone.
 
 - `winbackOfferEligible` (GET /me `winback_offer_eligible`, initiate, re-checked under the lock): `trial_end` set
   (trialled or paid before), status `cancelled`/`expired`/`pending`, nothing parked — a parked mandate is a live plan
@@ -103,3 +106,4 @@ parked ones included. The payer's UPI app shows the ₹99 payee as `hsrutilityon
 - [ ] A late ₹99 approval switches only a row still on its ₹199; on a cancelled row it is revoked
 - [ ] A switch attempt never fires `trial_started`, never arms the trial marker, is never resumable
 - [ ] No PhonePe call names ids of two merchants
+- [ ] The doors no pay tap opens (premium tap, daily, "Uninstall"): [winback-reach.md](winback-reach.md) §Contracts

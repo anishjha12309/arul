@@ -63,7 +63,8 @@ This is the Worker's ONE automated push: the ₹99 winback, landing on the ₹99
   `didUpdateWidget` because go_router keeps the State. Its offer events carry `entry: push` (GA4 reports it only
   once `entry` is registered as an event-scoped custom dimension).
 - Each arrival first re-runs the open-time reconcile and decides ONCE, on the `/me` it re-reads: a `/me` cached
-  before the revoke still reads as a live plan. A missed moment never retries — no ₹99 sheet pops up later.
+  before the revoke still reads as a live plan. The push never retries; the daily sheet may offer ₹99 later, and
+  the push's decline only closes, like every door no pay tap opened ([winback-reach.md](winback-reach.md)).
 - An older build ignores `offer` and shows ₹199 first, so the resolver sends only to
   `app_build % 1000 >= WINBACK_MIN_BUILD`: the versionCode of the release that ships the landing.
 
