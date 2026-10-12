@@ -76,15 +76,17 @@ class WinbackReachFlags {
 
 /// The paywall a blocked action opens; a lapsed returning user meets the ₹99 sheet on it first.
 /// Only the CACHED `/me` decides: awaiting one here would hold every new user's trial paywall.
+/// [flags] is read only for someone reachable, so the common tap never touches the config.
 String premiumGateLocation(
   String source, {
   Entitlement? cached,
-  AppConfigModel? config,
+  WinbackReachFlags Function()? flags,
 }) => Uri(
   path: '/premium',
   queryParameters: {
     'source': source,
-    if (WinbackReachFlags.from(config).tapFirst && winbackReachable(cached))
+    if (winbackReachable(cached) &&
+        (flags?.call() ?? const WinbackReachFlags()).tapFirst)
       'offer': kWinbackOffer,
   },
 ).toString();

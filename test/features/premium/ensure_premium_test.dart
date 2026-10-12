@@ -8,6 +8,10 @@ import 'dart:async';
 
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
+import 'package:arul/data/models/app_config_model.dart';
+import 'package:arul/data/models/subscription_model.dart';
+import 'package:arul/data/repositories/repository_providers.dart';
+import 'package:arul/features/premium/domain/entitlement.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,17 +41,24 @@ class _RecordingAnalytics implements AnalyticsService {
 void main() {
   late _RecordingAnalytics analytics;
   late List<String> paywallSources;
+  late List<String?> paywallOffers;
   late BuildContext gateContext;
   late WidgetRef gateRef;
 
   /// Pumps a tiny app whose home captures a (context, ref) pair and whose /premium route records its source.
   /// That asserts the REAL navigation, never a mock of it.
+  ///
+  /// [detail] answers the full `/me` instead, the way the app derives the gate's bool from it, and
+  /// [flags] is the remote config's `feature_flags`.
   Future<void> pumpGateHarness(
     WidgetTester tester, {
-    required FutureOr<bool> Function() entitlement,
+    FutureOr<bool> Function()? entitlement,
+    Entitlement? detail,
+    Map<String, dynamic> flags = const {},
   }) async {
     analytics = _RecordingAnalytics();
     paywallSources = [];
+    paywallOffers = [];
     final router = GoRouter(
       routes: [
         GoRoute(
@@ -64,6 +75,7 @@ void main() {
           path: '/premium',
           builder: (context, state) {
             paywallSources.add(state.uri.queryParameters['source'] ?? '');
+            paywallOffers.add(state.uri.queryParameters['offer']);
             return const SizedBox.shrink();
           },
         ),
@@ -73,7 +85,17 @@ void main() {
       ProviderScope(
         overrides: [
           analyticsServiceProvider.overrideWithValue(analytics),
-          entitlementProvider.overrideWith((ref) async => entitlement()),
+          if (entitlement != null)
+            entitlementProvider.overrideWith((ref) async => entitlement()),
+          if (detail != null)
+            entitlementDetailProvider.overrideWith((ref) async => detail),
+          appConfigProvider.overrideWithBuild(
+            (ref, _) async => AppConfigModel(
+              prices: const {},
+              policyUrls: const {},
+              featureFlags: flags,
+            ),
+          ),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -155,4 +177,83 @@ void main() {
       expect(paywallSources, ['share']);
     },
   );
+
+  // A lapsed returning user's blocked action opens the paywall on the ₹99 win-back sheet; everyone
+  // else, and every doubtful read, keeps the plain paywall.
+  group('the ₹99 win-back first', () {
+    SubscriptionModel row(
+      SubscriptionStatus status, {
+      bool trialSpent = true,
+    }) => SubscriptionModel(
+      id: 'sub_1',
+      userId: 'u_1',
+      status: status,
+      trialEnd: trialSpent ? DateTime(2026, 9, 1) : null,
+      currentPeriodEnd: DateTime(2026, 10, 1),
+      winbackOfferEligible: true,
+    );
+
+    Future<void> gate(
+      WidgetTester tester,
+      Entitlement detail, {
+      Map<String, dynamic> flags = const {},
+    }) async {
+      await pumpGateHarness(tester, detail: detail, flags: flags);
+      final container = ProviderScope.containerOf(gateContext);
+      await container.read(appConfigProvider.future);
+      final answer = await ensurePremium(gateContext, gateRef, source: 'apply');
+      await tester.pumpAndSettle();
+      expect(answer, isFalse);
+      expect(paywallSources, ['apply']);
+    }
+
+    testWidgets('premium has run out: the paywall opens on the offer', (
+      tester,
+    ) async {
+      await gate(
+        tester,
+        Entitlement(
+          isPremium: false,
+          subscription: row(SubscriptionStatus.expired),
+        ),
+      );
+      expect(paywallOffers, ['winback_99']);
+    });
+
+    testWidgets('a new user keeps the trial paywall', (tester) async {
+      await gate(
+        tester,
+        Entitlement(
+          isPremium: false,
+          subscription: row(SubscriptionStatus.expired, trialSpent: false),
+        ),
+      );
+      expect(paywallOffers, [null]);
+    });
+
+    testWidgets('a setup in flight keeps the plain paywall', (tester) async {
+      await gate(
+        tester,
+        Entitlement(
+          isPremium: false,
+          subscription: row(SubscriptionStatus.pending),
+        ),
+      );
+      expect(paywallOffers, [null]);
+    });
+
+    testWidgets('tap_first off keeps the plain paywall', (tester) async {
+      await gate(
+        tester,
+        Entitlement(
+          isPremium: false,
+          subscription: row(SubscriptionStatus.expired),
+        ),
+        flags: const {
+          'winback_reach': {'tap_first': false},
+        },
+      );
+      expect(paywallOffers, [null]);
+    });
+  });
 }

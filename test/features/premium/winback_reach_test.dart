@@ -160,12 +160,32 @@ void main() {
         premiumGateLocation(
           'apply',
           cached: _lapsed(),
-          config: _config(const {
-            'winback_reach': {'tap_first': false},
-          }),
+          flags: () => WinbackReachFlags.from(
+            _config(const {
+              'winback_reach': {'tap_first': false},
+            }),
+          ),
         ),
         plain,
       );
+    });
+
+    test('the switches are read only for someone reachable', () {
+      var reads = 0;
+      WinbackReachFlags flags() {
+        reads++;
+        return const WinbackReachFlags();
+      }
+
+      premiumGateLocation('apply', flags: flags);
+      premiumGateLocation(
+        'apply',
+        cached: _lapsed(trialSpent: false),
+        flags: flags,
+      );
+      expect(reads, 0);
+      premiumGateLocation('apply', cached: _lapsed(), flags: flags);
+      expect(reads, 1);
     });
   });
 

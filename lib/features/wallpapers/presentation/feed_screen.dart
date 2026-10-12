@@ -388,7 +388,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           properties: {'wallpaper_id': w.id, 'category': w.category},
         );
     JourneyStamps.noteGate(action.source, category: w.category, itemId: w.id);
-    unawaited(context.push('/premium?source=${action.source}'));
+    unawaited(context.push(premiumGateRoute(ref, action.source)));
   }
 
   Future<void> _doApply(Wallpaper w) async {
@@ -444,7 +444,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                 properties: {'wallpaper_id': w.id, 'category': w.category},
               );
           JourneyStamps.noteGate('apply', category: w.category, itemId: w.id);
-          unawaited(context.push('/premium?source=apply'));
+          unawaited(context.push(premiumGateRoute(ref, 'apply')));
         } else {
           showArulToast(
             context,
@@ -481,7 +481,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
               properties: {'wallpaper_id': w.id, 'category': w.category},
             );
         JourneyStamps.noteGate('share', category: w.category, itemId: w.id);
-        unawaited(context.push('/premium?source=share'));
+        unawaited(context.push(premiumGateRoute(ref, 'share')));
       } else {
         showArulToast(
           context,

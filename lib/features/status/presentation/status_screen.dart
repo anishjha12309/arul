@@ -217,7 +217,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
       category: status.category,
       itemId: status.id,
     );
-    unawaited(context.push('/premium?source=${verb.source}'));
+    unawaited(context.push(premiumGateRoute(ref, verb.source)));
   }
 
   // Card -> the Arul sheet (or the system sheet without WhatsApp) -> the pick. Back on the card

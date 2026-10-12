@@ -215,7 +215,7 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
                 .read(analyticsServiceProvider)
                 .track('ringtone_set_blocked_premium');
             JourneyStamps.noteGate('ringtone_set');
-            context.push('/premium?source=ringtone_set');
+            context.push(premiumGateRoute(ref, 'ringtone_set'));
           } else {
             showArulToast(
               context,

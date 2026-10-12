@@ -10,6 +10,7 @@ import '../../../core/config/app_config.dart';
 import '../../../data/repositories/repository_providers.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../domain/entitlement.dart';
+import '../domain/winback_reach.dart';
 import 'trial_conversion_catch_up.dart';
 import 'trial_nudge_provider.dart';
 
@@ -99,7 +100,16 @@ Future<bool> ensurePremium(
   );
 
   if (context.mounted) {
-    unawaited(context.push('/premium?source=$source'));
+    unawaited(context.push(premiumGateRoute(ref, source)));
   }
   return false;
 }
+
+/// Where every blocked action goes: `/premium?source=`, opening on the ₹99 win-back sheet when the
+/// cached `/me` says a returning user's premium has run out ([premiumGateLocation]).
+String premiumGateRoute(WidgetRef ref, String source) => premiumGateLocation(
+  source,
+  cached: ref.read(entitlementDetailProvider).asData?.value,
+  flags: () =>
+      WinbackReachFlags.from(ref.read(appConfigProvider).asData?.value),
+);
