@@ -100,6 +100,9 @@ const OFFERS_SELECT = /^SELECT id, offer_mandate_id FROM subscriptions/;
 const RETRY_SELECT = /^SELECT id, revoke_retry_mandate_id, revoke_retry_at FROM subscriptions/;
 const LEGACY_SELECT =
   /^SELECT id, merchant_subscription_id FROM subscriptions WHERE status IN \('trialing', 'active'\)/;
+const CLOSE_SELECT =
+  /^SELECT m\.merchant_order_id, m\.mandate_id, m\.user_id, m\.retry_rung FROM order_outcomes m/;
+const RECORD = /^INSERT INTO order_outcomes/;
 const RELEASE = /AS released_mandate_id/;
 const SWITCH = /^UPDATE subscriptions AS s SET status = CASE WHEN s\.trial_end IS NOT NULL/;
 const HONOUR = /^UPDATE subscriptions AS s SET merchant_subscription_id = s\.offer_mandate_id/;
@@ -131,6 +134,8 @@ const LABELS: [string, RegExp][] = [
   ["offers-select", OFFERS_SELECT],
   ["retries-select", RETRY_SELECT],
   ["legacy-select", LEGACY_SELECT],
+  ["close-select", CLOSE_SELECT],
+  ["record", RECORD],
   ["release", RELEASE],
   ["switch", SWITCH],
   ["honour", HONOUR],
@@ -152,7 +157,14 @@ const LABELS: [string, RegExp][] = [
 ];
 const order = (db: ReturnType<typeof routedSql>) =>
   db.stmts.map((s) => LABELS.find(([, re]) => re.test(s.text))?.[0] ?? s.text.slice(0, 40));
-const SELECTS = ["heal-select", "claims-select", "offers-select", "retries-select", "legacy-select"];
+const SELECTS = [
+  "heal-select",
+  "claims-select",
+  "offers-select",
+  "retries-select",
+  "legacy-select",
+  "close-select",
+];
 
 interface PpCall {
   merchant: "legacy" | "hsr" | "none";
@@ -271,6 +283,7 @@ interface Books {
   offers?: unknown[];
   retries?: unknown[];
   legacy?: unknown[];
+  close?: unknown[];
 }
 
 async function sweep(
@@ -286,6 +299,7 @@ async function sweep(
     if (OFFERS_SELECT.test(t)) return books.offers;
     if (RETRY_SELECT.test(t)) return books.retries;
     if (LEGACY_SELECT.test(t)) return books.legacy;
+    if (CLOSE_SELECT.test(t)) return books.close;
     return undefined;
   });
   const budget = { take: vi.fn(take) };
@@ -875,5 +889,150 @@ describe("runAutopayNotify — the row's price and the hourly wiring", () => {
     );
     expect(rearm.values).toEqual(["d1", null]);
     expect(reads(calls)).toEqual([["hsr", HSR_99]]);
+  });
+});
+
+describe("Closing read — every minted order gets PhonePe's final word, once", () => {
+  // The INSERT's bind order in lib/order-outcomes.ts
+  const EVENT = 3;
+  const STATE = 4;
+  const CODE = 5;
+  const DETAILED = 6;
+  const SOURCE = 7;
+  const MANDATE_STATE = 10;
+  const HTTP = 11;
+  const RUNG = 13;
+
+  const minted = (n = 1) =>
+    Array.from({ length: n }, (_, i) => ({
+      merchant_order_id: `DKS_R_U1_CLOSE_${i}`,
+      mandate_id: "DKS_S_U1_CLOSE",
+      user_id: "u-1",
+      retry_rung: 1,
+    }));
+  const recorded = (db: ReturnType<typeof routedSql>) => db.ran(RECORD).map((s) => s.values);
+  const orderUrls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.map((c) => String(c[0]))
+      .filter((u) => u.includes("/subscriptions/v2/order/"));
+
+  it("reads with errorContext and records who failed it, at the rung it was minted on", async () => {
+    fakePhonePe({
+      order: () => ({
+        state: "FAILED",
+        errorCode: "INSUFFICIENT_BALANCE",
+        detailedErrorCode: "Z9",
+        errorContext: { source: "CUSTOMER", stage: "AUTHORIZATION", description: "Insufficient balance" },
+        paymentDetails: [{ state: "FAILED", timestamp: Date.now() - HOUR }],
+      }),
+    });
+    const { db } = await sweep({ close: minted() });
+
+    expect(orderUrls()).toHaveLength(1);
+    expect(orderUrls()[0]).toContain("errorContext=true");
+    const [v] = recorded(db);
+    expect(v[EVENT]).toBe("closed");
+    expect(v[STATE]).toBe("FAILED");
+    expect(v[CODE]).toBe("INSUFFICIENT_BALANCE");
+    expect(v[DETAILED]).toBe("Z9");
+    expect(v[SOURCE]).toBe("CUSTOMER");
+    expect(v[RUNG]).toBe(1);
+  });
+
+  it("a skipped debit also records the mandate's state — the one code PhonePe pins on us", async () => {
+    fakePhonePe({
+      order: () => ({
+        state: "FAILED",
+        errorCode: "TXN_NOT_COMPLETED",
+        detailedErrorCode: "SUBSCRIPTION_DEBIT_SKIPPED",
+        errorContext: { source: "BUSINESS", stage: "CAPTURE" },
+        paymentDetails: [],
+      }),
+      mandate: () => "REVOKED",
+    });
+    const { db } = await sweep({ close: minted() });
+
+    const [v] = recorded(db);
+    expect(v[DETAILED]).toBe("SUBSCRIPTION_DEBIT_SKIPPED");
+    expect(v[SOURCE]).toBe("BUSINESS");
+    expect(v[MANDATE_STATE]).toBe("REVOKED");
+    expect(reads(pp.calls).map(([, id]) => id)).toContain("DKS_S_U1_CLOSE");
+  });
+
+  it("a skip is judged on the mandate the ORDER names, not the row's newer one", async () => {
+    fakePhonePe({
+      order: () => ({
+        state: "FAILED",
+        detailedErrorCode: "SUBSCRIPTION_DEBIT_SKIPPED",
+        paymentFlow: { type: "SUBSCRIPTION_REDEMPTION", merchantSubscriptionId: "DKS_S_U1_OLDER" },
+      }),
+      mandate: (id) => (id === "DKS_S_U1_OLDER" ? "REVOKED" : "ACTIVE"),
+    });
+    const { db } = await sweep({ close: minted() });
+
+    const [v] = recorded(db);
+    expect(v[1]).toBe("DKS_S_U1_OLDER");
+    expect(v[MANDATE_STATE]).toBe("REVOKED");
+    expect(reads(pp.calls).map(([, id]) => id)).not.toContain("DKS_S_U1_CLOSE");
+  });
+
+  it("an order PhonePe never had is closed as NOT_FOUND, not retried every hour", async () => {
+    fakePhonePe({ order: () => notFound("ORDER_NOT_FOUND") });
+    const { db } = await sweep({ close: minted() });
+
+    const [v] = recorded(db);
+    expect(v[STATE]).toBe("NOT_FOUND");
+    expect(v[CODE]).toBe("ORDER_NOT_FOUND");
+    expect(v[HTTP]).toBe(400);
+  });
+
+  it("a refused errorContext param falls back to one plain read, and still records", async () => {
+    let n = 0;
+    fakePhonePe({
+      order: () => {
+        n += 1;
+        return n === 1
+          ? new Response('{"code":"BAD_REQUEST","message":"Unknown param"}', { status: 400 })
+          : { state: "FAILED", errorCode: "INSUFFICIENT_BALANCE", detailedErrorCode: "Z9" };
+      },
+    });
+    const { db } = await sweep({ close: minted() });
+
+    expect(orderUrls()).toHaveLength(2);
+    expect(orderUrls()[1]).not.toContain("errorContext");
+    expect(recorded(db)[0][DETAILED]).toBe("Z9");
+  });
+
+  it("a transient error records nothing — the order is read again next hour", async () => {
+    fakePhonePe({ order: () => new Response("upstream", { status: 503 }) });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { db } = await sweep({ close: minted() });
+
+    expect(recorded(db)).toHaveLength(0);
+  });
+
+  it("reserves its calls from the shared budget and stops when it runs out", async () => {
+    fakePhonePe({ order: () => ({ state: "COMPLETED" }) });
+    let left = 4;
+    const { db } = await sweep({ close: minted(5) }, undefined, (calls) => {
+      if (left < calls) return false;
+      left -= calls;
+      return true;
+    });
+
+    // 2 per row -> two rows fit in 4, the third finds the budget gone
+    expect(orderUrls()).toHaveLength(2);
+    expect(recorded(db)).toHaveLength(2);
+  });
+
+  it("a failing closing pass never throws out of the sweeps", async () => {
+    fakePhonePe();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const db = routedSql((t) =>
+      CLOSE_SELECT.test(t) ? new Error('relation "order_outcomes" does not exist') : [],
+    );
+
+    await expect(runHourlySweeps(dualEnv(), db.sql as never, { take: () => true })).resolves.toBeUndefined();
   });
 });

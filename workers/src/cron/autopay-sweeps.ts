@@ -7,7 +7,9 @@
 
 import type { Env } from "../env.js";
 import { type getDb, toDate } from "../lib/db.js";
+import { recordOrderOutcome } from "../lib/order-outcomes.js";
 import {
+  getOrderOutcome,
   getOrderStatus,
   getSubscriptionStatus,
   mandateCreatedAt,
@@ -48,6 +50,9 @@ const MAX_LEGACY_ROWS = 120;
 
 const LANES = 4;
 
+/** An order is read once; this only has to outpace the few hundred minted a day. */
+const MAX_CLOSE_ROWS = 60;
+
 /** An abandoned app never reports back; PhonePe caps a setup intent at 15 min, so a claim this old is decided. */
 const CLAIM_STALE_AFTER = "30 minutes";
 
@@ -73,6 +78,72 @@ export async function runHourlySweeps(env: Env, sql: Sql, budget: SweepBudget): 
   await sweepOfferMandates(env, sql, budget);
   await retryStaleRevokes(env, sql, budget);
   await reconcileLegacyMandates(env, sql, budget);
+  // Diagnosis, not billing -> a missing table or a bad read must never cost the run its idle marker
+  await closeOrderOutcomes(env, sql, budget).catch((err) =>
+    console.warn("[autopay-sweeps] close: pass failed:", err),
+  );
+}
+
+/**
+ * The outcome log's closing read: each minted order, once past its expiry, read once with errorContext. Nothing else
+ * re-reads an order whose row was parked or recycled, so its SUBSCRIPTION_DEBIT_SKIPPED was never seen
+ */
+async function closeOrderOutcomes(env: Env, sql: Sql, budget: SweepBudget): Promise<void> {
+  const rows = (await sql`
+    SELECT m.merchant_order_id, m.mandate_id, m.user_id, m.retry_rung
+    FROM order_outcomes m
+    WHERE m.event = 'minted'
+      -- An order is final once past its expiry; one without a known expiry gets PhonePe's observed 72 h
+      AND coalesce(m.expire_at, m.observed_at + interval '72 hours') < now() - interval '1 hour'
+      AND NOT EXISTS (
+        SELECT 1 FROM order_outcomes c
+        WHERE c.merchant_order_id = m.merchant_order_id AND c.event = 'closed'
+      )
+    ORDER BY coalesce(m.expire_at, m.observed_at + interval '72 hours') ASC
+    LIMIT ${MAX_CLOSE_ROWS}
+  `) as unknown as {
+    merchant_order_id: string;
+    mandate_id: string | null;
+    user_id: string;
+    retry_rung: number | null;
+  }[];
+
+  const tally = { closed: 0, not_found: 0, errors: 0 };
+  // 2 per row: a refused errorContext param is retried plain
+  await inLanes(rows, budget, 2, async (row) => {
+    const base = {
+      event: "closed" as const,
+      observedBy: "close_sweep",
+      merchantOrderId: row.merchant_order_id,
+      userId: row.user_id,
+      mandateId: row.mandate_id,
+      retryRung: row.retry_rung,
+    };
+    try {
+      const order = await getOrderOutcome(env, row.merchant_order_id);
+      // The order names its own mandate; a re-subscribed row's current one is not it
+      const flow = order.paymentFlow as { merchantSubscriptionId?: unknown } | undefined;
+      const mandateId =
+        typeof flow?.merchantSubscriptionId === "string" ? flow.merchantSubscriptionId : row.mandate_id;
+      let mandateState: string | null = null;
+      // A skip is the one code PhonePe pins on us: was the mandate already gone, or did Pass B never redeem?
+      if (order.detailedErrorCode === "SUBSCRIPTION_DEBIT_SKIPPED" && mandateId && budget.take(1)) {
+        const mandate = await getSubscriptionStatus(env, mandateId).catch(() => null);
+        mandateState = mandate?.state ?? null;
+      }
+      await recordOrderOutcome(sql, { ...base, mandateId, order, mandateState });
+      tally.closed += 1;
+    } catch (err) {
+      if (isNotFound(err)) {
+        await recordOrderOutcome(sql, { ...base, phonepeState: "NOT_FOUND", error: err });
+        tally.not_found += 1;
+      } else {
+        tally.errors += 1;
+        console.warn(`[autopay-sweeps] close: order ${row.merchant_order_id} status failed:`, err);
+      }
+    }
+  });
+  logPass("close", rows.length, tally);
 }
 
 /**

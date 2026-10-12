@@ -10,6 +10,7 @@ import { sweepCanonical } from "../cron/sweep-canonical.js";
 import { pushEnabled, runPushDispatch, runPushTest } from "../cron/push-dispatch.js";
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
+import { recordOrderOutcome } from "../lib/order-outcomes.js";
 import type { PushCampaign } from "../lib/fcm.js";
 import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { audienceQuery, parseAudience } from "../lib/push-audience.js";
@@ -190,12 +191,32 @@ export async function handleRunRedemptions(c: Context<{ Bindings: Env }>): Promi
                 updated_at          = now()
             WHERE id = ${row.id as string}
           `;
+          await recordOrderOutcome(sql, {
+            event: "minted",
+            observedBy: "internal",
+            merchantOrderId: redemptionOrderId,
+            userId,
+            mandateId: merchantSubId,
+            amountPaise: row.price_paise ?? STANDARD_PRICE_PAISE,
+            retryRung: row.retry_count,
+            expireAt: notifyRes.expireAt,
+            phonepeState: notifyRes.state,
+          });
         } else {
           result.notify = "already_notified";
         }
 
         const execRes = await executeRedemption(env, redemptionOrderId);
         result.execute = execRes.state;
+        await recordOrderOutcome(sql, {
+          event: "redeem_accepted",
+          observedBy: "internal",
+          merchantOrderId: redemptionOrderId,
+          userId,
+          mandateId: merchantSubId,
+          retryRung: row.retry_count,
+          phonepeState: execRes.state,
+        });
 
         if (execRes.state === "COMPLETED") {
           const nextPeriodEnd = addOneMonth(new Date());

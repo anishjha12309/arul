@@ -646,6 +646,35 @@ export async function getRedemptionStatus(env: Env, merchantOrderId: string): Pr
   return getOrderStatus(env, merchantOrderId);
 }
 
+/** Order status plus PhonePe's errorContext (source, stage, description) — for the outcome log, never for billing. */
+export async function getOrderOutcome(env: Env, merchantOrderId: string): Promise<Record<string, unknown>> {
+  const base = getPgBase(env);
+  const token = await getAccessToken(env, merchantOf(merchantOrderId));
+  const url = `${base}/subscriptions/v2/order/${encodeURIComponent(merchantOrderId)}/status?details=true`;
+  const read = (extra: string) =>
+    fetch(url + extra, {
+      method: "GET",
+      headers: { Authorization: `O-Bearer ${token}`, "Content-Type": "application/json" },
+    });
+
+  // errorContext is documented for checkout orders only; on an autopay order it answers, but a refusal of the param
+  // must still yield the state and codes -> one plain read, never the billing path's getOrderStatus
+  let res = await read("&errorContext=true");
+  if (res.status === 400) {
+    const text = await res.text();
+    if (text.includes("ORDER_NOT_FOUND")) {
+      throw new PhonePeApiError(`PhonePe order status error 400: ${text}`, 400, text);
+    }
+    res = await read("");
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new PhonePeApiError(`PhonePe order status error ${res.status}: ${text}`, res.status, text);
+  }
+  return (await res.json()) as Record<string, unknown>;
+}
+
 export interface RefundResult {
   refundId: string;
   amount: number;

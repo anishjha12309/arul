@@ -29,6 +29,15 @@ const ROUTES = [
       "docs/launch-surface.md §Dead ends",
     ],
   },
+  // The outcome log rides behind billing writes; its placement rules outrank the cron and lib catch-alls.
+  {
+    when: [
+      "workers/src/lib/order-outcomes.ts",
+      "workers/tools/payment-failures.mjs",
+      "db/schema/36_order_outcomes.sql",
+    ],
+    docs: ["docs/order-outcomes.md"],
+  },
   {
     when: ["workers/src/routes/payments.ts", "workers/src/lib/phonepe.ts"],
     docs: ["docs/phonepe.md", "docs/phonepe-webhook.md (webhook handling only)"],
@@ -45,6 +54,7 @@ const ROUTES = [
     docs: [
       "docs/cancel-offer.md",
       "docs/autopay-debits.md §The hourly sweeps",
+      "docs/order-outcomes.md §The closing read",
       "docs/edge-cases.md §Premium / payments",
     ],
   },
@@ -84,7 +94,11 @@ const ROUTES = [
   },
   {
     when: ["workers/src/cron/**", "workers/wrangler.toml"],
-    docs: ["docs/cron.md", "workers/README.md §Dev / deploy"],
+    docs: [
+      "docs/cron.md",
+      "workers/README.md §Dev / deploy",
+      "docs/order-outcomes.md (every recordOrderOutcome call)",
+    ],
   },
   {
     when: ["workers/src/lib/entitlement.ts", "lib/features/premium/**"],

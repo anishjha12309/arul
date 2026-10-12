@@ -4,6 +4,7 @@ paths:
   - "workers/src/routes/payments.ts"
   - "workers/src/lib/phonepe.ts"
   - "workers/src/cron/autopay-notify.ts"
+  - "workers/src/lib/order-outcomes.ts"
 ---
 
 Real money moves here and several PhonePe docs are wrong: never re-derive an endpoint, payload shape

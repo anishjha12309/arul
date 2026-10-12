@@ -1,5 +1,6 @@
 import type { Env } from "../env.js";
 import { getDb, toDate } from "../lib/db.js";
+import { recordOrderOutcome } from "../lib/order-outcomes.js";
 import { reportPostHogFirstConversion, type SubscriptionCancelReason } from "../lib/posthog.js";
 import { STANDARD_PRICE_PAISE } from "../lib/pricing.js";
 import { grantReferralReward } from "../lib/referral.js";
@@ -148,6 +149,7 @@ export async function runAutopayNotify(env: Env): Promise<void> {
         merchant_subscription_id,
         next_debit_at,
         debit_count,
+        retry_count,
         current_period_end,
         price_paise
       FROM subscriptions
@@ -233,6 +235,19 @@ export async function runAutopayNotify(env: Env): Promise<void> {
               updated_at           = now()
           WHERE id = ${row.id as string}
         `;
+
+        // After the UPDATE, never before: a record between notify and the write could leave notified_at NULL
+        await recordOrderOutcome(sql, {
+          event: "minted",
+          observedBy: "pass_a",
+          merchantOrderId: redemptionOrderId,
+          userId,
+          mandateId: merchantSubId,
+          amountPaise: row.price_paise ?? STANDARD_PRICE_PAISE,
+          retryRung: row.retry_count,
+          expireAt: notifyResult.expireAt,
+          phonepeState: notifyResult.state,
+        });
 
         // Log-only by design -> see sendUserNotification
         await sendUserNotification({
@@ -413,6 +428,15 @@ export async function runAutopayNotify(env: Env): Promise<void> {
                   updated_at          = now()
               WHERE id = ${outcomeRow.id}
             `;
+            await recordOrderOutcome(sql, {
+              event: "recycled",
+              observedBy: "pass_b_wall",
+              merchantOrderId: redemptionOrderId,
+              userId: outcomeRow.userId,
+              mandateId: merchantSubId,
+              retryRung: outcomeRow.retryCount,
+              phonepeState: r.state,
+            });
             console.warn(
               `[autopay-notify] Sub ${merchantSubId} unsettled ${Math.round(
                 (Date.now() - outcomeRow.periodEnd.getTime()) / 86_400_000,
@@ -421,6 +445,15 @@ export async function runAutopayNotify(env: Env): Promise<void> {
             return;
           }
           await recycleRedemption(sql, outcomeRow.id);
+          await recordOrderOutcome(sql, {
+            event: "recycled",
+            observedBy: "pass_b_recycle",
+            merchantOrderId: redemptionOrderId,
+            userId: outcomeRow.userId,
+            mandateId: merchantSubId,
+            retryRung: outcomeRow.retryCount,
+            phonepeState: r.state,
+          });
           console.warn(
             `[autopay-notify] Order ${redemptionOrderId} for sub ${merchantSubId} ` +
               `expired unsettled — cleared for re-notify, debit still owed`,
@@ -466,6 +499,15 @@ export async function runAutopayNotify(env: Env): Promise<void> {
               `settles asynchronously; next run reconciles from order status`,
           );
         }
+        await recordOrderOutcome(sql, {
+          event: "redeem_accepted",
+          observedBy: "pass_b",
+          merchantOrderId: redemptionOrderId,
+          userId: outcomeRow.userId,
+          mandateId: merchantSubId,
+          retryRung: outcomeRow.retryCount,
+          phonepeState: execResult.state,
+        });
       } catch (err) {
         // A throw is NOT evidence the debit failed -> the commonest cause is the order ALREADY settled
         const inFlight = err instanceof PhonePeApiError && err.body.includes("DUPLICATE_TXN_REQUEST");
@@ -488,10 +530,12 @@ export async function runAutopayNotify(env: Env): Promise<void> {
 
         // Pass A cannot park it -> that pass only selects rows with notified_at IS NULL -> park it HERE
         // `inFlight` is excluded -> a duplicate proves the mandate works -> asking after its state learns nothing
+        let mandateState: string | null = null;
         if (!settled && !inFlight && err instanceof PhonePeApiError && err.isPermanent && budgetLeft(1)) {
           phonePeCalls += 1;
           try {
             const subStatus = await getSubscriptionStatus(env, merchantSubId);
+            mandateState = subStatus.state;
             if (TERMINAL_MANDATE_STATES.has(subStatus.state)) {
               await parkMandate(
                 env,
@@ -520,6 +564,20 @@ export async function runAutopayNotify(env: Env): Promise<void> {
           } catch (statusErr) {
             console.error(`[autopay-notify] Mandate status check failed for ${merchantSubId}:`, statusErr);
           }
+        }
+
+        // A network throw never reached PhonePe's verdict -> only a PhonePe answer is a rejection
+        if (err instanceof PhonePeApiError) {
+          await recordOrderOutcome(sql, {
+            event: "redeem_rejected",
+            observedBy: "pass_b",
+            merchantOrderId: redemptionOrderId,
+            userId: outcomeRow.userId,
+            mandateId: merchantSubId,
+            retryRung: outcomeRow.retryCount,
+            mandateState,
+            error: err,
+          });
         }
       }
     };
@@ -652,6 +710,18 @@ async function reconcileFromOrder(
         `(overdue ${Math.round(overdueMs / 3_600_000)}h)`,
     );
     const settled = await applyDebitOutcome(env, sql, order.state, row);
+    // PENDING and NOTIFIED are read every tick and say nothing new -> only a final answer is kept
+    if (order.state === "COMPLETED" || order.state === "FAILED") {
+      await recordOrderOutcome(sql, {
+        event: "reconciled",
+        observedBy: "pass_b",
+        merchantOrderId: row.redemptionOrderId,
+        userId: row.userId,
+        mandateId: row.merchantSubId,
+        retryRung: row.retryCount,
+        order,
+      });
+    }
     const dead =
       !settled && typeof order.expireAt === "number" && order.expireAt > 0 && Date.now() > order.expireAt;
     return { settled, dead, state: order.state };

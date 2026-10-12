@@ -49,6 +49,7 @@ import { runAutopayNotify } from "./cron/autopay-notify.js";
 import { runPushDispatch, sweepPush } from "./cron/push-dispatch.js";
 import { runWinbackPushes } from "./cron/winback-push.js";
 import { claimCronSlot, pruneCronRuns } from "./lib/cron-claim.js";
+import { pruneOrderOutcomes } from "./lib/order-outcomes.js";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -260,6 +261,16 @@ const worker: WorkerType = {
           })
           .catch((err: unknown) => {
             console.error("[cron] cron_runs prune failed:", err);
+          }),
+      );
+
+      ctx.waitUntil(
+        pruneOrderOutcomes(env)
+          .then((pruned) => {
+            console.log(`[cron] Pruned ${pruned} order_outcomes rows`);
+          })
+          .catch((err: unknown) => {
+            console.error("[cron] order_outcomes prune failed:", err);
           }),
       );
 

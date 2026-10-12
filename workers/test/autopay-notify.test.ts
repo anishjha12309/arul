@@ -946,3 +946,196 @@ describe("Win-back record — only the payer's own revoke queues a push (docs/pu
     }
   });
 });
+
+describe("Order outcomes — recorded after the billing write, never instead of it (docs/order-outcomes.md)", () => {
+  const RECORD = /^INSERT INTO order_outcomes/;
+  // The INSERT's bind order in lib/order-outcomes.ts
+  const EVENT = 3;
+  const STATE = 4;
+  const CODE = 5;
+  const DETAILED = 6;
+  const MANDATE_STATE = 10;
+  const HTTP = 11;
+  const RUNG = 13;
+  const EXPIRE = 14;
+
+  const records = (executed: Executed[]) => executed.filter((e) => RECORD.test(e.text));
+  const indexOf = (executed: Executed[], re: RegExp) => executed.findIndex((e) => re.test(e.text));
+
+  const dueForNotify = () => ({
+    id: "row-a",
+    user_id: "user-a",
+    merchant_subscription_id: SUB,
+    next_debit_at: new Date(Date.now() + 2 * HOUR).toISOString(),
+    current_period_end: new Date(Date.now() + 2 * HOUR).toISOString(),
+    debit_count: 1,
+    retry_count: 2,
+    price_paise: 19900,
+  });
+
+  /** The same mock, but the outcome INSERT fails the way a missing table or a dead socket would. */
+  function failingRecords(base: ReturnType<typeof makeSql>, how: "reject" | "throw") {
+    const fn = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
+      if (RECORD.test(strings.join("?").replace(/\s+/g, " ").trim())) {
+        base.executed.push({ text: "INSERT INTO order_outcomes (failed)", values });
+        if (how === "throw") throw new TypeError("UNDEFINED_VALUE");
+        return Promise.reject(new Error('relation "order_outcomes" does not exist'));
+      }
+      return base.sql(strings, ...values);
+    });
+    return Object.assign(fn, { end: base.sql.end });
+  }
+
+  it("Pass A records the minted order AFTER notified_at is written, with its rung and expiry", async () => {
+    const { sql, executed } = makeSql([], [], [dueForNotify()]);
+    db.getDb.mockReturnValue(sql);
+    const expireAt = Date.now() + 72 * HOUR;
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+    phonepe.notifyRedemption.mockResolvedValue({ orderId: "OMO1", state: "NOTIFIED", expireAt });
+
+    await runAutopayNotify(makeEnv());
+
+    const written = indexOf(executed, /^UPDATE subscriptions SET notified_at = now\(\)/);
+    const recorded = indexOf(executed, RECORD);
+    expect(written).toBeGreaterThanOrEqual(0);
+    expect(recorded).toBeGreaterThan(written);
+    const v = records(executed)[0].values;
+    expect(v[0]).toBe("DKS_R_NEW");
+    expect(v[EVENT]).toBe("minted");
+    expect(v[STATE]).toBe("NOTIFIED");
+    expect(v[RUNG]).toBe(2);
+    expect(v[EXPIRE]).toBe(new Date(expireAt).toISOString());
+  });
+
+  it.each(["reject", "throw"] as const)(
+    "a record that fails (%s) still leaves notified_at written and the run whole",
+    async (how) => {
+      const base = makeSql([], [], [dueForNotify()]);
+      db.getDb.mockReturnValue(failingRecords(base, how));
+      phonepe.getSubscriptionStatus.mockResolvedValue({ state: "ACTIVE" });
+      phonepe.notifyRedemption.mockResolvedValue({
+        orderId: "OMO1",
+        state: "NOTIFIED",
+        expireAt: Date.now(),
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      await expect(runAutopayNotify(makeEnv())).resolves.toBeUndefined();
+
+      expect(
+        indexOf(base.executed, /^UPDATE subscriptions SET notified_at = now\(\)/),
+      ).toBeGreaterThanOrEqual(0);
+      // Not backed off, not parked -> the notify stands and Pass B redeems it tomorrow
+      expect(updates(base.executed).some((u) => u.text.includes("SET next_debit_at = ?"))).toBe(false);
+      expect(updates(base.executed).some((u) => u.text.includes("SET status = ?"))).toBe(false);
+      warn.mockRestore();
+    },
+  );
+
+  it("a FAILED reconcile records PhonePe's codes at the rung that failed, after the ladder moved", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR, "active", 25 * HOUR, 1)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getOrderStatus.mockResolvedValue({
+      state: "FAILED",
+      expireAt: Date.now() + 24 * HOUR,
+      errorCode: "INSUFFICIENT_BALANCE",
+      detailedErrorCode: "Z9",
+      paymentDetails: [{ state: "FAILED", timestamp: Date.now() - HOUR }],
+    });
+
+    await runAutopayNotify(makeEnv());
+
+    const ladder = indexOf(executed, /^UPDATE subscriptions SET retry_count = \?/);
+    const recorded = indexOf(executed, RECORD);
+    expect(ladder).toBeGreaterThanOrEqual(0);
+    expect(recorded).toBeGreaterThan(ladder);
+    const v = records(executed)[0].values;
+    expect(v[EVENT]).toBe("reconciled");
+    expect(v[STATE]).toBe("FAILED");
+    expect(v[CODE]).toBe("INSUFFICIENT_BALANCE");
+    expect(v[DETAILED]).toBe("Z9");
+    // The in-memory rung, not the row's incremented one -> the failure belongs to attempt 1
+    expect(v[RUNG]).toBe(1);
+  });
+
+  it("a still-PENDING order records nothing — it is read every tick and says nothing new", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getOrderStatus.mockResolvedValue({ state: "PENDING", expireAt: Date.now() + 24 * HOUR });
+
+    await runAutopayNotify(makeEnv());
+
+    expect(records(executed)).toHaveLength(0);
+  });
+
+  it("an accepted redeem records PhonePe's answer", async () => {
+    const { sql, executed } = makeSql([dueRow(10 * 60 * 1000)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.executeRedemption.mockResolvedValue({ state: "PENDING", transactionId: "T1" });
+
+    await runAutopayNotify(makeEnv());
+
+    const v = records(executed)[0].values;
+    expect(v[EVENT]).toBe("redeem_accepted");
+    expect(v[STATE]).toBe("PENDING");
+  });
+
+  it("a refused redeem records PhonePe's code and the mandate state, after the park", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getOrderStatus.mockResolvedValue({ state: "NOTIFIED", expireAt: Date.now() + 24 * HOUR });
+    phonepe.executeRedemption.mockRejectedValue(
+      new FakePhonePeApiError(
+        "PhonePe execute error 400",
+        400,
+        '{"code":"INVALID_SUBSCRIPTION_STATE","message":"Subscription is not active"}',
+      ),
+    );
+    phonepe.getSubscriptionStatus.mockResolvedValue({ state: "REVOKED" });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runAutopayNotify(makeEnv());
+
+    const parked = executed.findIndex(
+      (e) => /SET status = \?/.test(e.text) && e.values.includes("cancelled"),
+    );
+    const rejected = executed.findIndex((e) => RECORD.test(e.text) && e.values[EVENT] === "redeem_rejected");
+    expect(parked).toBeGreaterThanOrEqual(0);
+    expect(rejected).toBeGreaterThan(parked);
+    const v = executed[rejected].values;
+    expect(v[CODE]).toBe("INVALID_SUBSCRIPTION_STATE");
+    expect(v[HTTP]).toBe(400);
+    expect(v[MANDATE_STATE]).toBe("REVOKED");
+  });
+
+  it("a network throw on redeem is not recorded as a rejection — PhonePe never answered", async () => {
+    const { sql, executed } = makeSql([dueRow(10 * 60 * 1000)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.executeRedemption.mockRejectedValue(new TypeError("fetch failed"));
+    phonepe.getOrderStatus.mockResolvedValue({ state: "NOTIFIED", expireAt: Date.now() + 24 * HOUR });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await runAutopayNotify(makeEnv());
+
+    expect(records(executed).some((r) => r.values[EVENT] === "redeem_rejected")).toBe(false);
+  });
+
+  it("an order past its expiry is recorded as recycled after the row lets it go", async () => {
+    const { sql, executed } = makeSql([dueRow(3 * HOUR)]);
+    db.getDb.mockReturnValue(sql);
+    phonepe.getOrderStatus.mockResolvedValue({ state: "NOTIFIED", expireAt: Date.now() - HOUR });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await runAutopayNotify(makeEnv());
+
+    const recycled = indexOf(
+      executed,
+      /^UPDATE subscriptions SET notified_at = NULL, redemption_order_id = NULL/,
+    );
+    const recorded = indexOf(executed, RECORD);
+    expect(recycled).toBeGreaterThanOrEqual(0);
+    expect(recorded).toBeGreaterThan(recycled);
+    expect(records(executed)[0].values[EVENT]).toBe("recycled");
+    expect(records(executed)[0].values[STATE]).toBe("NOTIFIED");
+  });
+});
