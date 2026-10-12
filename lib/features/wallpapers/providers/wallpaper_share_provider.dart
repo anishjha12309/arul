@@ -71,6 +71,7 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
   Future<void> share(
     Wallpaper wallpaper, {
     required String Function(String link) buildCaption,
+    Future<void> Function()? releaseVideoDecoders,
   }) async {
     if (state is WallpaperSharePreparing) return;
 
@@ -144,6 +145,11 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       // A share the user can retry is the better failure.
       var shared = file;
       var watermarked = false;
+      // The export decodes AND encodes in hardware; a budget SoC fits ~2 codecs and the feed's pool
+      // holds them, so both attempts failed with a codec exception -> free them first, as apply does.
+      if (wallpaper.kind == WallpaperKind.live && releaseVideoDecoders != null) {
+        await releaseVideoDecoders();
+      }
       try {
         shared = await _watermarkWithRetry(wallpaper, file, tmpDir.path);
         watermarked = true;

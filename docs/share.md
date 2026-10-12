@@ -27,6 +27,9 @@ AND bring someone back; these rules were paid for by getting the second half wro
       goes out CLEAN and tracks `share_watermark_skipped` with `sdk_int`. On a device that CAN watermark,
       a failure (after one retry) FAILS the share rather than shipping an untraced copy. Statics are
       watermarked on every Android version — that path never touches Media3.
+- [ ] **A live export frees the feed's decoders first**, as apply does: it needs a hardware decoder AND
+      encoder, and on a budget SoC the feed's pool held them, so both attempts died with a codec
+      exception and the share never went out. The feed reclaims after (a no-op while backgrounded).
 - [ ] Share has a re-entrancy guard, like apply and set: a double tap must not run two flows.
 
 ## Status clips — a card, then the user picks

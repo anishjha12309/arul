@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/api/api_client.dart';
 import '../../../core/config/build_info.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/error/app_exception.dart';
 
 /// Puts this phone in the campaign-push registry, and keeps its row current.
 class PushRegistration {
@@ -115,6 +116,8 @@ class PushRegistration {
     } catch (error, stack) {
       // Never surfaced. A failed registration costs this phone the next campaign and nothing else;
       // a message about it would be noise about a feature the user never asked for.
+      // Offline and timed-out posts are the phone's link, not a defect: the next trigger retries.
+      if (isNetworkError(error)) return;
       _crash.recordError(error, stack, reason: 'push device registration');
     }
   }

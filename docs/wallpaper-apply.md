@@ -65,6 +65,10 @@ measured on device. Stop re-deriving it.
   asked, and a copy that lands for a superseded source or a destroyed engine is deleted.
 - Download the MP4 locally FIRST; release the feed decoder only AFTER the download completes, and
   await that before the native call.
+- **A clip that fails to play is re-prepared at most 3 times, backing off 0.5/1/2 s, then the decoder
+  is freed until the next visibility gain.** An instant re-prepare in `onPlayerError` spun on a clip
+  that always failed until the heap ran out, in the background (OOMs inside Media3's analytics
+  collector). A rendered frame resets the count.
 
 ## The static fallback — exactly two signals
 

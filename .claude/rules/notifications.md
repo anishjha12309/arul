@@ -29,7 +29,7 @@ Campaign invariants ([docs/push.md](../../docs/push.md)):
 - **Send by `token`, not `fid`.** The REST reference says the opposite; a real device answered 404
   UNREGISTERED to the fid and 200 to the token on an identical payload. `SEND_BY` is the one switch.
 - **An unreadable payload opens the app** — unknown `dest`, deleted item, retired category. Never a
-  crash, never an error screen. Registration failures are swallowed into Crashlytics.
+  crash, never an error screen. Non-network registration failures go to Crashlytics.
 
 Traps:
 

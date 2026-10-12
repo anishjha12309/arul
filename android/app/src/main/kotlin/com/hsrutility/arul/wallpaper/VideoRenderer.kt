@@ -40,6 +40,10 @@ class VideoRenderer(private val context: Context) {
 
         private const val SURFACE_RELEASE_WAIT_MS = 1_000L
 
+        private const val MAX_RECOVERIES = 3
+
+        private const val RECOVERY_BASE_DELAY_MS = 500L
+
         /** The ONE scaling mode. Never derived from display metrics, never a second mode. */
         private const val SCALING_MODE = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
 
@@ -93,6 +97,20 @@ class VideoRenderer(private val context: Context) {
         releasePlayerInstance()
     }
 
+    /** Re-prepares since the last frame reached the screen; reset by a new player or a rendered frame. */
+    private var recoveries = 0
+
+    private val recover = Runnable {
+        try {
+            player?.let { p ->
+                p.seekTo(0)
+                p.prepare()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Recovery failed", e)
+        }
+    }
+
     /** Retained so the player can be re-created after a visibility-driven release. */
     private var currentVideoPath: String? = null
 
@@ -131,6 +149,7 @@ class VideoRenderer(private val context: Context) {
         currentSurfaceHolder = surfaceHolder
 
         releasePlayerInstance()
+        recoveries = 0
 
         try {
             // On first apply the chooser's preview engine is usually still alive when the home engine
@@ -173,6 +192,8 @@ class VideoRenderer(private val context: Context) {
         currentSurfaceHolder = surfaceHolder
 
         val activePlayer = player ?: return@onMain
+        mainHandler.removeCallbacks(recover)
+        recoveries = 0
         try {
             activePlayer.setMediaItem(MediaItem.fromUri("file://$videoPath"))
             activePlayer.prepare()
@@ -256,6 +277,7 @@ class VideoRenderer(private val context: Context) {
     }
 
     private fun releasePlayerInstance() {
+        mainHandler.removeCallbacks(recover)
         try {
             player?.let { p ->
                 resumeKey?.let { key ->
@@ -292,14 +314,18 @@ class VideoRenderer(private val context: Context) {
                 Log.e(TAG, "Source file missing; not retrying: $path")
                 return
             }
-            try {
-                player?.let { p ->
-                    p.seekTo(0)
-                    p.prepare()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Recovery failed", e)
+            mainHandler.removeCallbacks(recover)
+            // An instant re-prepare of a clip that always fails spun until the heap ran out (OOMs in
+            // the analytics collector, in the background) -> back off, then free the decoder until
+            // the next visibility gain re-initializes.
+            if (recoveries >= MAX_RECOVERIES) {
+                Log.e(TAG, "Still failing after $recoveries recoveries; releasing until visible again")
+                val failed = player
+                mainHandler.post { if (player === failed) releasePlayerInstance() }
+                return
             }
+            recoveries++
+            mainHandler.postDelayed(recover, RECOVERY_BASE_DELAY_MS shl (recoveries - 1))
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -323,6 +349,7 @@ class VideoRenderer(private val context: Context) {
         }
 
         override fun onRenderedFirstFrame() {
+            recoveries = 0
             assertScalingMode()
         }
     }

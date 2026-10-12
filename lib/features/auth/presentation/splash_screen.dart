@@ -179,6 +179,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           .read(authServiceProvider)
           .initialized
           .timeout(const Duration(seconds: 6), onTimeout: () {});
+      if (!mounted) return;
       BootTrace.mark('splash: auth seed settled');
 
       // No stored session -> ask Google NOW, not at the sign-in screen's first frame a route away.

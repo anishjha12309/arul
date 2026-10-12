@@ -474,6 +474,40 @@ void main() {
       expect(sheetCalls.single.fileNameOverrides, ['arul-murugan-vel.mp4']);
     });
 
+    test('a live share frees the feed decoders BEFORE the export, a static '
+        'one never', () async {
+      // The export needs a hardware decoder and encoder; a budget SoC's feed pool held them, so both
+      // attempts failed with a codec exception and the share never went out.
+      final watermark = _FakeWatermarkService();
+      final c = _container(
+        service: _FakeApplyService(tmpDir),
+        watermark: watermark,
+        sheetCalls: <ShareParams>[],
+      );
+      addTearDown(c.dispose);
+      final releasedAtAttempt = <int>[];
+      Future<void> release() async => releasedAtAttempt.add(watermark.attempts);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(
+            _wallpaper(kind: WallpaperKind.live),
+            buildCaption: _caption,
+            releaseVideoDecoders: release,
+          );
+      expect(releasedAtAttempt, [0]);
+      expect(watermark.attempts, 1);
+
+      await c
+          .read(wallpaperShareProvider.notifier)
+          .share(
+            _wallpaper(id: 'w2'),
+            buildCaption: _caption,
+            releaseVideoDecoders: release,
+          );
+      expect(releasedAtAttempt, [0]);
+    });
+
     test('a device that CANNOT watermark video shares the clean original and '
         'tracks share_watermark_skipped', () async {
       // Below API 31 Media3's Transformer resolves an API-31-only class and takes the process down (androidx/media#2535).

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
@@ -191,6 +192,30 @@ void main() {
       },
     );
 
+    test(
+      'an offline post records nothing, and the next trigger posts again',
+      () async {
+        // Offline and timed-out posts were the top Crashlytics issues by users, all of them noise.
+        final api = _RecordingApi(failWith: const SocketException('offline'));
+        final crash = _RecordingCrash();
+        final registration = PushRegistration(
+          apiClient: api,
+          crash: crash,
+          appLanguage: () => 'ta',
+          fid: () async => 'fid-test',
+          token: () async => 'tok-test',
+          appBuild: () async => 76,
+        );
+
+        await expectLater(registration.register(account: 'u'), completes);
+        expect(crash.errors, isEmpty);
+
+        api.failWith = null;
+        await registration.register(account: 'u');
+        expect(api.posts, hasLength(2));
+      },
+    );
+
     test('an empty fid registers nothing rather than an empty row', () async {
       final api = _RecordingApi();
       final registration = _make(api, fid: () async => '');
@@ -331,10 +356,11 @@ class _RecordedPost {
 }
 
 class _RecordingApi extends ApiClient {
-  _RecordingApi({this.gate});
+  _RecordingApi({this.gate, this.failWith});
 
   /// Holds every post open until it completes, to put two registrations in flight at once.
   final Future<void>? gate;
+  Object? failWith;
   final List<_RecordedPost> posts = [];
 
   @override
@@ -347,6 +373,8 @@ class _RecordingApi extends ApiClient {
   }) async {
     posts.add(_RecordedPost(path, body, requiresAuth));
     await gate;
+    final error = failWith;
+    if (error != null) throw error;
     return {'ok': true};
   }
 }

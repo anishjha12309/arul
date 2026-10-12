@@ -476,9 +476,15 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     final l10n = AppLocalizations.of(context);
     await ref
         .read(wallpaperShareProvider.notifier)
-        .share(w, buildCaption: l10n.wallpaperShareCaption);
+        .share(
+          w,
+          buildCaption: l10n.wallpaperShareCaption,
+          releaseVideoDecoders: _video.releaseDecoders,
+        );
 
     if (!mounted) return;
+    // A no-op while WhatsApp or the sheet has us backgrounded: the resume path reclaims then.
+    _video.reclaimDecoders();
     final state = ref.read(wallpaperShareProvider);
     if (state is WallpaperShareError) {
       if (state.premiumRequired) {
