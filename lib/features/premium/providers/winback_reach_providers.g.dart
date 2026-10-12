@@ -9,47 +9,6 @@ part of 'winback_reach_providers.dart';
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
 
-@ProviderFor(winbackLedger)
-final winbackLedgerProvider = WinbackLedgerProvider._();
-
-final class WinbackLedgerProvider
-    extends $FunctionalProvider<WinbackLedger, WinbackLedger, WinbackLedger>
-    with $Provider<WinbackLedger> {
-  WinbackLedgerProvider._()
-    : super(
-        from: null,
-        argument: null,
-        retry: null,
-        name: r'winbackLedgerProvider',
-        isAutoDispose: false,
-        dependencies: null,
-        $allTransitiveDependencies: null,
-      );
-
-  @override
-  String debugGetCreateSourceHash() => _$winbackLedgerHash();
-
-  @$internal
-  @override
-  $ProviderElement<WinbackLedger> $createElement($ProviderPointer pointer) =>
-      $ProviderElement(pointer);
-
-  @override
-  WinbackLedger create(Ref ref) {
-    return winbackLedger(ref);
-  }
-
-  /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(WinbackLedger value) {
-    return $ProviderOverride(
-      origin: this,
-      providerOverride: $SyncValueProvider<WinbackLedger>(value),
-    );
-  }
-}
-
-String _$winbackLedgerHash() => r'6cd95c915c9a05d1ff7c81803ab1937494811d81';
-
 @ProviderFor(winbackReachFlags)
 final winbackReachFlagsProvider = WinbackReachFlagsProvider._();
 
@@ -193,50 +152,50 @@ final class UninstallShortcutSyncProvider
 String _$uninstallShortcutSyncHash() =>
     r'd1d6402394051fb02d1073c96fc400ffc0052d76';
 
-@ProviderFor(winbackDailyController)
-final winbackDailyControllerProvider = WinbackDailyControllerProvider._();
+@ProviderFor(winbackOpenController)
+final winbackOpenControllerProvider = WinbackOpenControllerProvider._();
 
-final class WinbackDailyControllerProvider
+final class WinbackOpenControllerProvider
     extends
         $FunctionalProvider<
-          WinbackDailyController,
-          WinbackDailyController,
-          WinbackDailyController
+          WinbackOpenController,
+          WinbackOpenController,
+          WinbackOpenController
         >
-    with $Provider<WinbackDailyController> {
-  WinbackDailyControllerProvider._()
+    with $Provider<WinbackOpenController> {
+  WinbackOpenControllerProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
-        name: r'winbackDailyControllerProvider',
+        name: r'winbackOpenControllerProvider',
         isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
 
   @override
-  String debugGetCreateSourceHash() => _$winbackDailyControllerHash();
+  String debugGetCreateSourceHash() => _$winbackOpenControllerHash();
 
   @$internal
   @override
-  $ProviderElement<WinbackDailyController> $createElement(
+  $ProviderElement<WinbackOpenController> $createElement(
     $ProviderPointer pointer,
   ) => $ProviderElement(pointer);
 
   @override
-  WinbackDailyController create(Ref ref) {
-    return winbackDailyController(ref);
+  WinbackOpenController create(Ref ref) {
+    return winbackOpenController(ref);
   }
 
   /// {@macro riverpod.override_with_value}
-  Override overrideWithValue(WinbackDailyController value) {
+  Override overrideWithValue(WinbackOpenController value) {
     return $ProviderOverride(
       origin: this,
-      providerOverride: $SyncValueProvider<WinbackDailyController>(value),
+      providerOverride: $SyncValueProvider<WinbackOpenController>(value),
     );
   }
 }
 
-String _$winbackDailyControllerHash() =>
-    r'8c0916385915046be7eb8ad5a764f0b3e71bc0af';
+String _$winbackOpenControllerHash() =>
+    r'9f8e1f1dbdce3d119db3465f1b053a0d27a55570';

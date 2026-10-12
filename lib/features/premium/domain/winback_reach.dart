@@ -19,25 +19,25 @@ bool winbackReachable(Entitlement? entitlement) {
 enum WinbackEntry {
   push('push'),
   premiumTap('premium_tap'),
-  daily('daily'),
+  appOpen('app_open'),
   uninstallShortcut('uninstall_shortcut');
 
   const WinbackEntry(this.key);
 
   final String key;
 
-  static const dailySource = 'daily';
+  static const appOpenSource = 'app_open';
   static const uninstallSource = 'uninstall_shortcut';
 
   /// Opened over the screen the person was on, so closing it returns them there.
-  bool get sheetOnly => this == daily || this == uninstallShortcut;
+  bool get sheetOnly => this == appOpen || this == uninstallShortcut;
 
   /// A premium tap keeps its gate's own `source`, so any other source with the offer is one.
   static WinbackEntry? fromRoute({required String source, String? offer}) {
     if (offer != kWinbackOffer) return null;
     return switch (source) {
       'push' => push,
-      dailySource => daily,
+      appOpenSource => appOpen,
       uninstallSource => uninstallShortcut,
       _ => premiumTap,
     };
@@ -49,7 +49,7 @@ enum WinbackEntry {
 class WinbackReachFlags {
   const WinbackReachFlags({
     this.tapFirst = true,
-    this.dailySheet = true,
+    this.openSheet = true,
     this.uninstallShortcut = true,
     this.countdown = true,
   });
@@ -59,14 +59,14 @@ class WinbackReachFlags {
     bool on(String key) => !(raw is Map && raw[key] == false);
     return WinbackReachFlags(
       tapFirst: on('tap_first'),
-      dailySheet: on('daily_sheet'),
+      openSheet: on('open_sheet'),
       uninstallShortcut: on('uninstall_shortcut'),
       countdown: on('countdown'),
     );
   }
 
   final bool tapFirst;
-  final bool dailySheet;
+  final bool openSheet;
   final bool uninstallShortcut;
 
   /// The 10:00 hold on the doors no pay tap opened. Kept by the owner, a CCPA "false urgency" risk,

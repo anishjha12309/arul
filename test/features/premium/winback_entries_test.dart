@@ -1,4 +1,4 @@
-// The ₹99 win-back sheet opened by a door no pay tap opened: a premium tap, the daily sheet and the
+// The ₹99 win-back sheet opened by a door no pay tap opened: a premium tap, the app-open sheet and the
 // "Uninstall" shortcut. None of them may start a checkout nobody accepted; the sheet-only doors rise
 // over the page the person was on and return them there; "Uninstall" always reaches App info.
 
@@ -18,7 +18,6 @@ import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/premium/data/uninstall_shortcut_channel.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
-import 'package:arul/features/premium/domain/winback_ledger.dart';
 import 'package:arul/features/premium/presentation/cancel_offer_sheet.dart';
 import 'package:arul/features/premium/presentation/paywall_view.dart';
 import 'package:arul/features/premium/presentation/premium_screen.dart';
@@ -156,7 +155,7 @@ void main() {
       analytics.events.where((e) => e.$1 == name).map((e) => e.$2).toList();
 
   // Opens `/browse` (the page a door rises over), then pushes [location] the way the gates, the
-  // daily trigger and the shortcut do.
+  // app-open trigger and the shortcut do.
   Future<void> open(
     WidgetTester tester,
     String location, {
@@ -270,7 +269,6 @@ void main() {
       final shown = eventsNamed('cancel_offer_shown').single!;
       expect(shown['offer'], 'winback_99');
       expect(shown['entry'], 'premium_tap');
-      expect(prefs.getString(WinbackLedger.shownDayKey), isNotNull);
       expectNothingStarted();
     });
 
@@ -288,7 +286,6 @@ void main() {
       expect(declined['via'], 'link');
       expect(declined['entry'], 'premium_tap');
       expectNothingStarted();
-      expect(prefs.getInt(WinbackLedger.dismissalsKey), isNull);
     });
 
     testWidgets('accepting is the ₹99 sale', (tester) async {
@@ -336,8 +333,8 @@ void main() {
     });
   });
 
-  group('the daily sheet', () {
-    const location = '/premium?source=daily&offer=winback_99';
+  group('the app-open sheet', () {
+    const location = '/premium?source=app_open&offer=winback_99';
 
     testWidgets('rises over the page they were on, with no paywall behind it', (
       tester,
@@ -347,19 +344,16 @@ void main() {
       expect(sheet(), findsOneWidget);
       expect(find.byType(ArulPaywallView), findsNothing);
       expect(find.text('the feed'), findsOneWidget);
-      expect(eventsNamed('cancel_offer_shown').single?['entry'], 'daily');
+      expect(eventsNamed('cancel_offer_shown').single?['entry'], 'app_open');
     });
 
-    testWidgets('the X returns them to the feed and counts a dismissal', (
-      tester,
-    ) async {
+    testWidgets('the X returns them to the feed', (tester) async {
       await open(tester, location);
       await tester.tap(find.byKey(const ValueKey('cancel-offer-close')));
       await tester.pumpAndSettle();
 
       expect(onFeed(), isTrue);
       expect(find.byType(PremiumScreen), findsNothing);
-      expect(prefs.getInt(WinbackLedger.dismissalsKey), 1);
       expect(eventsNamed('cancel_offer_declined').single?['via'], 'close');
       expectNothingStarted();
     });
@@ -462,7 +456,6 @@ void main() {
 
       expect(shortcut.appInfoOpens, 0);
       expect(onFeed(), isTrue);
-      expect(prefs.getInt(WinbackLedger.dismissalsKey), isNull);
     });
 
     testWidgets('no ₹99 to offer: straight to App info, never a dead end', (

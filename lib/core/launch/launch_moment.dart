@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// One unrequested surface per launch: the push-permission ask, Play's review sheet or the daily ₹99
-/// sheet, whichever claims it first. The others wait for a later cold open.
+/// One unrequested surface per launch: the push-permission ask, Play's review sheet or the app-open
+/// ₹99 sheet, whichever claims it first. The others wait for a later cold open.
 class LaunchMoment {
   String? _takenBy;
 

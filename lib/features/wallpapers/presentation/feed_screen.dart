@@ -26,7 +26,7 @@ import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/presentation/trial_nudge_row.dart';
-import '../../premium/presentation/winback_daily_trigger.dart';
+import '../../premium/presentation/winback_open_trigger.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../push/providers/push_providers.dart';
 import '../../quick_bar/providers/quick_bar_providers.dart';
@@ -58,7 +58,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         ApplyRestore,
         WidgetsBindingObserver,
         ReviewPromptTrigger,
-        WinbackDailyTrigger {
+        WinbackOpenTrigger {
   /// `viewportFraction` is final on PageController and needs the reel's measured height -> build
   /// lazily in [_pagerFor], never in initState.
   ///
@@ -174,9 +174,9 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       ref.read(wallpaperShareProvider) is! WallpaperSharePreparing &&
       ref.read(ringtoneSetProvider) is! RingtoneSetLoading;
 
-  /// The daily ₹99 sheet waits for exactly the same plain feed (docs/winback-reach.md).
+  /// The app-open ₹99 sheet waits for exactly the same plain feed (docs/winback-reach.md).
   @override
-  bool winbackDailyHostReady() => reviewHostReady();
+  bool winbackOpenHostReady() => reviewHostReady();
 
   void _onDeepLinkChanged() {
     scheduleMicrotask(() {
@@ -516,7 +516,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
       maybeRestoreAfterApply(value);
       maybeOpenDeepLink(value);
       if (value.isNotEmpty) {
-        maybeScheduleWinbackDaily();
+        maybeScheduleWinbackOpen();
         maybeScheduleReviewPrompt();
       }
     }

@@ -11,25 +11,24 @@ import '../domain/cancel_offer.dart';
 import '../domain/winback_reach.dart';
 import '../providers/winback_reach_providers.dart';
 
-/// A beat shorter than [reviewSettleDelay]: on a launch where both qualify, the daily ₹99 sheet is
+/// A beat shorter than [reviewSettleDelay]: on a launch where both qualify, the ₹99 sheet is
 /// that launch's one unrequested surface and the review keeps its arm for a later cold open.
-const winbackDailySettleDelay = Duration(milliseconds: 1500);
+const winbackOpenSettleDelay = Duration(milliseconds: 1500);
 
-/// The daily ₹99 sheet's one trigger point: the home surface, once its content is on screen.
-mixin WinbackDailyTrigger<T extends ConsumerStatefulWidget>
-    on ConsumerState<T> {
-  Timer? _dailyTimer;
-  bool _dailyScheduled = false;
-  VoidCallback? _dailyAwaitUpdate;
+/// The app-open ₹99 sheet's one trigger point: the home surface, once its content is on screen.
+mixin WinbackOpenTrigger<T extends ConsumerStatefulWidget> on ConsumerState<T> {
+  Timer? _openTimer;
+  bool _openScheduled = false;
+  VoidCallback? _openAwaitUpdate;
 
   /// The host's own "nothing is in flight" — its route, connectivity, running applies or sets.
-  bool winbackDailyHostReady();
+  bool winbackOpenHostReady();
 
   /// Call once the host's content is on screen. Only the first call per mount schedules anything.
-  void maybeScheduleWinbackDaily() {
-    if (_dailyScheduled) return;
-    _dailyScheduled = true;
-    _dailyTimer = Timer(winbackDailySettleDelay, _showOnceUpdateDecided);
+  void maybeScheduleWinbackOpen() {
+    if (_openScheduled) return;
+    _openScheduled = true;
+    _openTimer = Timer(winbackOpenSettleDelay, _showOnceUpdateDecided);
   }
 
   // An update outranks the sheet: decide only after this launch's update check has settled.
@@ -39,27 +38,22 @@ mixin WinbackDailyTrigger<T extends ConsumerStatefulWidget>
       void listener() {
         if (UpdateHolds.launch.value == UpdateLaunch.undecided) return;
         UpdateHolds.launch.removeListener(listener);
-        _dailyAwaitUpdate = null;
+        _openAwaitUpdate = null;
         _showOnceUpdateDecided();
       }
 
-      _dailyAwaitUpdate = listener;
+      _openAwaitUpdate = listener;
       UpdateHolds.launch.addListener(listener);
       return;
     }
-    try {
-      unawaited(
-        ref
-            .read(winbackDailyControllerProvider)
-            .maybeShow(surfaceClear: _dailySurfaceClear, open: _openDaily),
-      );
-    } catch (e) {
-      // A container without prefs (a screen test) -> no sheet, and nothing thrown from a timer.
-      debugPrint('[WinbackDaily] trigger unavailable: $e');
-    }
+    unawaited(
+      ref
+          .read(winbackOpenControllerProvider)
+          .maybeShow(surfaceClear: _openSurfaceClear, open: _openSheet),
+    );
   }
 
-  bool _dailySurfaceClear() {
+  bool _openSurfaceClear() {
     if (!mounted) return false;
     // A dialog the OS put over us pauses the Activity -> only `resumed` means they see our screen.
     if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
@@ -68,17 +62,17 @@ mixin WinbackDailyTrigger<T extends ConsumerStatefulWidget>
     if (ArulDeepLink.landedThisLaunch) return false;
     if (UpdateHolds.launch.value != UpdateLaunch.clear) return false;
     if (!reviewSurfaceIsTopmost(context)) return false;
-    return winbackDailyHostReady();
+    return winbackOpenHostReady();
   }
 
-  void _openDaily() {
+  void _openSheet() {
     if (!mounted) return;
     unawaited(
       context.push(
         Uri(
           path: '/premium',
           queryParameters: {
-            'source': WinbackEntry.dailySource,
+            'source': WinbackEntry.appOpenSource,
             'offer': kWinbackOffer,
           },
         ).toString(),
@@ -88,8 +82,8 @@ mixin WinbackDailyTrigger<T extends ConsumerStatefulWidget>
 
   @override
   void dispose() {
-    _dailyTimer?.cancel();
-    final awaiting = _dailyAwaitUpdate;
+    _openTimer?.cancel();
+    final awaiting = _openAwaitUpdate;
     if (awaiting != null) UpdateHolds.launch.removeListener(awaiting);
     super.dispose();
   }

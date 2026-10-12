@@ -70,7 +70,7 @@ void main() {
 
   group('WinbackEntry.fromRoute', () {
     test('nothing without the offer in the link', () {
-      expect(WinbackEntry.fromRoute(source: 'daily'), isNull);
+      expect(WinbackEntry.fromRoute(source: 'app_open'), isNull);
       expect(
         WinbackEntry.fromRoute(source: 'push', offer: 'cancel_99'),
         isNull,
@@ -81,23 +81,23 @@ void main() {
       WinbackEntry? of(String source) =>
           WinbackEntry.fromRoute(source: source, offer: 'winback_99');
       expect(of('push'), WinbackEntry.push);
-      expect(of('daily'), WinbackEntry.daily);
+      expect(of('app_open'), WinbackEntry.appOpen);
       expect(of('uninstall_shortcut'), WinbackEntry.uninstallShortcut);
       expect(of('apply'), WinbackEntry.premiumTap);
       expect(of('ringtone_set'), WinbackEntry.premiumTap);
     });
 
-    test('only the daily and Uninstall doors are sheet-only', () {
+    test('only the app-open and Uninstall doors are sheet-only', () {
       expect(
         [
           for (final e in WinbackEntry.values)
             if (e.sheetOnly) e,
         ],
-        [WinbackEntry.daily, WinbackEntry.uninstallShortcut],
+        [WinbackEntry.appOpen, WinbackEntry.uninstallShortcut],
       );
       expect(
         [for (final e in WinbackEntry.values) e.key],
-        ['push', 'premium_tap', 'daily', 'uninstall_shortcut'],
+        ['push', 'premium_tap', 'app_open', 'uninstall_shortcut'],
       );
     });
   });
@@ -110,7 +110,7 @@ void main() {
         WinbackReachFlags.from(_config(const {'winback_reach': 'off'})),
       ]) {
         expect(flags.tapFirst, isTrue);
-        expect(flags.dailySheet, isTrue);
+        expect(flags.openSheet, isTrue);
         expect(flags.uninstallShortcut, isTrue);
         expect(flags.countdown, isTrue);
       }
@@ -121,14 +121,14 @@ void main() {
         _config(const {
           'winback_reach': {
             'tap_first': false,
-            'daily_sheet': 'false',
+            'open_sheet': 'false',
             'uninstall_shortcut': 0,
             'countdown': false,
           },
         }),
       );
       expect(flags.tapFirst, isFalse);
-      expect(flags.dailySheet, isTrue);
+      expect(flags.openSheet, isTrue);
       expect(flags.uninstallShortcut, isTrue);
       expect(flags.countdown, isFalse);
     });

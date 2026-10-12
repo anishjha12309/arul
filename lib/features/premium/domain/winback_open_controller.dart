@@ -2,31 +2,26 @@ import 'dart:async';
 
 import '../../../core/launch/launch_moment.dart';
 import 'entitlement.dart';
-import 'winback_ledger.dart';
 import 'winback_reach.dart';
 
-enum WinbackDailyOutcome {
+enum WinbackOpenOutcome {
   alreadyEvaluated,
   switchedOff,
   blocked,
   notReachable,
-  notToday,
   momentTaken,
   shown,
 }
 
-/// The daily ₹99 sheet's one ask per process ([docs/winback-reach.md]): only for someone whose
-/// premium has run out, at most once per IST day, and only when no other unrequested surface has
-/// taken this launch.
-class WinbackDailyController {
-  WinbackDailyController({
-    required this._ledger,
+/// The ₹99 sheet's one ask per process ([docs/winback-reach.md]): only for someone whose
+/// premium has run out, and only when no other unrequested surface has taken this launch.
+class WinbackOpenController {
+  WinbackOpenController({
     required this._moment,
     required this._entitlement,
     required this._flags,
   });
 
-  final WinbackLedger _ledger;
   final LaunchMoment _moment;
   final Future<Entitlement> Function() _entitlement;
   final WinbackReachFlags Function() _flags;
@@ -37,25 +32,24 @@ class WinbackDailyController {
   bool _evaluated = false;
 
   /// [surfaceClear] is re-read after `/me` answers: a sheet or a dialog can arrive meanwhile.
-  Future<WinbackDailyOutcome> maybeShow({
+  Future<WinbackOpenOutcome> maybeShow({
     required bool Function() surfaceClear,
     required void Function() open,
   }) async {
-    if (_evaluated) return WinbackDailyOutcome.alreadyEvaluated;
+    if (_evaluated) return WinbackOpenOutcome.alreadyEvaluated;
     _evaluated = true;
-    if (!_flags().dailySheet) return WinbackDailyOutcome.switchedOff;
-    if (!surfaceClear()) return WinbackDailyOutcome.blocked;
+    if (!_flags().openSheet) return WinbackOpenOutcome.switchedOff;
+    if (!surfaceClear()) return WinbackOpenOutcome.blocked;
     Entitlement? me;
     try {
       me = await _entitlement().timeout(entitlementWait);
     } catch (_) {
       // Offline or slow: no verdict, no sheet.
     }
-    if (!winbackReachable(me)) return WinbackDailyOutcome.notReachable;
-    if (!_ledger.canAutoShow()) return WinbackDailyOutcome.notToday;
-    if (!surfaceClear()) return WinbackDailyOutcome.blocked;
-    if (!_moment.take('winback_daily')) return WinbackDailyOutcome.momentTaken;
+    if (!winbackReachable(me)) return WinbackOpenOutcome.notReachable;
+    if (!surfaceClear()) return WinbackOpenOutcome.blocked;
+    if (!_moment.take('winback_open')) return WinbackOpenOutcome.momentTaken;
     open();
-    return WinbackDailyOutcome.shown;
+    return WinbackOpenOutcome.shown;
   }
 }

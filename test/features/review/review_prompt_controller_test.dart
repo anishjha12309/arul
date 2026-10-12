@@ -237,7 +237,7 @@ void main() {
     'a launch whose one unrequested surface is spent keeps the ask pending',
     () async {
       await ledgerFor('A').arm(ReviewTrigger.ringtone);
-      final moment = LaunchMoment()..take('winback_daily');
+      final moment = LaunchMoment()..take('winback_open');
       final controller = ReviewPromptController(
         ledger: ledgerFor('B'),
         launcher: launcher,
@@ -250,7 +250,7 @@ void main() {
       expect(await controller.maybeAsk(clear), ReviewAskOutcome.blocked);
       expect(launcher.requests, 0);
       expect(ledgerFor('C').isArmed, isTrue, reason: 'the next cold open asks');
-      expect(moment.takenBy, 'winback_daily');
+      expect(moment.takenBy, 'winback_open');
     },
   );
 

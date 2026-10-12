@@ -54,7 +54,7 @@ const ROUTES = [
       "lib/features/premium/domain/winback_*.dart",
       "lib/features/premium/data/uninstall_shortcut_*.dart",
       "lib/features/premium/providers/winback_reach_providers.dart",
-      "lib/features/premium/presentation/winback_daily_trigger.dart",
+      "lib/features/premium/presentation/winback_open_trigger.dart",
       "lib/core/launch/**",
       "android/**/shortcut/**",
     ],

@@ -501,7 +501,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     );
   }
 
-  // A premium tap, the daily sheet or the Uninstall shortcut: whoever opened the door already read
+  // A premium tap, the app-open sheet or the Uninstall shortcut: whoever opened the door already read
   // `/me`, so no reconcile wait and no loading face. Never `_startPaid`, so no ₹199 start either.
   Future<void> _openOfferAtOnce(WinbackEntry entry) async {
     final arrival = ++_offerArrival;
@@ -556,13 +556,13 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
   }
 
   // Where a door goes when its sheet did not open. "Uninstall" must still uninstall, so its door
-  // ends in App info; the daily one returns to where it rose; a premium tap keeps its paywall.
+  // ends in App info; the app-open one returns to where it rose; a premium tap keeps its paywall.
   void _closeDoor(WinbackEntry entry) {
     switch (entry) {
       case WinbackEntry.uninstallShortcut:
         unawaited(ref.read(uninstallShortcutChannelProvider).openAppInfo());
         _leave();
-      case WinbackEntry.daily:
+      case WinbackEntry.appOpen:
         _leave();
       case WinbackEntry.premiumTap || WinbackEntry.push:
         break;
@@ -975,7 +975,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
     WinbackEntry? entry,
   }) async {
     if (_offerSheet != null) return;
-    final ledger = ref.read(winbackLedgerProvider);
     void track(String event, [Map<String, Object> extra = const {}]) =>
         _trackOffer(
           event,
@@ -984,7 +983,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
           extra: {'flow': 'winback', 'entry': ?entry?.key, ...extra},
         );
     track('cancel_offer_shown');
-    unawaited(ledger.noteShown());
     final choice = await _holdOfferSheet(
       showCancelOfferSheet(
         context,
@@ -996,7 +994,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         uninstall: entry == WinbackEntry.uninstallShortcut,
         onAccept: () async {
           track('cancel_offer_accepted');
-          unawaited(ledger.noteAccepted());
           return _beginPaid(targetApp, asQr: asQr, offer: kWinbackOffer);
         },
         untilHandedOff: _untilOfferHandedOff,
@@ -1021,8 +1018,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
         }
       case WinbackEntry.push || WinbackEntry.premiumTap:
         break;
-      case WinbackEntry.daily:
-        unawaited(ledger.noteDailyDismissed());
+      case WinbackEntry.appOpen:
         _leave();
       case WinbackEntry.uninstallShortcut:
         if (choice == CancelOfferChoice.uninstall) {

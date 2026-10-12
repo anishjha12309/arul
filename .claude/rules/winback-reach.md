@@ -1,10 +1,10 @@
 ---
-description: The ₹99 doors no pay tap opens — premium tap, daily sheet, Uninstall shortcut — and their one rule.
+description: The ₹99 doors no pay tap opens — premium tap, app-open sheet, Uninstall shortcut — and their one rule.
 paths:
   - "lib/features/premium/domain/winback_*.dart"
   - "lib/features/premium/data/uninstall_shortcut_*.dart"
   - "lib/features/premium/providers/winback_reach_providers.dart"
-  - "lib/features/premium/presentation/winback_daily_trigger.dart"
+  - "lib/features/premium/presentation/winback_open_trigger.dart"
   - "lib/core/launch/**"
   - "android/**/shortcut/**"
 ---
@@ -17,8 +17,9 @@ paths:
   info. Never `disableShortcuts` (a pinned copy would lie); no `REQUEST_DELETE_PACKAGES`.
 - **Sync only on a verdict**: no native call while `/me` or the config is loading or failed.
 - **A sheet-only door still watches `/me`**, or the open-time reconcile leaves its await hung.
-- **The daily**: one per IST day, device-only ledger, two dismissals → seven days off, and one unrequested
-  surface per launch through `launchMomentProvider` (push ask, daily, review).
+- **The app-open sheet**: every fresh start, never a resume, nothing stored on the phone (owner; brake =
+  `open_sheet: false`), and one unrequested surface per launch through `launchMomentProvider` (push ask,
+  app-open sheet, review).
 - Switches `feature_flags.winback_reach.*` are ON unless exactly `false`.
 
 Read [docs/winback-reach.md](../../docs/winback-reach.md) before changing any of it.

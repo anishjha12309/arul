@@ -17,9 +17,8 @@ paths:
 - **A switch books no paid month**: no debit stamps, no referral, no `subscription_active`, no `trial_started`.
 - **A winback is a paid re-setup, never a switch**: `offer_switch` false, a ₹99 TRANSACTION, the ordinary grant. Never
   infer a switch from 9900; a released winback keeps 9900 because the row still names its mandate.
-- **No per-person record** (owner): nothing on the server stores an offer answer (the daily sheet's
-  on-phone ledger aside, [winback-reach.md](../../docs/winback-reach.md)); `price_paise = 19900` alone
-  keeps a ₹99 row off the switch. The revoke-retry ALARM runs on `revoke_retry_at`, set and NULLed with its id.
+- **No per-person record** (owner): nothing stores an offer answer; `price_paise = 19900` alone keeps a ₹99 row off the
+  switch. The revoke-retry ALARM runs on `revoke_retry_at`, set and NULLed with its id.
 - **A decline never cancels by itself**: every way off the sheet opens the confirm, and only its "Cancel it" posts
   the cancel. The 10:00 hold is true per sheet (CCPA "false urgency"); the server never enforces it.
 - The hourly sweeps read a row once and move it out of their own selection, or it heads the pass forever.

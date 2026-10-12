@@ -14,6 +14,6 @@ paths:
 - **The guard is `canPop()` up every navigator, never `ModalRoute.of`** (it subscribes the feed), plus
   `resumed` lifecycle and `ArulDeepLink.landedThisLaunch`.
 - **One unrequested surface per launch** (`launchMomentProvider`): already taken by the push ask or the
-  daily ₹99 sheet → `blocked`, arm kept.
+  ₹99 sheet on a fresh start → `blocked`, arm kept.
 
 Read [docs/review-prompt.md](../../docs/review-prompt.md) before changing any of it.

@@ -1,6 +1,7 @@
-// The daily ₹99 sheet: one ask per process, only for someone whose premium has run out, at most
-// once per IST day, and never on a launch another unrequested surface (the push-permission ask,
-// Play's review sheet) already took. The trigger opens it from the plain feed only.
+// The app-open ₹99 sheet: one ask per process (every fresh start, never a return from the
+// background), only for someone whose premium has run out, and never on a launch another
+// unrequested surface (the push-permission ask, Play's review sheet) already took. The trigger
+// opens it from the plain feed only.
 
 import 'dart:async';
 
@@ -9,16 +10,14 @@ import 'package:arul/core/launch/launch_moment.dart';
 import 'package:arul/core/update/update_holds.dart';
 import 'package:arul/data/models/subscription_model.dart';
 import 'package:arul/features/premium/domain/entitlement.dart';
-import 'package:arul/features/premium/domain/winback_daily_controller.dart';
-import 'package:arul/features/premium/domain/winback_ledger.dart';
+import 'package:arul/features/premium/domain/winback_open_controller.dart';
 import 'package:arul/features/premium/domain/winback_reach.dart';
-import 'package:arul/features/premium/presentation/winback_daily_trigger.dart';
+import 'package:arul/features/premium/presentation/winback_open_trigger.dart';
 import 'package:arul/features/premium/providers/winback_reach_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 Entitlement _lapsed({SubscriptionStatus status = SubscriptionStatus.expired}) =>
     Entitlement(
@@ -34,31 +33,26 @@ Entitlement _lapsed({SubscriptionStatus status = SubscriptionStatus.expired}) =>
     );
 
 void main() {
-  late SharedPreferences prefs;
-  late WinbackLedger ledger;
   late LaunchMoment moment;
   late int opens;
 
-  setUp(() async {
-    SharedPreferences.setMockInitialValues(const {});
-    prefs = await SharedPreferences.getInstance();
-    ledger = WinbackLedger(prefs);
+  setUp(() {
     moment = LaunchMoment();
     opens = 0;
   });
 
-  WinbackDailyController controller({
+  WinbackOpenController controller({
     Future<Entitlement> Function()? me,
     WinbackReachFlags flags = const WinbackReachFlags(),
-  }) => WinbackDailyController(
-    ledger: ledger,
-    moment: moment,
+    LaunchMoment? launch,
+  }) => WinbackOpenController(
+    moment: launch ?? moment,
     entitlement: me ?? () async => _lapsed(),
     flags: () => flags,
   );
 
-  Future<WinbackDailyOutcome> ask(
-    WinbackDailyController c, {
+  Future<WinbackOpenOutcome> ask(
+    WinbackOpenController c, {
     bool Function()? surfaceClear,
   }) => c.maybeShow(
     surfaceClear: surfaceClear ?? () => true,
@@ -70,20 +64,28 @@ void main() {
       'a lapsed returning user on a clear feed gets it, once per process',
       () async {
         final c = controller();
-        expect(await ask(c), WinbackDailyOutcome.shown);
+        expect(await ask(c), WinbackOpenOutcome.shown);
         expect(opens, 1);
-        expect(moment.takenBy, 'winback_daily');
-        expect(await ask(c), WinbackDailyOutcome.alreadyEvaluated);
+        expect(moment.takenBy, 'winback_open');
+        expect(await ask(c), WinbackOpenOutcome.alreadyEvaluated);
         expect(opens, 1);
       },
     );
 
+    test('every fresh start asks again: two processes, two sheets', () async {
+      final first = LaunchMoment();
+      final second = LaunchMoment();
+      expect(await ask(controller(launch: first)), WinbackOpenOutcome.shown);
+      expect(await ask(controller(launch: second)), WinbackOpenOutcome.shown);
+      expect(opens, 2);
+      expect(first.takenBy, 'winback_open');
+      expect(second.takenBy, 'winback_open');
+    });
+
     test('the switch off: nothing', () async {
       expect(
-        await ask(
-          controller(flags: const WinbackReachFlags(dailySheet: false)),
-        ),
-        WinbackDailyOutcome.switchedOff,
+        await ask(controller(flags: const WinbackReachFlags(openSheet: false))),
+        WinbackOpenOutcome.switchedOff,
       );
       expect(opens, 0);
     });
@@ -102,7 +104,7 @@ void main() {
         ]) {
           expect(
             await ask(controller(me: me)),
-            WinbackDailyOutcome.notReachable,
+            WinbackOpenOutcome.notReachable,
           );
         }
         expect(opens, 0);
@@ -110,38 +112,28 @@ void main() {
       },
     );
 
-    test('already shown today, from any door: not again', () async {
-      await ledger.noteShown();
-      expect(await ask(controller()), WinbackDailyOutcome.notToday);
-      expect(opens, 0);
-    });
-
     test(
       'a surface that covers the feed, before or after /me, skips it',
       () async {
         expect(
           await ask(controller(), surfaceClear: () => false),
-          WinbackDailyOutcome.blocked,
+          WinbackOpenOutcome.blocked,
         );
         var reads = 0;
         expect(
           await ask(controller(), surfaceClear: () => ++reads == 1),
-          WinbackDailyOutcome.blocked,
+          WinbackOpenOutcome.blocked,
         );
         expect(opens, 0);
         expect(moment.takenBy, isNull);
       },
     );
 
-    test(
-      'a launch the review already took keeps the sheet for another day',
-      () async {
-        expect(moment.take('review'), isTrue);
-        expect(await ask(controller()), WinbackDailyOutcome.momentTaken);
-        expect(opens, 0);
-        expect(ledger.canAutoShow(), isTrue);
-      },
-    );
+    test('a launch the review already took gets no sheet', () async {
+      expect(moment.take('review'), isTrue);
+      expect(await ask(controller()), WinbackOpenOutcome.momentTaken);
+      expect(opens, 0);
+    });
 
     testWidgets(
       'a /me slower than the wait costs this launch, never a late pop-up',
@@ -149,9 +141,9 @@ void main() {
         final never = Completer<Entitlement>();
         final pending = ask(controller(me: () => never.future));
         await tester.pump(
-          WinbackDailyController.entitlementWait + const Duration(seconds: 1),
+          WinbackOpenController.entitlementWait + const Duration(seconds: 1),
         );
-        expect(await pending, WinbackDailyOutcome.notReachable);
+        expect(await pending, WinbackOpenOutcome.notReachable);
         expect(opens, 0);
       },
     );
@@ -195,26 +187,26 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            winbackDailyControllerProvider.overrideWithValue(controller()),
+            winbackOpenControllerProvider.overrideWithValue(controller()),
           ],
           child: MaterialApp.router(routerConfig: router),
         ),
       );
     }
 
-    testWidgets('opens the daily door after the settle, on the plain feed', (
+    testWidgets('opens the app-open door after the settle, on the plain feed', (
       tester,
     ) async {
       await pumpFeed(tester);
       await tester.pump(
-        winbackDailySettleDelay - const Duration(milliseconds: 1),
+        winbackOpenSettleDelay - const Duration(milliseconds: 1),
       );
       expect(opened, isEmpty, reason: 'inside the settle window');
 
       await tester.pump(const Duration(milliseconds: 1));
       await tester.pumpAndSettle();
       expect(opened.single.queryParameters, {
-        'source': WinbackEntry.dailySource,
+        'source': 'app_open',
         'offer': 'winback_99',
       });
     });
@@ -224,7 +216,7 @@ void main() {
     ) async {
       UpdateHolds.launch.value = UpdateLaunch.undecided;
       await pumpFeed(tester);
-      await tester.pump(winbackDailySettleDelay);
+      await tester.pump(winbackOpenSettleDelay);
       await tester.pumpAndSettle();
       expect(opened, isEmpty);
 
@@ -236,7 +228,7 @@ void main() {
     testWidgets('an update prompt on this launch: no sheet', (tester) async {
       UpdateHolds.launch.value = UpdateLaunch.undecided;
       await pumpFeed(tester);
-      await tester.pump(winbackDailySettleDelay);
+      await tester.pump(winbackOpenSettleDelay);
       UpdateHolds.launch.value = UpdateLaunch.prompted;
       await tester.pumpAndSettle();
       expect(opened, isEmpty);
@@ -245,7 +237,7 @@ void main() {
     testWidgets('a link or push landing skips this launch', (tester) async {
       ArulDeepLink.noteExternalOpen();
       await pumpFeed(tester);
-      await tester.pump(winbackDailySettleDelay);
+      await tester.pump(winbackOpenSettleDelay);
       await tester.pumpAndSettle();
       expect(opened, isEmpty);
     });
@@ -253,7 +245,7 @@ void main() {
     testWidgets('the feed not ready: skipped', (tester) async {
       hostReady.value = false;
       await pumpFeed(tester);
-      await tester.pump(winbackDailySettleDelay);
+      await tester.pump(winbackOpenSettleDelay);
       await tester.pumpAndSettle();
       expect(opened, isEmpty);
     });
@@ -269,13 +261,13 @@ class _Feed extends ConsumerStatefulWidget {
   ConsumerState<_Feed> createState() => _FeedState();
 }
 
-class _FeedState extends ConsumerState<_Feed> with WinbackDailyTrigger {
+class _FeedState extends ConsumerState<_Feed> with WinbackOpenTrigger {
   @override
-  bool winbackDailyHostReady() => widget.hostReady.value;
+  bool winbackOpenHostReady() => widget.hostReady.value;
 
   @override
   Widget build(BuildContext context) {
-    maybeScheduleWinbackDaily();
+    maybeScheduleWinbackOpen();
     return const Text('feed');
   }
 }
