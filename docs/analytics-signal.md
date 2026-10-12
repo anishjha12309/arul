@@ -63,6 +63,9 @@ reads through its warehouse. Events and the allow-list: [analytics-events.md](an
   `postgres.neon.posthog_internal_users`. Never `users`: email and name stay out of PostHog. The password
   lives only in the source; lost → `ALTER ROLE posthog_reader PASSWORD …` and re-enter it.
 - A view cannot sync incrementally (PostHog needs a primary key), so only a tiny view is a view.
+- `postgres.neon.posthog_renewal_outcomes_daily` and `posthog_winback_daily` (`38_*`, full refresh) are daily
+  totals, never rows: a per-person copy would escape `order_outcomes`' 12-month prune and the account-delete
+  cascade. Payment failure reasons and ₹99 push results reach PostHog only this way.
 - `subscriptions.checkout_context` = `JourneyStamps.checkoutContext()` sent with `/payments/initiate`;
   `paywall_views` = one `POST /me/paywall-view` per paywall screen, `views` counting, `context` latest —
   the only record of people who look and never tap. Both go through `lib/analytics-context.ts` (flat

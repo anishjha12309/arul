@@ -23,12 +23,13 @@ parameterized query to the verified `sub`; the app never reaches the DB.
   `%anish%` hits real paying users. The one safe pattern is `%@cloudtestlabaccounts.com` (Google's Test
   Lab robots).
 - **`posthog_reader` (PostHog's warehouse role) reads `subscriptions`, `paywall_views`,
-  `checkout_events` and the `posthog_internal_users` view, nothing else** — never grant it `users`,
+  `checkout_events`, the `posthog_internal_users` view and the two `38_*` daily-total views, nothing else** — never grant it `users`,
   which holds email and name. The role and password are made by hand, so the grant files skip where
   the role is absent. `subscriptions.checkout_context`, `paywall_views` and `checkout_events` are
   analytics only: no payment or entitlement path reads them ([analytics-signal.md](analytics-signal.md)).
 - `order_outcomes` is diagnosis only — what PhonePe said about each renewal order, kept 12 months, never
-  read by billing and never granted to `posthog_reader` ([order-outcomes.md](order-outcomes.md)).
+  read by billing and never granted to `posthog_reader`, which reads only its daily totals
+  ([order-outcomes.md](order-outcomes.md)).
 - `users.app_instance_id` and `users.meta_anon_id` are VESTIGIAL — their only readers were the deleted
   server-side GA4/Meta reporters. Never revive them.
 - `subscriptions.upi_target_app` names the flow that RAN (re-stamped when an intent setup falls back to

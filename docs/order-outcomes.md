@@ -71,7 +71,8 @@ and a backfilled order's redeem is unknown — nothing recorded redeem calls bef
 
 Owner's call: one row per order per person, 12 months, then `pruneOrderOutcomes` in the `30 21` cron.
 Codes and timestamps only — never VPA, UTR, UMN, account number or holder name, all of which
-`paymentDetails` carries. `user_id` cascades with account deletion. No grant to `posthog_reader`.
+`paymentDetails` carries. `user_id` cascades with account deletion. No grant to `posthog_reader`: PostHog
+reads only `posthog_renewal_outcomes_daily` (`38_*`), totals per day, state and code, recomputed every sync.
 
 ## Backfill
 
