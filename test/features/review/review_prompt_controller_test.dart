@@ -4,6 +4,7 @@
 // Play never says whether the sheet showed, so a completed call is what consumes the arm.
 
 import 'package:arul/core/crash/crash_reporter.dart';
+import 'package:arul/core/launch/launch_moment.dart';
 import 'package:arul/features/review/data/review_launcher.dart';
 import 'package:arul/features/review/domain/review_ledger.dart';
 import 'package:arul/features/review/providers/review_prompt_controller.dart';
@@ -231,6 +232,43 @@ void main() {
       expect(launcher.requests, 2);
     },
   );
+
+  test(
+    'a launch whose one unrequested surface is spent keeps the ask pending',
+    () async {
+      await ledgerFor('A').arm(ReviewTrigger.ringtone);
+      final moment = LaunchMoment()..take('winback_daily');
+      final controller = ReviewPromptController(
+        ledger: ledgerFor('B'),
+        launcher: launcher,
+        analytics: analytics,
+        crash: const NoOpCrashReporter(),
+        moment: moment,
+        clock: () => now,
+      );
+
+      expect(await controller.maybeAsk(clear), ReviewAskOutcome.blocked);
+      expect(launcher.requests, 0);
+      expect(ledgerFor('C').isArmed, isTrue, reason: 'the next cold open asks');
+      expect(moment.takenBy, 'winback_daily');
+    },
+  );
+
+  test('the ask claims the launch it shows on', () async {
+    await ledgerFor('A').arm(ReviewTrigger.ringtone);
+    final moment = LaunchMoment();
+    final controller = ReviewPromptController(
+      ledger: ledgerFor('B'),
+      launcher: launcher,
+      analytics: analytics,
+      crash: const NoOpCrashReporter(),
+      moment: moment,
+      clock: () => now,
+    );
+
+    expect(await controller.maybeAsk(clear), ReviewAskOutcome.requested);
+    expect(moment.takenBy, 'review');
+  });
 
   test('the real launcher is the Play plugin', () {
     expect(const PlayReviewLauncher(), isA<ReviewLauncher>());

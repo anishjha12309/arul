@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/launch/launch_moment.dart';
 
 class PushPermission {
   PushPermission({
@@ -11,6 +12,7 @@ class PushPermission {
     required this._analytics,
     required this._crash,
     this._request,
+    this._moment,
   });
 
   static const _kPromptedKey = 'arul_push_prompted';
@@ -24,6 +26,9 @@ class PushPermission {
   /// the SDK", which is what every real build does and what `flutter test` must never reach.
   final Future<AuthorizationStatus> Function()? _request;
 
+  /// The ask is this launch's unrequested surface; it is never held back, it only claims the moment.
+  final LaunchMoment? _moment;
+
   bool _asking = false;
 
   bool get alreadyPrompted => _prefs.getBool(_kPromptedKey) ?? false;
@@ -32,6 +37,7 @@ class PushPermission {
   Future<bool> promptOnce() async {
     if (_asking || alreadyPrompted) return false;
     _asking = true;
+    _moment?.take('push_permission');
     try {
       final status = await (_request?.call() ?? _askSdk());
       final granted =

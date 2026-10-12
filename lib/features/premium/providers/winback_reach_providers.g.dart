@@ -144,3 +144,51 @@ final class UninstallShortcutChannelProvider
 
 String _$uninstallShortcutChannelHash() =>
     r'e2d8062794afef9fe83ce236742272ea534fe317';
+
+@ProviderFor(winbackDailyController)
+final winbackDailyControllerProvider = WinbackDailyControllerProvider._();
+
+final class WinbackDailyControllerProvider
+    extends
+        $FunctionalProvider<
+          WinbackDailyController,
+          WinbackDailyController,
+          WinbackDailyController
+        >
+    with $Provider<WinbackDailyController> {
+  WinbackDailyControllerProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'winbackDailyControllerProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$winbackDailyControllerHash();
+
+  @$internal
+  @override
+  $ProviderElement<WinbackDailyController> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  WinbackDailyController create(Ref ref) {
+    return winbackDailyController(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(WinbackDailyController value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<WinbackDailyController>(value),
+    );
+  }
+}
+
+String _$winbackDailyControllerHash() =>
+    r'8c0916385915046be7eb8ad5a764f0b3e71bc0af';

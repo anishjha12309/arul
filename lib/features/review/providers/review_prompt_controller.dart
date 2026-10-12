@@ -8,6 +8,7 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/analytics_service.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/crash/crash_reporter.dart';
+import '../../../core/launch/launch_moment.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../data/review_launcher.dart';
 import '../domain/review_ledger.dart';
@@ -30,6 +31,7 @@ class ReviewPromptController {
     required this._launcher,
     required this._analytics,
     required this._crash,
+    this._moment,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
@@ -37,6 +39,9 @@ class ReviewPromptController {
   final ReviewLauncher _launcher;
   final AnalyticsService _analytics;
   final CrashReporter _crash;
+
+  /// Play's sheet is one unrequested surface; a launch whose moment is already spent keeps the arm.
+  final LaunchMoment? _moment;
   final DateTime Function() _clock;
 
   bool _evaluated = false;
@@ -53,6 +58,7 @@ class ReviewPromptController {
       if (!surfaceClear()) return ReviewAskOutcome.blocked;
       if (!await _launcher.isAvailable()) return ReviewAskOutcome.unavailable;
       if (!surfaceClear()) return ReviewAskOutcome.blocked;
+      if (_moment?.take('review') == false) return ReviewAskOutcome.blocked;
 
       final trigger = _ledger.armedTrigger;
       final now = _clock();
@@ -104,6 +110,7 @@ final reviewPromptControllerProvider = Provider<ReviewPromptController>(
     launcher: ref.watch(reviewLauncherProvider),
     analytics: ref.watch(analyticsServiceProvider),
     crash: ref.watch(crashReporterProvider),
+    moment: ref.watch(launchMomentProvider),
     clock: ref.watch(reviewClockProvider),
   ),
 );

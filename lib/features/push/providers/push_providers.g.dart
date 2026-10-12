@@ -94,7 +94,7 @@ final class PushPermissionProvider
   }
 }
 
-String _$pushPermissionHash() => r'd19546f87878ae9def7d4444092d96a4b2668024';
+String _$pushPermissionHash() => r'15a251cfa0e150419801dd89e7508f9ce1d18b8c';
 
 /// Keeps the campaign channel's NAME in the user's language.
 ///

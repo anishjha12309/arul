@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../app/l10n/app_localizations.dart';
 import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/crash/crash_provider.dart';
+import '../../../core/launch/launch_moment.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../auth/domain/auth_service.dart';
@@ -34,6 +35,7 @@ PushPermission pushPermission(Ref ref) => PushPermission(
   prefs: ref.watch(sharedPreferencesProvider),
   analytics: ref.watch(analyticsServiceProvider),
   crash: ref.watch(crashReporterProvider),
+  moment: ref.watch(launchMomentProvider),
 );
 
 /// Keeps the campaign channel's NAME in the user's language.

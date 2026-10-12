@@ -4,6 +4,7 @@ import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/api/api_client.dart';
 import 'package:arul/core/config/build_info.dart';
 import 'package:arul/core/crash/crash_reporter.dart';
+import 'package:arul/core/launch/launch_moment.dart';
 import 'package:arul/features/push/data/push_permission.dart';
 import 'package:arul/features/push/data/push_registration.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -235,6 +236,21 @@ void main() {
         1,
         reason: 'Android stops showing its dialog after two refusals',
       );
+    });
+
+    test('the ask claims this launch\'s one unrequested surface', () async {
+      final prefs = await SharedPreferences.getInstance();
+      final moment = LaunchMoment();
+      final permission = PushPermission(
+        prefs: prefs,
+        analytics: _RecordingAnalytics(),
+        crash: const NoOpCrashReporter(),
+        request: () async => AuthorizationStatus.authorized,
+        moment: moment,
+      );
+
+      await permission.promptOnce();
+      expect(moment.takenBy, 'push_permission');
     });
 
     test('a DENIED answer is final for this install', () async {
