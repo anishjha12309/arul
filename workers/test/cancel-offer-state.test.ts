@@ -267,6 +267,16 @@ describe("releaseClaim — every release path's ONE statement", () => {
     );
     expect(values).toEqual([STANDARD_PRICE_PAISE, "row-1"]);
   });
+
+  it("gives a restored parked mandate its debit date back — a parked PAUSED one has none, and no pass selects NULL", async () => {
+    const db = routedSql(() => []);
+    await releaseClaim(asSql(db), where(db, "id", "row-1"));
+
+    expect(db.stmts[0].text).toContain(
+      "next_debit_at = CASE WHEN s.superseded_mandate_id IS NOT NULL " +
+        "THEN COALESCE(s.next_debit_at, s.current_period_end) ELSE s.next_debit_at END",
+    );
+  });
 });
 
 describe("grantCompletedSetup — the offer switch runs FIRST on every grant surface", () => {

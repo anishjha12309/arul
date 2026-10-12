@@ -85,8 +85,8 @@ expiring every failed setup stripped a cancelled-but-live trial when the user ba
 Every failure path (abandon, the status FAILED/EXPIRED reconcile, the `*.order.failed` webhook, the claim
 sweep, a revoke of the claim's own id while one is parked) runs ONE `releaseClaim`: a parked
 `superseded_mandate_id` wins and becomes `merchant_subscription_id` again at its own price,
-`active` when `current_period_end > trial_end` else `trialing` (the claim never touches ladder columns,
-so the cron resumes where it stood); otherwise `current_period_end > now()` → `cancelled`, else
+`active` when `current_period_end > trial_end` else `trialing` (the ladder resumes where it stood; a parked
+PAUSED mandate, whose date the park nulled, is rearmed from `current_period_end` so Pass A re-reads it); otherwise `current_period_end > now()` → `cancelled`, else
 `expired`. The setup-completed resurrect matches `('expired','cancelled')` so a paid approval racing the
 restore still grants. `pending` with a live period keeps premium, so entitlement never flickers while
 the sheet is open.

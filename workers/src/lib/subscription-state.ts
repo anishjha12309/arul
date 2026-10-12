@@ -89,6 +89,11 @@ export async function releaseClaim(sql: Sql, where: Fragment): Promise<ReleasedC
                                         ELSE s.price_paise END,
         offer_mandate_id         = CASE WHEN s.offer_switch THEN s.merchant_subscription_id ELSE s.offer_mandate_id END,
         offer_switch             = false,
+        -- A parked PAUSED mandate comes back with no debit date (the park nulled it) -> trialing that no pass selects
+        -- Rearm from the period end: Pass A reads the mandate before notifying and re-parks it if still paused
+        next_debit_at            = CASE WHEN s.superseded_mandate_id IS NOT NULL
+                                        THEN COALESCE(s.next_debit_at, s.current_period_end)
+                                        ELSE s.next_debit_at END,
         superseded_mandate_id    = NULL,
         superseded_price_paise   = NULL,
         updated_at               = now()
