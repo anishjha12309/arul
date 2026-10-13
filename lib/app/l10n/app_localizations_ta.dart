@@ -269,9 +269,6 @@ class AppLocalizationsTa extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'முன்னோட்டம் இன்னும் கிடைக்கவில்லை';
 
   @override
-  String get ringtoneVolumeMuted => 'கேட்க, வால்யூமைக் கூட்டுங்கள்';
-
-  @override
   String get ringtoneCurrentBadge => 'இப்போது';
 
   @override

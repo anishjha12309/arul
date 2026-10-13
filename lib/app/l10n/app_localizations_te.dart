@@ -269,9 +269,6 @@ class AppLocalizationsTe extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'ప్రివ్యూ ఇంకా అందుబాటులో లేదు';
 
   @override
-  String get ringtoneVolumeMuted => 'ఈ ప్రివ్యూ వినడానికి వాల్యూమ్ పెంచండి';
-
-  @override
   String get ringtoneCurrentBadge => 'ప్రస్తుతం';
 
   @override

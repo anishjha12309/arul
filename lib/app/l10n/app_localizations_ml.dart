@@ -269,9 +269,6 @@ class AppLocalizationsMl extends AppLocalizations {
   String get ringtonePreviewUnavailable => 'പ്രിവ്യൂ ഇപ്പോൾ ലഭ്യമല്ല';
 
   @override
-  String get ringtoneVolumeMuted => 'ഇത് കേൾക്കാൻ വോളിയം കൂട്ടൂ';
-
-  @override
   String get ringtoneCurrentBadge => 'ഇപ്പോൾ';
 
   @override

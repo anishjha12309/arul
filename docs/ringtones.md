@@ -74,6 +74,10 @@ ONE shared `just_audio` player for ALL previews: starting a track stops the prev
 decoder is ever held (the feed's video pool shares the device). Every now-playing affordance derives
 from the ONE `currentId`; clearing it stops the audio, never just dims the row.
 
+**A tap always plays, even at zero media volume — no "turn up the volume" toast (owner: it annoyed
+people).** While the preview plays, the volume keys move the media stream, so the person raises it
+themselves; a blocked tap would leave the keys on the ringer.
+
 Focus is **`GAIN_TRANSIENT`**, configured through `audio_session` (a direct dependency for that one
 reason) — just_audio's own default is the permanent `music()` gain, which kills the user's music for
 the rest of the session. It also takes focus on play and **never abandons it**, so every path back to

@@ -16,7 +16,7 @@ import '../../../data/models/ringtone.dart';
 
 const Object _absent = Object();
 
-enum RingtonePreviewIssue { none, unavailable, muted }
+enum RingtonePreviewIssue { none, unavailable }
 
 class RingtonePreviewState {
   const RingtonePreviewState({
@@ -34,8 +34,6 @@ class RingtonePreviewState {
   final RingtonePreviewIssue issue;
 
   bool get hasError => issue == RingtonePreviewIssue.unavailable;
-
-  bool get isMuted => issue == RingtonePreviewIssue.muted;
 
   bool isPlayingId(String id) => currentId == id && isPlaying;
 
@@ -256,26 +254,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     }
   }
 
-  /// Whether starting a preview right now would be inaudible.
-  ///
-  /// Only STREAM_MUSIC's own level counts. Android's ringer mode (silent/vibrate) gates the
-  /// ringtone and notification streams, never music — a user who silenced notifications but kept
-  /// their media volume up must still hear this preview, so ringer mode plays no part in the
-  /// answer. `getStreamVolume`/`getStreamMaxVolume`/`getRingerMode` are marked "(UNTESTED)" in the
-  /// audio_session source itself, so any failure here answers `false` — a flaky probe must never
-  /// block a preview the user could actually have heard.
-  Future<bool> _isMediaStreamMuted() async {
-    try {
-      final volume = await AndroidAudioManager().getStreamVolume(
-        AndroidStreamType.music,
-      );
-      return volume <= 0;
-    } catch (e) {
-      debugPrint('[RingtonePreview] volume probe unavailable: $e');
-      return false;
-    }
-  }
-
   /// Writes one volume value, never letting a platform hiccup here reach the caller -> a failed
   /// step just holds the last volume the player actually accepted.
   Future<void> _setVolumeSafe(double volume) async {
@@ -331,7 +309,7 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
   }
 
   /// Toggle play/pause for [ringtone]. A different track cross-fades rather than being
-  /// hard-stopped; an empty audio key, a fetch failure, or a muted stream sets
+  /// hard-stopped; an empty audio key or a fetch failure sets
   /// [RingtonePreviewState.issue] so the screen can toast — see [RingtonePreviewIssue].
   ///
   /// [reduceMotion] lets a caller holding a BuildContext pass `context.reduceMotion` straight in.
@@ -352,11 +330,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
         await _player.pause();
         await _releaseFocus();
       } else {
-        if (await _isMediaStreamMuted()) {
-          debugPrint('[RingtonePreview] muted, not starting (volume 0)');
-          state = state.copyWith(issue: RingtonePreviewIssue.muted);
-          return;
-        }
         if (!reduceFx) await _player.setVolume(0);
         final generation = ++_fadeGeneration;
         // NEVER `await` this. just_audio's own contract: the future completes when playback
@@ -394,8 +367,8 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
     } else {
       // No ramp available -> HARD CUT, the pre-fade behaviour. Under reduceMotion `_fadeOut`
       // returns immediately, so routing the outgoing clip through it would neither fade nor stop
-      // it: the old track would keep playing at full volume through the session await, the muted
-      // probe and the whole cache fetch, while the lit row already showed the NEW one. That is a
+      // it: the old track would keep playing at full volume through the session await and the whole
+      // cache fetch, while the lit row already showed the NEW one. That is a
       // low-tier-only path, which is exactly why the A001 walk could not see it.
       if (outgoingId != null) {
         debugPrint('[RingtonePreview] cut $outgoingId -> ${ringtone.id}');
@@ -413,15 +386,6 @@ class RingtonePreviewNotifier extends Notifier<RingtonePreviewState> {
       state = const RingtonePreviewState(
         issue: RingtonePreviewIssue.unavailable,
       );
-      return;
-    }
-
-    if (await _isMediaStreamMuted()) {
-      debugPrint('[RingtonePreview] muted, not starting (volume 0)');
-      await outgoingFaded;
-      await _player.stop();
-      await _releaseFocus();
-      state = const RingtonePreviewState(issue: RingtonePreviewIssue.muted);
       return;
     }
 

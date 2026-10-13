@@ -189,9 +189,6 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
           kind: ToastKind.error,
         );
         ref.read(ringtonePreviewProvider.notifier).clearError();
-      } else if (next.isMuted && !(prev?.isMuted ?? false)) {
-        showArulToast(context, l10n.ringtoneVolumeMuted, kind: ToastKind.error);
-        ref.read(ringtonePreviewProvider.notifier).clearError();
       }
     });
 
