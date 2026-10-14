@@ -159,7 +159,7 @@ const worker: WorkerType = {
           .then(async (results) => {
             console.log("[cron] Catalog rebuild complete:", JSON.stringify(results));
             // A failed scope leaves pages pointing at unreferenced objects -> deleting them breaks the feed -> skip the sweep
-            // Every scope { skipped: "no_change" } -> nothing was unreferenced this run -> nothing to reclaim
+            // Every scope { skipped: "no_change" } or { reshuffled } -> nothing was unreferenced this run -> nothing to reclaim
             const anyScopeError = Object.values(results).some(
               (r) => r && typeof r === "object" && "error" in r,
             );

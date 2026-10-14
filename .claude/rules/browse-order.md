@@ -14,8 +14,8 @@ paths:
   or empty falls back to `compareBrowseCategories` / `compareRingtoneCategories`; a partial list puts
   the named slugs first. An explicit order beats `others`-last.
 - **Order is ONE SQL clause in `build-catalog`**: `feed_rank ASC NULLS LAST, apply_count DESC,
-  created_at DESC, id ASC` (`set_count` + a second `NULLS LAST` for ringtones, `share_count +
-  download_count` for statuses), numbered into the
+  created_at DESC, id ASC` (`set_count` + a second `NULLS LAST` for ringtones; statuses are a
+  weighted shuffle instead, no pins — docs/status.md §Order), numbered into the
   catalog's `feed_rank`, which the shipped comparator sorts on. Same order on All and every category
   chip — a category IS All restricted. Never add a per-chip rank. New is the one exception (below).
 - **The trailing `id` is REQUIRED**: an import batch ties on `created_at`, and without a unique key

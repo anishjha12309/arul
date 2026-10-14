@@ -17,12 +17,14 @@ import { buildScope, buildCatalog, refreshPopularityOrder } from "../src/cron/bu
 
 function makeR2(existing: string[] = []) {
   const store = new Map<string, unknown>(existing.map((k) => [k, {}]));
+  const cache = new Map<string, string | undefined>();
   const bucket = {
     get: vi.fn(async (key: string) =>
       store.has(key) ? { text: async () => JSON.stringify(store.get(key)) } : null,
     ),
-    put: vi.fn(async (key: string, value: string) => {
+    put: vi.fn(async (key: string, value: string, opts?: R2PutOptions) => {
       store.set(key, JSON.parse(value));
+      cache.set(key, (opts?.httpMetadata as R2HTTPMetadata | undefined)?.cacheControl);
       return {} as R2Object;
     }),
     list: vi.fn(async (opts?: R2ListOptions) => ({
@@ -33,12 +35,33 @@ function makeR2(existing: string[] = []) {
       store.delete(key);
     }),
   } as unknown as R2Bucket;
-  return { bucket, store };
+  return { bucket, store, cache };
 }
 
 function sqlReturning(rows: Record<string, unknown>[]) {
   return vi.fn(async () => rows) as unknown as Parameters<typeof buildScope>[0];
 }
+
+const status = (id: string, extra: Record<string, unknown> = {}) => ({
+  id,
+  title: id,
+  category: "murugan",
+  full_key: `statuses/murugan/${id}.mp4`,
+  mime: "video/mp4",
+  duration_ms: 24000,
+  width: 1024,
+  height: 1824,
+  bytes: "8000000",
+  is_published: true,
+  feed_rank: null,
+  share_count: "3",
+  download_count: "4",
+  published_at: "2026-10-01T00:00:00Z",
+  renewed_at: null,
+  pre_renew_published_at: null,
+  created_at: "2026-10-01T00:00:00Z",
+  ...extra,
+});
 
 type Page = { items: Record<string, unknown>[]; total: number; total_pages: number; has_more: boolean };
 
@@ -155,37 +178,17 @@ describe("buildScope", () => {
   });
 
   // ── statuses: a third scope no fielded build fetches ──────────────────────
-  const status = (id: string, extra: Record<string, unknown> = {}) => ({
-    id,
-    title: id,
-    category: "murugan",
-    full_key: `statuses/murugan/${id}.mp4`,
-    mime: "video/mp4",
-    duration_ms: 24000,
-    width: 1024,
-    height: 1824,
-    bytes: "8000000",
-    is_published: true,
-    feed_rank: null,
-    share_count: "3",
-    download_count: "4",
-    published_at: "2026-10-01T00:00:00Z",
-    renewed_at: null,
-    pre_renew_published_at: null,
-    created_at: "2026-10-01T00:00:00Z",
-    ...extra,
-  });
 
-  it("statuses ship only the reel's fields, in the SQL's order, under catalog/statuses/", async () => {
+  it("statuses ship only the reel's fields under catalog/statuses/, drawn from a stable id order", async () => {
     const { bucket, store } = makeR2();
     const sql = vi.fn(async (..._args: unknown[]) => [status("s1"), status("s2")]);
-    const r = await buildScope(sql as never, bucket, "statuses");
+    // Equal weights + one fixed draw -> equal keys -> the stable sort keeps the SQL's order
+    const r = await buildScope(sql as never, bucket, "statuses", () => 0.5);
     expect(r).toMatchObject({ pages: 1, items: 2, skipped: 0 });
     const text = (sql.mock.calls[0]![0] as string[]).join("?");
     expect(text).toMatch(/FROM statuses/);
-    expect(text).toMatch(
-      /ORDER BY feed_rank ASC NULLS LAST, \(share_count \+ download_count\) DESC, created_at DESC, id ASC/,
-    );
+    expect(text).toMatch(/ORDER BY id ASC/);
+    expect(text).not.toMatch(/feed_rank/);
     const items = (store.get("catalog/statuses/all_1.json") as Page).items;
     expect(items.map((i) => i["id"])).toEqual(["s1", "s2"]);
     expect(Object.keys(items[0]!).sort()).toEqual(
@@ -207,6 +210,67 @@ describe("buildScope", () => {
     // The card is sized from the clip's own shape before its first frame -> the page carries it
     expect(items[0]).toMatchObject({ width: 1024, height: 1824 });
     expect(items[0]!["feed_rank"]).toBeLessThan(items[1]!["feed_rank"] as number);
+  });
+
+  it("statuses ignore a stale CMS pin: the draw alone decides the order, renumbered 10, 20, 30", async () => {
+    const { bucket, store } = makeR2();
+    const draws = [0.9, 0.1, 0.5]; // log(1 - u) -> 0.1 draws highest, then 0.5, then 0.9
+    let i = 0;
+    await buildScope(
+      sqlReturning([status("pinned", { feed_rank: 10 }), status("b"), status("c")]),
+      bucket,
+      "statuses",
+      () => draws[i++]!,
+      new Date("2026-12-01T00:00:00Z"),
+    );
+    const items = (store.get("catalog/statuses/all_1.json") as Page).items;
+    expect(items.map((x) => x["id"])).toEqual(["b", "c", "pinned"]);
+    expect(items.map((x) => x["feed_rank"])).toEqual([10, 20, 30]);
+  });
+
+  it("statuses lean to used and fresh clips without ever fixing the order", async () => {
+    const now = new Date("2026-10-14T12:00:00Z");
+    const rows = [
+      status("old", { share_count: "0", download_count: "0", published_at: "2026-01-01T00:00:00Z" }),
+      status("busy", { share_count: "900", download_count: "100", published_at: "2026-01-01T00:00:00Z" }),
+      status("fresh", { share_count: "0", download_count: "0", published_at: "2026-10-14T11:00:00Z" }),
+      status("renewed", {
+        share_count: "0",
+        download_count: "0",
+        published_at: "2026-10-14T11:00:00Z",
+        pre_renew_published_at: "2026-01-01T00:00:00Z",
+        renewed_at: "2026-10-14T11:00:00Z",
+      }),
+    ];
+    // A seeded LCG -> the same 4,000 draws every run, so the test cannot flake
+    let seed = 42;
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) % 2 ** 32;
+      return seed / 2 ** 32;
+    };
+    const firsts = new Map<string, number>();
+    for (let run = 0; run < 1000; run++) {
+      const { bucket, store } = makeR2();
+      await buildScope(sqlReturning(rows), bucket, "statuses", random, now);
+      const top = (store.get("catalog/statuses/all_1.json") as Page).items[0]!["id"] as string;
+      firsts.set(top, (firsts.get(top) ?? 0) + 1);
+    }
+    // Weights ~1 : 4 : 4 : 4 -> "old" leads ~1 in 13 runs, never 0 and never most
+    expect(firsts.get("old") ?? 0).toBeGreaterThan(30);
+    expect(firsts.get("old") ?? 0).toBeLessThan(150);
+    for (const id of ["busy", "fresh", "renewed"]) expect(firsts.get(id) ?? 0).toBeGreaterThan(200);
+  });
+
+  it("statuses ship as ONE short-cached page however many there are", async () => {
+    const { bucket, store, cache } = makeR2(["catalog/statuses/all_2.json"]);
+    const rows = Array.from({ length: 450 }, (_, i) => status(`s${i}`));
+    const r = await buildScope(sqlReturning(rows), bucket, "statuses");
+    expect(r).toMatchObject({ pages: 1, items: 450, deleted: 1 });
+    const page = store.get("catalog/statuses/all_1.json") as Page & { per_page: number };
+    expect(page).toMatchObject({ total: 450, total_pages: 1, has_more: false, per_page: 450 });
+    expect(new Set(page.items.map((x) => x["id"])).size).toBe(450);
+    expect(store.has("catalog/statuses/all_2.json")).toBe(false);
+    expect(cache.get("catalog/statuses/all_1.json")).toBe("public, max-age=600, stale-while-revalidate=600");
   });
 
   it("statuses skip a row with no full_key or a non-mp4 mime", async () => {
@@ -315,13 +379,42 @@ describe("buildCatalog with the statuses scope", () => {
     return Object.assign(fn, { end: vi.fn().mockResolvedValue(undefined) });
   }
 
-  async function runBuild(sql: unknown) {
-    const { bucket, store } = makeR2();
+  async function runBuild(sql: unknown, builtVersion?: string) {
+    const { bucket, store, cache } = makeR2();
     const env = makeEnv({ R2: bucket });
     (env as unknown as { _testSql: unknown })._testSql = sql;
+    if (builtVersion !== undefined) {
+      for (const s of ["wallpapers", "ringtones", "statuses"])
+        await env.KV.put(`catalog_version:${s}`, builtVersion);
+    }
     const results = await buildCatalog(env, null);
-    return { results, store };
+    return { results, store, cache };
   }
+
+  it("an unchanged catalog still reshuffles statuses, reported apart so the canonical sweep waits", async () => {
+    const { results, store, cache } = await runBuild(
+      routedSql(async () => [status("s1"), status("s2")]),
+      "42",
+    );
+    expect(results["wallpapers"]).toEqual({ skipped: "no_change" });
+    expect(results["ringtones"]).toEqual({ skipped: "no_change" });
+    expect(results["statuses"]).toEqual({ reshuffled: { pages: 1, items: 2, skipped: 0, deleted: 0 } });
+    // index.ts sweeps only when some result carries "pages" -> a reshuffle alone must not
+    expect(Object.values(results).some((r) => r && typeof r === "object" && "pages" in r)).toBe(false);
+    expect((store.get("catalog/statuses/all_1.json") as Page).items).toHaveLength(2);
+    expect(store.has("catalog/wallpapers/all_1.json")).toBe(false);
+    expect(cache.get("catalog/wallpapers/all_1.json")).toBeUndefined();
+    expect((store.get("catalog/version.json") as { content_version: string }).content_version).toBe("42");
+  });
+
+  it("a failed reshuffle is a scope error, so version.json is not rewritten over it", async () => {
+    const { results, store } = await runBuild(
+      routedSql(() => Promise.reject(new Error("boom"))),
+      "42",
+    );
+    expect(results["statuses"]).toMatchObject({ error: expect.stringContaining("boom") });
+    expect(store.has("catalog/version.json")).toBe(false);
+  });
 
   it("a missing statuses table builds an empty scope and still commits version.json", async () => {
     const missing = Object.assign(new Error('relation "statuses" does not exist'), { code: "42P01" });

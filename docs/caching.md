@@ -32,6 +32,9 @@ metadata rewrite. It also caches 404s for its full TTL (below).
   body is immutable for its `?v`. **Never let these fall back to `putPublicJson`'s `max-age=60`
   default**: at 60 s nearly every fetch was `REVALIDATED` against R2, and the ringtone tab's page drain
   stacked that into a multi-second first open.
+- `catalog/statuses/all_1.json` is the exception — `public, max-age=600, stale-while-revalidate=600`.
+  It is reshuffled every hour at the SAME `?v` ([status.md](status.md) §Order), so a day-long copy would
+  freeze one order per PoP; SWR keeps the refetch off the user's open.
 - Media uploaded by `tools/content-import/import.mjs` — `public, max-age=31536000, immutable` (keys are
   content UUIDs).
 - **Never request a media key before its object exists.** The edge caches the 404 (`cf-cache-status:

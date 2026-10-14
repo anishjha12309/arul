@@ -6,13 +6,17 @@
 import type { Env } from "../env.js";
 import { getDb } from "../lib/db.js";
 import { putPublicJson, getJsonString } from "../lib/r2.js";
-import { rankFor } from "../lib/feed-score.js";
+import { rankFor, statusWeight, weightedShuffle } from "../lib/feed-score.js";
 
 // 200/page holds ringtones to one page and the wallpaper library to a handful -> one parallel batch after page 1
 // The app reads per_page/total_pages out of the JSON -> this size is not a client contract -> it can change freely
 const PAGE_SIZE = 200;
 
 const CATALOG_PAGE_CACHE_CONTROL = "public, max-age=86400";
+
+// Statuses are reshuffled every hour at the SAME ?v= -> a day-long edge copy would hide every new order
+// 10 min bounds how stale a PoP's order gets; SWR serves the old copy while it refetches, so no open waits on R2
+const STATUS_PAGE_CACHE_CONTROL = "public, max-age=600, stale-while-revalidate=600";
 
 type ContentRow = Record<string, unknown>;
 
@@ -24,7 +28,12 @@ interface ScopeResult {
 }
 
 interface BuildResults {
-  [scope: string]: ScopeResult | { error: string } | { skipped: "no_change" } | { skipped: "locked" };
+  [scope: string]:
+    | ScopeResult
+    | { error: string }
+    | { skipped: "no_change" }
+    | { skipped: "locked" }
+    | { reshuffled: ScopeResult };
 }
 
 export async function buildCatalog(env: Env, scope: string | null, force = false): Promise<BuildResults> {
@@ -140,7 +149,13 @@ async function buildCatalogLocked(env: Env, scope: string | null, force: boolean
           const kvKey = `catalog_version:${s}`;
           const lastBuilt = await env.KV.get(kvKey);
           if (lastBuilt === contentVersion) {
-            results[s] = { skipped: "no_change" };
+            // Statuses reshuffle every run (owner: a new order hourly) -> the gate never skips them
+            // Reported apart from a real build -> no "pages" key, so the cron's canonical sweep still waits for a change
+            if (s === "statuses") {
+              results[s] = { reshuffled: await buildScope(sql, env.R2 as R2Bucket, s) };
+            } else {
+              results[s] = { skipped: "no_change" };
+            }
             continue;
           }
         }
@@ -400,6 +415,8 @@ export async function buildScope(
   sql: ReturnType<typeof getDb>,
   r2Bucket: R2Bucket,
   scope: string,
+  random: () => number = Math.random,
+  now: Date = new Date(),
 ): Promise<ScopeResult> {
   let rows: ContentRow[];
   if (scope === "wallpapers") {
@@ -463,7 +480,8 @@ export async function buildScope(
 
   // Already decided by the ORDER BY above -> validation only DROPS rows -> dropping preserves relative order
   // So the survivors are still in feed order and the ranks below stay contiguous, with no holes
-  const orderedRows = validRows;
+  // Statuses are the exception: a weighted shuffle of the survivors (owner) -> no pins, no fixed order
+  const orderedRows = scope === "statuses" ? shuffleStatuses(validRows, random, now) : validRows;
 
   // The whole catalog is drained before first paint -> every column is download weight -> keep the models' fields only
   // A dropped column is always-null or unread today -> re-add it to the keep-set the moment a model starts reading it
@@ -509,22 +527,25 @@ export async function buildScope(
   // build-catalog is otherwise write-only -> without this, a shrunk page count leaves an orphan serving deleted items
   const writtenKeys = new Set<string>();
 
-  const totalPages = Math.max(1, Math.ceil(publicRows.length / PAGE_SIZE));
+  // Statuses ship as ONE page -> the edge caches each page apart, so a multi-page drain could join two
+  // shuffles and show a clip twice while hiding another. ~350 B a clip keeps even thousands small
+  const pageSize = scope === "statuses" ? Math.max(1, publicRows.length) : PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(publicRows.length / pageSize));
   for (let page = 1; page <= totalPages; page++) {
-    const pageItems = publicRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    const pageItems = publicRows.slice((page - 1) * pageSize, page * pageSize);
     const key = `catalog/${scope}/all_${page}.json`;
     await putPublicJson(
       r2Bucket,
       key,
       {
         page,
-        per_page: PAGE_SIZE,
+        per_page: pageSize,
         total: publicRows.length,
         total_pages: totalPages,
         has_more: page < totalPages,
         items: pageItems,
       },
-      CATALOG_PAGE_CACHE_CONTROL,
+      scope === "statuses" ? STATUS_PAGE_CACHE_CONTROL : CATALOG_PAGE_CACHE_CONTROL,
     );
     writtenKeys.add(key);
   }
@@ -543,12 +564,45 @@ async function selectStatuses(sql: ReturnType<typeof getDb>): Promise<ContentRow
     return await sql`
       SELECT * FROM statuses
       WHERE is_published = true
-      ORDER BY feed_rank ASC NULLS LAST, (share_count + download_count) DESC, created_at DESC, id ASC
+      ORDER BY id ASC
     `;
   } catch (err) {
     if ((err as { code?: string } | null)?.code === "42P01") return [];
     throw err;
   }
+}
+
+/**
+ * The status feed order: a weighted shuffle on uses and newness (feed-score.ts), redrawn every build.
+ * `feed_rank` is IGNORED here -> the CMS no longer pins statuses, and a stale pin must not lead the feed.
+ * Newness runs from the later of published_at and renewed_at -> a CMS Renew restarts the 7-day boost.
+ */
+function shuffleStatuses(rows: ContentRow[], random: () => number, now: Date): ContentRow[] {
+  const uses = (row: ContentRow) =>
+    pgBigintToNumber(row["share_count"]) + pgBigintToNumber(row["download_count"]);
+  const maxUses = rows.reduce((m, row) => Math.max(m, uses(row)), 0);
+  return weightedShuffle(
+    rows,
+    (row) =>
+      statusWeight(
+        { uses: uses(row), freshAt: latestDate(row["published_at"] ?? row["created_at"], row["renewed_at"]) },
+        maxUses,
+        now,
+      ),
+    random,
+  );
+}
+
+/** postgres.js runs fetch_types:false -> timestamps arrive as ISO strings; unreadable is skipped, never NaN. */
+function latestDate(...values: unknown[]): Date | null {
+  let latest: Date | null = null;
+  for (const v of values) {
+    if (v === null || v === undefined) continue;
+    const d = v instanceof Date ? v : new Date(String(v));
+    if (Number.isNaN(d.getTime())) continue;
+    if (!latest || d > latest) latest = d;
+  }
+  return latest;
 }
 
 /**

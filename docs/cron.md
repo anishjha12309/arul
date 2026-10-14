@@ -33,7 +33,8 @@ with `cron-rehearse <cron> --twice --time <ms>`.
 
 1. **build-catalog** — a no-op when `content_version` is unchanged, so most hours only rewrite
    `app_config.json` and `version.json` (`built_at` moves on every successful run; the
-   `content_version` inside it is the change signal).
+   `content_version` inside it is the change signal) — and reshuffle statuses, which always rebuild and
+   report `{ reshuffled }`, not `pages` ([status.md](status.md) §Order).
 2. → **sweep-canonical**, only after a rebuild that fully succeeded AND touched a scope. On-change
    convenience, not the safety net.
 

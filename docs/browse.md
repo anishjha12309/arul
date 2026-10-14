@@ -15,7 +15,8 @@ It lives in `build-catalog`'s `buildScope()` and it is the WHOLE of the order: t
 lifetime uses, then recency, then `id`. `build-catalog` numbers the result into the catalog JSON's
 `feed_rank` field (`rankFor(i) = (i+1)*10`), which the shipped comparator (`feedOrder()` /
 `orderedByUse()`, both tabs) already sorts on — so a new order reaches installs that never update. The
-unified CMS's feed-order page copies this clause verbatim; keep the two in step.
+unified CMS's feed-order page copies this clause verbatim; keep the two in step. Statuses have no
+clause: a weighted shuffle, [status.md](status.md) §Order.
 
 - **The COLUMN and the JSON FIELD share a name and are different things.** The column is a nullable
   `integer` hand pin the CMS writes, read only by that ORDER BY; the field is a computed POSITION over

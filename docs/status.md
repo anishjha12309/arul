@@ -22,7 +22,22 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   is the error state with retry: every status publish writes it, so a user meeting it is an operational
   fault.
 - Chips derive from the items, ordered by `category_order.statuses`; row order is the catalog's
-  `feed_rank` (pins, then shares + saves), never re-derived on the phone.
+  `feed_rank`, never re-derived on the phone (§Order).
+
+## Order — a weighted shuffle, redrawn every hour (owner, 14 Oct 2026)
+
+- **No pins and no fixed order.** `build-catalog` draws a weighted random order (`weightedShuffle`,
+  `statusWeight` in `workers/src/lib/feed-score.ts`) and numbers it into `feed_rank`; the `feed_rank`
+  COLUMN is ignored for statuses and the CMS no longer offers a status pin. Same order for every phone
+  until the next draw; a category chip is All filtered, as on the other tabs.
+- **Weight = 1 + 3 × uses + 3 × fresh.** Uses = `share_count + download_count`, log-scaled against the
+  busiest clip so one viral clip cannot own slot 1. Fresh fades 1 → 0 over 7 days from the later of
+  `published_at` and `renewed_at` (a CMS Renew restarts it). The floor of 1 keeps every clip in reach.
+- **Redrawn on every build, including the hourly no-change run**, reported as `{ reshuffled }` so the
+  canonical sweep still waits for a real change. Each draw reads the counters live from Neon.
+- **ONE page, short-cached** ([caching.md](caching.md)): the edge caches pages apart, so two pages could
+  join two draws and show a clip twice. The app drains it once per process, so a new draw lands on the
+  next cold start or pull-to-refresh, never mid-scroll.
 - **The tab wears the feed's faces with its own words**: the loading card says status videos
   (`statusLoadingBody`), never wallpapers; empty is `FeedEmpty` with Browse all; a failure is
   `FeedError`; offline with NOTHING loaded is the offline card (`offlineStatusBody`), while clips

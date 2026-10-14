@@ -74,12 +74,14 @@ Moderation never ships a dimension-violating video: approve copies bytes verbati
 ## Catalog generation
 
 Trigger: a CMS mutation, `POST /internal/build-catalog`, or the hourly cron (a no-op while
-`app_config.content_version` is unchanged). Output per scope (`wallpapers`, `ringtones`, `statuses`):
-`catalog/<scope>/all_<page>.json`, ONE page set each at 200 rows/page, no per-category files — plus the
+`app_config.content_version` is unchanged, bar the status reshuffle). Output per scope (`wallpapers`,
+`ringtones`, `statuses`): `catalog/<scope>/all_<page>.json`, ONE page set each at 200 rows/page
+(statuses: always one page), no per-category files — plus the
 shared `catalog/version.json` (the pointer the app reads first, then `?v=<version>` on pages) and
 `catalog/app_config.json` (the public config subset).
 
-- **Row order is ONE SQL clause numbered into the catalog's `feed_rank` field** ([browse.md](browse.md)).
+- **Row order is ONE SQL clause numbered into the catalog's `feed_rank` field** ([browse.md](browse.md));
+  statuses are a weighted shuffle instead ([status.md](status.md) §Order).
   Order server-side, because the catalog is the only channel that reaches installs that never update;
   chips stay client-side.
 - **A zero-row scope still writes a valid empty `all_1.json`** — a 404 there means the build FAILED,
