@@ -84,6 +84,17 @@ class _FakeWatermarkService implements ShareWatermarkService {
   /// Watermark attempts made across both media kinds -> the retry assertions read this.
   int attempts = 0;
 
+  // Status-only; no wallpaper path may reach it.
+  @override
+  Future<File> overlayVideo(
+    File src,
+    Uint8List overlayPng, {
+    required String outPath,
+    int? canvasWidth,
+    int? canvasHeight,
+    int? contentHeight,
+  }) => throw StateError('wallpaper share must never call overlayVideo');
+
   @override
   WatermarkSpec plan({required String wallpaperId, String? userId}) {
     planned.add(wallpaperId);

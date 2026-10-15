@@ -7,10 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/widgets/arul_browse_header.dart';
 import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_icon_tap.dart';
 import '../../../app/widgets/arul_line_icons.dart';
+import '../../../app/widgets/arul_pressable.dart';
+import '../../../app/widgets/arul_screen_header.dart';
 import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/reel/feed_card_geometry.dart';
 import '../../../app/widgets/reel/reel_card.dart';
@@ -22,14 +23,20 @@ import '../../../core/connectivity/connectivity_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/haptics/arul_haptics.dart';
+import '../../../core/providers/locale_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
+import '../../settings/presentation/language_sheet.dart';
 import '../../wallpapers/presentation/feed_states.dart';
+import '../data/status_overlay.dart';
 import '../domain/status_video.dart';
 import '../providers/status_action_provider.dart';
+import '../providers/status_persona_provider.dart';
 import '../providers/status_providers.dart';
+import 'status_persona_sheet.dart';
 import 'status_preparing_card.dart';
 import 'status_share_sheet.dart';
 
@@ -46,6 +53,9 @@ enum StatusVerb {
 /// The Status tab: devotional clips with music in the same reel the wallpaper feed uses.
 class StatusScreen extends ConsumerStatefulWidget {
   const StatusScreen({super.key});
+
+  /// Set once the first visit has asked the language (owner: never twice).
+  static const languageAskedKey = 'arul_status_lang_asked';
 
   @override
   ConsumerState<StatusScreen> createState() => _StatusScreenState();
@@ -76,6 +86,24 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     _video = ref.read(statusVideoControllerProvider);
     // A status link landing on an already-built screen must re-run the build that consumes it.
     ArulDeepLink.changes.addListener(_onDeepLinkChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskLanguage());
+  }
+
+  /// Owner: the first Status visit asks the language ONCE and makes it the app language, so
+  /// that language's statuses lead. A visit that arrives on a status link answers first.
+  Future<void> _maybeAskLanguage() async {
+    final prefs = ref.read(sharedPreferencesProvider);
+    if (prefs.getBool(StatusScreen.languageAskedKey) ?? false) return;
+    if (ArulDeepLink.pendingTarget is StatusLinkTarget) return;
+    await prefs.setBool(StatusScreen.languageAskedKey, true);
+    if (!mounted) return;
+    final current = appLanguageName(ref.read(localeProvider).languageCode);
+    final next = await showLanguageSheet(context, current);
+    final code = next == null ? null : appLanguageCodeFor(next);
+    if (code == null || !mounted) return;
+    await ref
+        .read(localeProvider.notifier)
+        .setLocale(Locale(code), source: LanguageSource.pick);
   }
 
   void _onDeepLinkChanged() {
@@ -166,9 +194,14 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     // First data on All: the build that follows runs [_sync] -> the pager and the pool start ON the
     // target. A detour through card 0 opened its clip and staged card 1 against the one the link
     // asked for: three transfers for one card, 34-60 s on a slow 4G.
-    if (_served == null &&
-        ref.read(selectedStatusCategoryProvider) == allSlug) {
+    if (_served == null && ref.read(activeStatusCategoryProvider) == allSlug) {
       _pendingIndex = index;
+      // Pin All -> the app language's category must not take the reel once the link is spent.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(selectedStatusCategoryProvider.notifier).select(allSlug);
+        }
+      });
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -335,7 +368,9 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              ArulBrowseHeader(
+              // Shubh's status header: the title band, then a 36 dp chip row and 12 dp of air -> every dp
+              // the browse tabs spend above their reels here goes to the clip's width instead.
+              ArulScreenHeader(
                 title: l10n.statusTitle,
                 actions: [
                   ArulIconTap.glyph(
@@ -345,10 +380,14 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                     onTap: () => context.push('/settings'),
                   ),
                 ],
-                chips: feed.hasValue
+              ),
+              SizedBox(
+                height: ArulChip.denseStripHeight,
+                child: feed.hasValue
                     ? const StatusChips()
                     : const FeedChipsSkeleton(),
               ),
+              const SizedBox(height: 12),
               Expanded(
                 // One LayoutBuilder for loading AND reel -> the skeleton and the card share a rect.
                 child: offline
@@ -409,6 +448,26 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   static const _pageMargin = EdgeInsets.symmetric(horizontal: 12);
   static const _pageInset = EdgeInsets.symmetric(horizontal: 12, vertical: 4);
 
+  /// Below API 31 the export would crash, so the sheet explains instead (owner).
+  Future<void> _openPersona() async {
+    // A double tap would stack two sheets.
+    if (_personaOpen) return;
+    _personaOpen = true;
+    try {
+      final supported = await ref.read(statusPersonaSupportedProvider.future);
+      if (!mounted) return;
+      if (!supported) {
+        await StatusPersonaSheet.showUnsupported(context);
+        return;
+      }
+      await StatusPersonaSheet.show(context);
+    } finally {
+      _personaOpen = false;
+    }
+  }
+
+  bool _personaOpen = false;
+
   Widget _buildReel(List<StatusVideo> items, Size reel, AppLocalizations l10n) {
     _sync(items);
     final busy = ref.watch(
@@ -417,9 +476,19 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     final p = ArulPalette.of(context);
     // One status per page, the whole reel (Shubh's status view): the clip's box is the largest of
     // its own shape inside the page, centred — no peek of the next clip, nothing beside the picture.
-    final box = _pageInset.deflateSize(reel);
+    // The page is the reel minus the bar under it; the clip's box is the largest of its shape inside.
+    final box = _pageInset.deflateSize(
+      Size(reel.width, reel.height - StatusActionBar.height),
+    );
 
-    return Stack(
+    final current = items[_index.clamp(0, items.length - 1)];
+    final nameBand = ref.watch(statusNameBandProvider);
+    // Shubh's status view: the clip alone on the page, the verbs in ONE fixed bar under the reel that
+    // acts on the clip in view -> nothing of ours over the name strip or the photo slots.
+    return Column(
+      children: [
+        Expanded(
+          child: Stack(
       fit: StackFit.expand,
       children: [
         // A pull on the first card re-reads the catalog, exactly as the wallpaper reel's does;
@@ -441,56 +510,71 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
               _video.onPageChanged(i);
               _onCardSettled(items[i]);
             },
-            itemBuilder: (context, i) => Center(
-              child: SizedBox.fromSize(
-                size: FeedCardGeometry.contain(box, items[i].aspect),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(FeedCardGeometry.radius),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      // Tap pauses and resumes; vertical drags still belong to the pager.
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () {
-                          ArulHaptics.tap();
-                          _video.toggleHeldByUser();
-                        },
-                        child: ReelMedia(
-                          controller: _video,
-                          index: i,
-                          builder: (context, slot) =>
-                              StatusMedia(status: items[i], slot: slot),
-                        ),
-                      ),
-                      IgnorePointer(
-                        child: _HeldMark(controller: _video, index: i),
-                      ),
-                      ReelCardChrome(
-                        actions: ReelActionBar(
-                          busy: busy,
-                          primary: ReelAction(
-                            icon: Icons.send_rounded,
-                            image: const AssetImage(
-                              'assets/images/whatsapp.webp',
+            itemBuilder: (context, i) {
+              final status = items[i];
+              // The name band sits under the clip, so the card is the clip plus the band, fitted as one.
+              final height = status.height ?? 1824;
+              final band = nameBand
+                  ? StatusOverlaySpec.bandPxFor(height) / height
+                  : 0.0;
+              final card = FeedCardGeometry.contain(
+                box,
+                status.aspect * (1 + band),
+              );
+              return Center(
+                child: SizedBox.fromSize(
+                  size: card,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      FeedCardGeometry.radius,
+                    ),
+                    child: ColoredBox(
+                      color: ArulTokens.darkSurface,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            right: 0,
+                            height: card.height / (1 + band),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // Tap pauses and resumes; vertical drags still belong to the pager.
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () {
+                                    ArulHaptics.tap();
+                                    _video.toggleHeldByUser();
+                                  },
+                                  child: ReelMedia(
+                                    controller: _video,
+                                    index: i,
+                                    builder: (context, slot) =>
+                                        StatusMedia(status: status, slot: slot),
+                                  ),
+                                ),
+                                IgnorePointer(
+                                  child: _HeldMark(controller: _video, index: i),
+                                ),
+                              ],
                             ),
-                            label: l10n.statusWhatsapp,
-                            semanticsId: 'arul_status_whatsapp',
-                            onTap: () => _onAction(StatusVerb.share, items[i]),
                           ),
-                          secondary: ReelAction(
-                            icon: Icons.file_download_outlined,
-                            label: l10n.statusSave,
-                            semanticsId: 'arul_status_save',
-                            onTap: () => _onAction(StatusVerb.save, items[i]),
+                          Positioned.fill(
+                            child: _PersonaLayer(
+                              status: status,
+                              onEdit: _openPersona,
+                              onAddPhoto: _openPersona,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
         if (_fetchingBehind)
@@ -500,6 +584,15 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
             right: _pageMargin.right,
             child: const _StatusTransferProgress(),
           ),
+      ],
+          ),
+        ),
+        StatusActionBar(
+          busy: busy,
+          onPhoto: _openPersona,
+          onSave: () => _onAction(StatusVerb.save, current),
+          onShare: () => _onAction(StatusVerb.share, current),
+        ),
       ],
     );
   }
@@ -599,14 +692,16 @@ class StatusChips extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final categories = ref.watch(statusCategoriesProvider);
-    final selected = ref.watch(selectedStatusCategoryProvider);
+    final selected = ref.watch(activeStatusCategoryProvider);
     if (categories.isEmpty) return const SizedBox.shrink();
-    final items = <WallpaperCategory>[
-      WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll),
-      ...categories,
-    ];
+    final all = WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll);
+    // The app language's category leads even All (owner); the provider already put it first.
+    final lead = statusSlugForLanguage(ref.watch(localeProvider).languageCode);
+    final items = categories.first.slug == lead
+        ? <WallpaperCategory>[categories.first, all, ...categories.skip(1)]
+        : <WallpaperCategory>[all, ...categories];
     return SizedBox(
-      height: ArulChip.categoryStripHeight,
+      height: ArulChip.denseStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
@@ -620,12 +715,353 @@ class StatusChips extends ConsumerWidget {
             label: c.label,
             selected: c.slug == selected,
             variant: ArulChipVariant.category,
+            dense: true,
             identifier: 'arul_status_chip_${c.slug}',
             onTap: () => ref
                 .read(selectedStatusCategoryProvider.notifier)
                 .select(c.slug),
           );
         },
+      ),
+    );
+  }
+}
+
+/// The user's photo and name painted over the clip exactly as the export burns them in, plus the
+/// tap targets: the photo opens the sheet, an empty slot offers to add one.
+class _PersonaLayer extends ConsumerWidget {
+  const _PersonaLayer({
+    required this.status,
+    required this.onEdit,
+    required this.onAddPhoto,
+  });
+
+  final StatusVideo status;
+  final VoidCallback onEdit;
+  final VoidCallback onAddPhoto;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (ref.watch(statusPersonaSupportedProvider).value != true) {
+      return const SizedBox.shrink();
+    }
+    final persona = ref.watch(statusPersonaProvider).value;
+    if (persona == null) return const SizedBox.shrink();
+    final name = persona.showName ? ref.watch(statusPersonaNameProvider) : null;
+    final spec = StatusOverlaySpec(
+      photo: persona.shownPhoto,
+      name: name,
+      slot: status.photoSlot,
+      clipHeightPx: status.height ?? 1824,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = StatusOverlayLayout.of(constraints.biggest, spec);
+        final spot =
+            layout.photo ??
+            StatusOverlayLayout.photoSpot(layout.clip.size, status.photoSlot);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              child: CustomPaint(painter: StatusOverlayPainter(spec)),
+            ),
+            // Slots reach the clip's bottom edge; clipped like the painted photo, nothing spills on the band.
+            Positioned.fromRect(
+              rect: layout.clip,
+              child: ClipRect(
+                child: Stack(
+                  children: [
+                    if (persona.photo != null && persona.showPhoto)
+                      Positioned.fromRect(
+                        rect: spot,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onEdit,
+                        ),
+                      )
+                    else if (persona.showPhoto)
+                      Positioned.fromRect(
+                        rect: spot,
+                        child: _AddPhotoMedallion(onTap: onAddPhoto),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Shubh's empty-profile placeholder in Arul's maroon and gold: it covers the clip's own slot art
+/// until a photo is picked, and is never burnt into a shared or saved clip.
+class _AddPhotoMedallion extends StatelessWidget {
+  const _AddPhotoMedallion({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: AppLocalizations.of(context).statusAddPhoto,
+      identifier: 'arul_status_add_photo',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          ArulHaptics.tap();
+          onTap();
+        },
+        child: const Image(
+          image: AssetImage('assets/images/status_add_photo.webp'),
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
+      ),
+    );
+  }
+}
+
+/// Shubh's bottom bar: Photo and Save as quiet pills, the WhatsApp share filling the rest.
+@visibleForTesting
+class StatusActionBar extends StatelessWidget {
+  const StatusActionBar({super.key, 
+    required this.busy,
+    required this.onPhoto,
+    required this.onSave,
+    required this.onShare,
+  });
+
+  /// What Shubh's reel gives its bar (its PageView keeps 56 clear under the template).
+  static const height = 56.0;
+
+  static const _gap = 8.0;
+
+  final bool busy;
+  final VoidCallback onPhoto;
+  final VoidCallback onSave;
+  final VoidCallback onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final en = lookupAppLocalizations(const Locale('en'));
+    final p = ArulPalette.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: p.surface,
+        border: Border(top: BorderSide(color: p.divider)),
+      ),
+      child: SizedBox(
+        height: height,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final fit = _BarFit.of(
+                context,
+                room: constraints.maxWidth - 2 * _gap,
+                labels: [l10n.statusPhoto, l10n.statusSave, l10n.statusWhatsapp],
+                english: [en.statusPhoto, en.statusSave, en.statusWhatsapp],
+              );
+              return Row(
+                children: [
+                  SizedBox(
+                    width: fit.widths[0],
+                    child: _BarPill(
+                      icon: Icons.add_a_photo_outlined,
+                      label: fit.labels[0],
+                      showGlyph: fit.quietGlyphs,
+                      padH: fit.padH,
+                      identifier: 'arul_status_photo',
+                      onTap: onPhoto,
+                    ),
+                  ),
+                  const SizedBox(width: _gap),
+                  SizedBox(
+                    width: fit.widths[1],
+                    child: _BarPill(
+                      icon: Icons.file_download_outlined,
+                      label: fit.labels[1],
+                      showGlyph: fit.quietGlyphs,
+                      padH: fit.padH,
+                      identifier: 'arul_status_save',
+                      onTap: busy ? null : onSave,
+                    ),
+                  ),
+                  const SizedBox(width: _gap),
+                  Expanded(
+                    child: _BarPill(
+                      image: const AssetImage('assets/images/whatsapp.webp'),
+                      label: fit.labels[2],
+                      showGlyph: true,
+                      padH: fit.padH,
+                      identifier: 'arul_status_whatsapp',
+                      primary: true,
+                      onTap: busy ? null : onShare,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// How the three pills share the row, decided once for the whole bar: the translations with their
+/// glyphs, else any label that does not fit in plain English (owner: an overflowing label reads in
+/// English, never shrunk or cut), else the quiet pills without glyphs, else tighter padding.
+class _BarFit {
+  const _BarFit(this.labels, this.widths, this.quietGlyphs, this.padH);
+
+  factory _BarFit.of(
+    BuildContext context, {
+    required double room,
+    required List<String> labels,
+    required List<String> english,
+  }) {
+    // Up to a dozen attempts re-measure the same six labels on every layout -> one TextPainter each.
+    final measured = <String, double>{};
+    double text(String s) => measured[s] ??= _BarPill.textWidth(context, s);
+    _BarFit? attempt(List<String> chosen, {required bool glyphs, required double pad}) {
+      // The quiet pills' 0.5 rim is padding too: a Container adds its border's width inside.
+      double pill(int i, {required bool glyph}) =>
+          2 * pad +
+          (i < 2 ? 1 : 0) +
+          (glyph ? _BarPill.glyphSize + _BarPill.glyphGap : 0) +
+          text(chosen[i]);
+      final widths = [pill(0, glyph: glyphs), pill(1, glyph: glyphs), pill(2, glyph: true)];
+      final need = widths.reduce((a, b) => a + b);
+      return need <= room ? _BarFit(chosen, widths, glyphs, pad) : null;
+    }
+
+    // A label only switches language when IT is the one that cannot fit: the widest English
+    // fallback first, so a bar that overflows by one word changes one word.
+    final mixed = [...labels];
+    final order = [0, 1, 2]..sort((a, b) => text(labels[b]).compareTo(text(labels[a])));
+    final steps = <List<String>>[
+      [...labels],
+      for (final i in order) [...(mixed..[i] = english[i])],
+    ];
+    for (final pad in [12.0, 8.0]) {
+      for (final glyphs in [true, false]) {
+        for (final chosen in steps) {
+          final fit = attempt(chosen, glyphs: glyphs, pad: pad);
+          if (fit != null) return fit;
+        }
+      }
+    }
+    // Nothing fits even in English, glyph-less and tight: English, and the share keeps the rest.
+    final last = attempt(english, glyphs: false, pad: 8);
+    return last ?? _BarFit(english, [room * 0.3, room * 0.3, room * 0.4], false, 8);
+  }
+
+  final List<String> labels;
+
+  /// Natural widths; the share's is only a floor, it fills the rest of the row.
+  final List<double> widths;
+  final bool quietGlyphs;
+  final double padH;
+}
+
+class _BarPill extends StatelessWidget {
+  const _BarPill({
+    required this.label,
+    required this.identifier,
+    required this.onTap,
+    required this.showGlyph,
+    required this.padH,
+    this.icon,
+    this.image,
+    this.primary = false,
+  });
+
+  final IconData? icon;
+  final ImageProvider? image;
+  final String label;
+  final String identifier;
+  final VoidCallback? onTap;
+  final bool showGlyph;
+  final double padH;
+
+  /// The share: the green CTA fill, white glyph and label, widened to the rest of the row.
+  final bool primary;
+
+  static const glyphSize = 18.0;
+  static const glyphGap = 5.0;
+
+  static TextStyle style(Color ink) => ArulTokens.button.copyWith(
+    fontSize: 13.5,
+    fontWeight: FontWeight.w600,
+    color: ink,
+  );
+
+  /// The label's laid-out width at the phone's own text scale, plus rounding slack.
+  static double textWidth(BuildContext context, String text) {
+    // Merged over the inherited style, exactly as the Text will be, or the two disagree on the font.
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        // Only the width matters here -> any ink will do.
+        style: DefaultTextStyle.of(context).style.merge(style(ArulTokens.ivory)),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final width = painter.width.ceilToDouble() + 2;
+    painter.dispose();
+    return width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = ArulPalette.of(context);
+    final ink = primary ? ArulTokens.onCta : p.text;
+    final image = this.image;
+    return ArulPressable(
+      identifier: identifier,
+      semanticLabel: label,
+      haptic: ArulHapticStyle.firm,
+      onTap: onTap,
+      builder: (context, _) => Opacity(
+        opacity: onTap == null ? 0.55 : 1,
+        child: Container(
+          height: double.infinity,
+          padding: EdgeInsets.symmetric(horizontal: padH),
+          decoration: BoxDecoration(
+            color: primary ? ArulTokens.ctaGreen : p.controlFill,
+            borderRadius: BorderRadius.circular(22),
+            border: primary ? null : Border.all(color: p.border, width: 0.5),
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showGlyph) ...[
+                if (image != null)
+                  Image(image: image, width: glyphSize, height: glyphSize)
+                else if (icon != null)
+                  Icon(icon, size: 17, color: p.controlInk),
+                const SizedBox(width: glyphGap),
+              ],
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style(ink),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

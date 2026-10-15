@@ -273,4 +273,26 @@ void main() {
       reason: 'a stale card decodes off screen for nothing',
     );
   });
+
+  testWidgets('a held reel opens no decoder on a swipe until it is reclaimed', (
+    tester,
+  ) async {
+    controller = build(visible: true);
+    controller.setItems(clips);
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await controller.holdDecoders();
+    calls.clear();
+    await controller.onPageChanged(1);
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(
+      calls.where((c) => c.method == 'create' || c.method == 'open'),
+      isEmpty,
+      reason: 'the export needs every codec the SoC has',
+    );
+
+    controller.reclaimDecoders();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(calls.where((c) => c.method == 'open'), isNotEmpty);
+  });
 }

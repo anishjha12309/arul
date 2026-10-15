@@ -3,16 +3,20 @@
 // The gate is read on EVERY action, cached bytes or not; a 403 routes to the paywall, never a crash.
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
+import 'package:arul/app/widgets/reel/video_preload_controller.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
 import 'package:arul/features/status/data/status_media_service.dart';
+import 'package:arul/features/status/domain/status_photo_slot.dart';
 import 'package:arul/features/status/domain/status_video.dart';
 import 'package:arul/features/status/providers/status_action_provider.dart';
+import 'package:arul/features/status/providers/status_persona_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/wallpapers/data/direct_share_service.dart';
 import 'package:arul/features/wallpapers/data/share_watermark_service.dart';
@@ -128,6 +132,24 @@ class _FakeDirectShare implements DirectShareService {
 /// Status never watermarks -> every method here records, and the suite asserts it stayed empty.
 class _FakeWatermark implements ShareWatermarkService {
   final calls = <String>[];
+  bool supported = true;
+  Uint8List? overlay;
+  (int?, int?, int?)? canvas;
+
+  @override
+  Future<File> overlayVideo(
+    File src,
+    Uint8List overlayPng, {
+    required String outPath,
+    int? canvasWidth,
+    int? canvasHeight,
+    int? contentHeight,
+  }) async {
+    calls.add('overlay_video');
+    overlay = overlayPng;
+    canvas = (canvasWidth, canvasHeight, contentHeight);
+    return File(outPath)..writeAsBytesSync(List.filled(16, 5));
+  }
 
   @override
   WatermarkSpec plan({required String wallpaperId, String? userId}) {
@@ -138,7 +160,7 @@ class _FakeWatermark implements ShareWatermarkService {
   @override
   Future<({bool supported, int sdkInt})> videoWatermarkSupport() async {
     calls.add('support');
-    return (supported: true, sdkInt: 34);
+    return (supported: supported, sdkInt: supported ? 34 : 30);
   }
 
   @override
@@ -170,6 +192,39 @@ class _FakeWatermark implements ShareWatermarkService {
     calls.add('overlay');
     return Uint8List(0);
   }
+}
+
+class _FixedPersona extends StatusPersonaNotifier {
+  _FixedPersona(this.persona);
+
+  final StatusPersona persona;
+
+  @override
+  Future<StatusPersona> build() async => persona;
+}
+
+const _slotClip = StatusVideo(
+  id: 'c0ffee02-1c2d-4f3a-9b8e-7d6c5a4b3e2f',
+  title: 'Amman',
+  category: 'tamil',
+  key: 'statuses/tamil/c0ffee02.mp4',
+  width: 768,
+  height: 1152,
+  photoSlot: StatusPhotoSlot(
+    left: 0.3583,
+    top: 0.6865,
+    size: 0.2917,
+    shape: StatusSlotShape.softCircle,
+  ),
+);
+
+Future<ui.Image> _photo() async {
+  final recorder = ui.PictureRecorder();
+  ui.Canvas(recorder).drawRect(
+    const ui.Rect.fromLTWH(0, 0, 64, 64),
+    ui.Paint()..color = const ui.Color(0xFF3366CC),
+  );
+  return recorder.endRecording().toImage(64, 64);
 }
 
 /// A real CacheManager starts disk work in its constructor; nothing here ever calls it.
@@ -242,9 +297,22 @@ void main() {
   ProviderContainer container({
     required _FakeMedia media,
     _FakeDirectShare? direct,
+    StatusPersona? persona,
+    String? name,
   }) {
     final c = ProviderContainer(
       overrides: [
+        if (persona != null) ...[
+          statusPersonaProvider.overrideWith(() => _FixedPersona(persona)),
+          statusPersonaNameProvider.overrideWithValue(name),
+          statusVideoControllerProvider.overrideWithValue(
+            VideoPreloadController<StatusVideo>(
+              cdnBaseUrl: 'https://cdn.test',
+              prefetch: _NoPrefetch(),
+              visible: false,
+            ),
+          ),
+        ],
         statusTempDirProvider.overrideWith((_) async => tmp),
         statusMediaServiceProvider.overrideWithValue(media),
         statusPrefetchServiceProvider.overrideWithValue(_NoPrefetch()),
@@ -370,6 +438,8 @@ void main() {
         'category': 'murugan',
         'result': 'unavailable',
         'watermarked': false,
+        'with_photo': false,
+        'with_name': false,
         'channel': 'status',
         'via': 'composer',
         'has_whatsapp': true,
@@ -589,7 +659,7 @@ void main() {
   });
 
   group('Save', () {
-    test('saves the fetched clip byte for byte under a fresh name', () async {
+    test('with nothing to burn in, saves the fetched clip byte for byte under a fresh name', () async {
       final media = _FakeMedia();
       final c = container(media: media);
       final stages = <StatusActionState>[];
@@ -611,6 +681,8 @@ void main() {
         'status_id': _clip.id,
         'category': 'murugan',
         'watermarked': false,
+        'with_photo': false,
+        'with_name': false,
       });
     });
 
@@ -683,5 +755,66 @@ void main() {
     expect(s.feedRank, 3);
     expect(s.durationMs, 21000);
     expect(s.thumbUrl('c'), 'c/thumbs/statuses/amman/x.jpg');
+  });
+
+  group('your photo and name', () {
+    test('burnt in at the clip\'s own size, on share and on save', () async {
+      final photo = await _photo();
+      final media = _FakeMedia();
+      final direct = _FakeDirectShare(composer: true);
+      final c = container(
+        media: media,
+        direct: direct,
+        persona: StatusPersona(photo: photo),
+        name: 'Anish',
+      );
+      final actions = c.read(statusActionProvider.notifier);
+      expect(await actions.prepareShare(_slotClip), isA<StatusShareReady>());
+      expect(
+        await actions.shareVia(StatusShareTarget.status),
+        StatusActionOutcome.done,
+      );
+      expect(watermark.calls, contains('overlay_video'));
+      final codec = await ui.instantiateImageCodec(watermark.overlay!);
+      final frame = await codec.getNextFrame();
+      // The clip plus its 64 px name band, and the export told to grow the frame to match.
+      expect((frame.image.width, frame.image.height), (768, 1216));
+      expect(watermark.canvas, (768, 1216, 1152));
+      expect(analytics.props['status_shared'], containsPair('with_photo', true));
+      expect(analytics.props['status_shared'], containsPair('with_name', true));
+
+      watermark.calls.clear();
+      expect(await actions.save(_slotClip), StatusActionOutcome.done);
+      expect(watermark.calls, contains('overlay_video'));
+      expect(media.savedFrom.single, contains('-me-'));
+    });
+
+    test('Android 11 and older: the clip goes out as it is', () async {
+      watermark.supported = false;
+      final media = _FakeMedia();
+      final c = container(
+        media: media,
+        persona: StatusPersona(photo: await _photo()),
+        name: 'Anish',
+      );
+      expect(
+        await c.read(statusActionProvider.notifier).save(_slotClip),
+        StatusActionOutcome.done,
+      );
+      expect(watermark.calls, isNot(contains('overlay_video')));
+      expect(media.savedFrom.single, isNot(contains('-me-')));
+      expect(analytics.props['status_saved'], containsPair('with_photo', false));
+    });
+
+    test('nothing switched on: no export at all', () async {
+      final media = _FakeMedia();
+      final c = container(
+        media: media,
+        persona: StatusPersona(photo: await _photo(), showPhoto: false, showName: false),
+        name: 'Anish',
+      );
+      await c.read(statusActionProvider.notifier).save(_slotClip);
+      expect(watermark.calls, isEmpty);
+    });
   });
 }

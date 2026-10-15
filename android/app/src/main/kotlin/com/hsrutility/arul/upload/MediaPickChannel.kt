@@ -2,6 +2,8 @@ package com.hsrutility.arul.upload
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
@@ -45,6 +47,7 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "pick" -> pick(call.argument<String>("kind"), result)
+            "squarePhoto" -> squarePhoto(call, result)
             else -> result.notImplemented()
         }
     }
@@ -57,6 +60,7 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
         val intent = when (kind) {
             "audio" -> audioIntent()
             "video" -> visualMediaIntent(PickVisualMedia.VideoOnly)
+            "image" -> visualMediaIntent(PickVisualMedia.ImageOnly)
             else -> visualMediaIntent(PickVisualMedia.ImageAndVideo)
         }
         try {
@@ -139,6 +143,65 @@ class MediaPickChannel(private val activity: Activity) : MethodChannel.MethodCal
         val ext = activity.contentResolver.getType(uri)
             ?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
         return if (ext.isNullOrBlank()) base else "$base.$ext"
+    }
+
+    // ImageDecoder, not BitmapFactory -> it reads HEIC and applies the EXIF rotation a phone camera
+    // writes, so a portrait selfie never lands sideways in the status slot.
+    private fun squarePhoto(call: MethodCall, result: MethodChannel.Result) {
+        val input = call.argument<String>("inputPath")
+        val output = call.argument<String>("outputPath")
+        val side = call.argument<Int>("side") ?: 0
+        if (input.isNullOrEmpty() || output.isNullOrEmpty() || side <= 0) {
+            result.error("bad_input", "inputPath, outputPath and side are required", null)
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            result.error("unsupported_api", "ImageDecoder needs API 28", null)
+            return
+        }
+        scope.launch {
+            try {
+                writeSquare(File(input), File(output), side)
+                withContext(Dispatchers.Main) { result.success(null) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Throwable -> a 200 MP photo can still OOM, and that must read as a failed crop.
+                Log.w(TAG, "squarePhoto failed", e)
+                withContext(Dispatchers.Main) { result.error("CROP_FAILED", e.message, null) }
+            }
+        }
+    }
+
+    private fun writeSquare(input: File, output: File, side: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+        val decoded = ImageDecoder.decodeBitmap(ImageDecoder.createSource(input)) { decoder, info, _ ->
+            val short = minOf(info.size.width, info.size.height)
+            // Decode straight to the size we keep -> a 50 MP photo never sits in memory whole.
+            if (short > side) {
+                decoder.setTargetSize(
+                    info.size.width * side / short,
+                    info.size.height * side / short,
+                )
+            }
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+        val short = minOf(decoded.width, decoded.height)
+        val square = Bitmap.createBitmap(
+            decoded,
+            (decoded.width - short) / 2,
+            (decoded.height - short) / 2,
+            short,
+            short,
+        )
+        val scaled = if (short == side) square else Bitmap.createScaledBitmap(square, side, side, true)
+        output.parentFile?.mkdirs()
+        // A false here leaves a broken file that would replace the user's good photo.
+        val written = output.outputStream().use { scaled.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+        if (scaled !== square) scaled.recycle()
+        if (square !== decoded) square.recycle()
+        decoded.recycle()
+        check(written) { "compress_failed" }
     }
 
     fun dispose() {

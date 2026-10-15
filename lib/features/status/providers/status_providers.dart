@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/widgets/reel/reel_prefetch_service.dart';
 import '../../../app/widgets/reel/video_preload_controller.dart';
 import '../../../core/config/app_config.dart';
+import '../../../core/deeplink/deep_link_target.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../data/models/catalog_page.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -106,24 +108,60 @@ final statusCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   for (final s in all) {
     labels.putIfAbsent(s.category, () => s.categoryLabel);
   }
-  return orderedByCms(
+  final ordered = orderedByCms(
     labels.entries.map((e) => WallpaperCategory(e.key, e.value)).toList(),
     categoryOrderFor(cfg?.categoryOrder, 'statuses'),
     compareBrowseCategories,
   );
+  final lead = statusSlugForLanguage(ref.watch(localeProvider).languageCode);
+  final i = ordered.indexWhere((c) => c.slug == lead);
+  if (i <= 0) return ordered;
+  return [ordered[i], ...ordered.take(i), ...ordered.skip(i + 1)];
+});
+
+/// The status category of an app language (owner: the app language's statuses lead). Only the four
+/// South Indian languages have one; English and Hindi open on All.
+String? statusSlugForLanguage(String code) => const {
+  'ta': 'tamil',
+  'te': 'telugu',
+  'kn': 'kannada',
+  'ml': 'malayalam',
+}[code];
+
+/// The app language's category when the catalog has it -> first chip and the opening selection.
+/// Never while a status link waits: the link must land on All, on its own clip.
+final statusPreferredCategoryProvider = Provider<String?>((ref) {
+  final slug = statusSlugForLanguage(ref.watch(localeProvider).languageCode);
+  if (slug == null || ArulDeepLink.pendingTarget is StatusLinkTarget) {
+    return null;
+  }
+  final all = switch (ref.watch(statusCatalogProvider)) {
+    AsyncData(:final value) => value,
+    _ => const <StatusVideo>[],
+  };
+  return all.any((s) => s.category == slug) ? slug : null;
 });
 
 final selectedStatusCategoryProvider =
-    NotifierProvider<SelectedStatusCategory, String>(
+    NotifierProvider<SelectedStatusCategory, String?>(
       SelectedStatusCategory.new,
     );
 
-class SelectedStatusCategory extends Notifier<String> {
+/// Null until a chip, a link or Browse all picks one -> until then the preferred category leads.
+class SelectedStatusCategory extends Notifier<String?> {
   @override
-  String build() => WallpaperCategory.allSlug;
+  String? build() => null;
 
   void select(String slug) => state = slug;
 }
+
+/// The chip the reel shows: the user's pick, else the app language's category, else All.
+final activeStatusCategoryProvider = Provider<String>(
+  (ref) =>
+      ref.watch(selectedStatusCategoryProvider) ??
+      ref.watch(statusPreferredCategoryProvider) ??
+      WallpaperCategory.allSlug,
+);
 
 /// The catalog filtered to the selected chip, in `feed_rank` order (nulls last, catalog order next).
 List<StatusVideo> statusFeedOrder(String slug, List<StatusVideo> all) =>
@@ -136,7 +174,7 @@ List<StatusVideo> statusFeedOrder(String slug, List<StatusVideo> all) =>
     );
 
 final statusFeedProvider = Provider<AsyncValue<List<StatusVideo>>>((ref) {
-  final slug = ref.watch(selectedStatusCategoryProvider);
+  final slug = ref.watch(activeStatusCategoryProvider);
   return ref
       .watch(statusCatalogProvider)
       .whenData((all) => statusFeedOrder(slug, all));

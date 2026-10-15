@@ -1875,6 +1875,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This offer isn\'t available any more.'**
   String get cancelOfferUnavailable;
+
+  /// Label of the Photo pill in the Status tab's bottom bar; opens 'your photo & name'. ONE short noun.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo'**
+  String get statusPhoto;
+
+  /// Spoken by TalkBack for the add-photo medallion on a status clip's empty photo spot; not shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your photo'**
+  String get statusAddPhoto;
+
+  /// Title of the sheet where the user sets the photo and name shown on their statuses.
+  ///
+  /// In en, this message translates to:
+  /// **'Your photo & name'**
+  String get statusPersonaTitle;
+
+  /// One line under the sheet title.
+  ///
+  /// In en, this message translates to:
+  /// **'Shown on every status you share or save.'**
+  String get statusPersonaBody;
+
+  /// Button: pick a photo from the gallery (no photo yet).
+  ///
+  /// In en, this message translates to:
+  /// **'Choose photo'**
+  String get statusPersonaChoosePhoto;
+
+  /// Button: pick a different photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Change photo'**
+  String get statusPersonaChangePhoto;
+
+  /// Button: remove the saved photo.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove photo'**
+  String get statusPersonaRemovePhoto;
+
+  /// Label over the name field; the name is printed along the bottom of every status.
+  ///
+  /// In en, this message translates to:
+  /// **'Your name'**
+  String get statusPersonaNameLabel;
+
+  /// Switch: draw my photo on statuses.
+  ///
+  /// In en, this message translates to:
+  /// **'Show my photo'**
+  String get statusPersonaShowPhoto;
+
+  /// Switch: print my name on statuses.
+  ///
+  /// In en, this message translates to:
+  /// **'Show my name'**
+  String get statusPersonaShowName;
+
+  /// Closes the sheet and keeps the changes.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get statusPersonaDone;
+
+  /// Toast when a picked photo cannot be read or cropped.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t use that photo. Try another one.'**
+  String get statusPersonaPhotoFailed;
+
+  /// Toast when the new name could not be saved (usually offline).
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save your name. Try again.'**
+  String get statusPersonaNameFailed;
+
+  /// Title of the popup on Android 11 and older, where the photo and name cannot be added to videos.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs Android 12 or newer'**
+  String get statusPersonaOldTitle;
+
+  /// Body of that popup: the feature needs a newer Android; sharing and saving still work as before.
+  ///
+  /// In en, this message translates to:
+  /// **'Adding your photo and name to statuses needs Android 12 or newer. You can still share and save every status as it is.'**
+  String get statusPersonaOldBody;
+
+  /// Closes the popup.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get statusPersonaOldOk;
 }
 
 class _AppLocalizationsDelegate

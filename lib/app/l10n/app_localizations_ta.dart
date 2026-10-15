@@ -1020,4 +1020,56 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'இந்தச் சலுகை இப்போது கிடைக்கவில்லை.';
+
+  @override
+  String get statusPhoto => 'புகைப்படம்';
+
+  @override
+  String get statusAddPhoto => 'உங்கள் புகைப்படம் சேர்க்கவும்';
+
+  @override
+  String get statusPersonaTitle => 'உங்கள் புகைப்படம் & பெயர்';
+
+  @override
+  String get statusPersonaBody =>
+      'நீங்கள் பகிரும் அல்லது சேமிக்கும் ஒவ்வொரு ஸ்டேட்டஸிலும் காட்டப்படும்.';
+
+  @override
+  String get statusPersonaChoosePhoto => 'புகைப்படம் தேர்வுசெய்';
+
+  @override
+  String get statusPersonaChangePhoto => 'புகைப்படத்தை மாற்று';
+
+  @override
+  String get statusPersonaRemovePhoto => 'புகைப்படத்தை நீக்கு';
+
+  @override
+  String get statusPersonaNameLabel => 'உங்கள் பெயர்';
+
+  @override
+  String get statusPersonaShowPhoto => 'என் புகைப்படத்தைக் காட்டு';
+
+  @override
+  String get statusPersonaShowName => 'என் பெயரைக் காட்டு';
+
+  @override
+  String get statusPersonaDone => 'முடிந்தது';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'அந்தப் புகைப்படத்தைப் பயன்படுத்த முடியவில்லை. வேறொன்றை முயற்சிக்கவும்.';
+
+  @override
+  String get statusPersonaNameFailed =>
+      'உங்கள் பெயரைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.';
+
+  @override
+  String get statusPersonaOldTitle => 'Android 12 அல்லது புதியது தேவை';
+
+  @override
+  String get statusPersonaOldBody =>
+      'ஸ்டேட்டஸில் உங்கள் புகைப்படமும் பெயரும் சேர்க்க Android 12 அல்லது புதிய பதிப்பு தேவை. எல்லா ஸ்டேட்டஸையும் இப்போது உள்ளபடியே பகிரலாம், சேமிக்கலாம்.';
+
+  @override
+  String get statusPersonaOldOk => 'சரி';
 }

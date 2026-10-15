@@ -21,6 +21,6 @@ void main() {
       expect(await picker.pick(kind), isNull);
     }
 
-    expect(kinds, ['visual', 'video', 'audio']);
+    expect(kinds, ['visual', 'video', 'audio', 'image']);
   });
 }

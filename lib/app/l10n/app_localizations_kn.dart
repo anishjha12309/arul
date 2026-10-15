@@ -1009,4 +1009,56 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'ಈ ಆಫರ್ ಈಗ ಲಭ್ಯವಿಲ್ಲ.';
+
+  @override
+  String get statusPhoto => 'ಫೋಟೋ';
+
+  @override
+  String get statusAddPhoto => 'ನಿಮ್ಮ ಫೋಟೋ ಸೇರಿಸಿ';
+
+  @override
+  String get statusPersonaTitle => 'ನಿಮ್ಮ ಫೋಟೋ & ಹೆಸರು';
+
+  @override
+  String get statusPersonaBody =>
+      'ನೀವು ಹಂಚಿಕೊಳ್ಳುವ ಅಥವಾ ಉಳಿಸುವ ಪ್ರತಿ ಸ್ಟೇಟಸ್‌ನಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ.';
+
+  @override
+  String get statusPersonaChoosePhoto => 'ಫೋಟೋ ಆಯ್ಕೆಮಾಡಿ';
+
+  @override
+  String get statusPersonaChangePhoto => 'ಫೋಟೋ ಬದಲಾಯಿಸಿ';
+
+  @override
+  String get statusPersonaRemovePhoto => 'ಫೋಟೋ ತೆಗೆದುಹಾಕಿ';
+
+  @override
+  String get statusPersonaNameLabel => 'ನಿಮ್ಮ ಹೆಸರು';
+
+  @override
+  String get statusPersonaShowPhoto => 'ನನ್ನ ಫೋಟೋ ತೋರಿಸಿ';
+
+  @override
+  String get statusPersonaShowName => 'ನನ್ನ ಹೆಸರು ತೋರಿಸಿ';
+
+  @override
+  String get statusPersonaDone => 'ಆಯಿತು';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'ಆ ಫೋಟೋ ಬಳಸಲು ಆಗಲಿಲ್ಲ. ಬೇರೆಯದನ್ನು ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get statusPersonaNameFailed =>
+      'ನಿಮ್ಮ ಹೆಸರು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.';
+
+  @override
+  String get statusPersonaOldTitle => 'Android 12 ಅಥವಾ ಹೊಸದು ಬೇಕು';
+
+  @override
+  String get statusPersonaOldBody =>
+      'ಸ್ಟೇಟಸ್‌ಗಳಿಗೆ ನಿಮ್ಮ ಫೋಟೋ ಮತ್ತು ಹೆಸರು ಸೇರಿಸಲು Android 12 ಅಥವಾ ಹೊಸ ಆವೃತ್ತಿ ಬೇಕು. ಪ್ರತಿ ಸ್ಟೇಟಸ್ ಅನ್ನು ಈಗಿನಂತೆಯೇ ಹಂಚಿಕೊಳ್ಳಬಹುದು, ಉಳಿಸಬಹುದು.';
+
+  @override
+  String get statusPersonaOldOk => 'ಸರಿ';
 }

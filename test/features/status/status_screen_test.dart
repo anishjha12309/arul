@@ -2,6 +2,7 @@
 // the paywall stamped with the verb it came from, and a premium share's card -> sheet -> target.
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/widgets/reel/reel_card.dart';
@@ -13,21 +14,27 @@ import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
+import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/status/domain/status_video.dart';
 import 'package:arul/features/status/presentation/status_screen.dart';
 import 'package:arul/features/status/providers/status_action_provider.dart';
+import 'package:arul/features/status/providers/status_persona_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/wallpapers/data/feed_video_player.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../l10n/support/load_real_fonts.dart';
 
 const _clips = [
   // A 2:3 clip and a 9:16 one: the reel must hold both at their own shapes.
@@ -48,6 +55,24 @@ const _clips = [
     height: 1824,
   ),
 ];
+
+/// The reel's poster sweep never settles -> step the sheet's rise and fall instead.
+Future<void> _settle(WidgetTester tester) async {
+  for (var i = 0; i < 6; i++) {
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+}
+
+final _shotKey = GlobalKey();
+
+const _tamil = StatusVideo(
+  id: 'c0ffee02-1c2d-4f3a-9b8e-7d6c5a4b3e2f',
+  title: 'Amman',
+  category: 'tamil',
+  key: 'statuses/tamil/c0ffee02.mp4',
+  width: 768,
+  height: 1152,
+);
 
 class _NullCache implements CacheManager {
   @override
@@ -172,6 +197,8 @@ void main() {
   setUp(ArulDeepLink.reset);
   tearDown(ArulDeepLink.reset);
 
+  late SharedPreferences prefs;
+
   Future<void> pump(
     WidgetTester tester, {
     bool premium = false,
@@ -180,14 +207,19 @@ void main() {
     Future<List<StatusVideo>> Function()? catalog,
     _FakeActions? actions,
     bool reduceMotion = false,
+    bool languageAsked = true,
+    double textScale = 1,
+    List<Override> extra = const [],
   }) async {
     builds = [];
     analytics = _RecordingAnalytics();
     pushed = [];
     prefetch = _NoPrefetch();
     // The deep-link consume clears its persisted copy through installReferrerServiceProvider.
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
+    SharedPreferences.setMockInitialValues({
+      if (languageAsked) StatusScreen.languageAskedKey: true,
+    });
+    prefs = await SharedPreferences.getInstance();
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       _method,
       (_) async => null,
@@ -233,16 +265,18 @@ void main() {
           isOnlineProvider.overrideWith((ref) => Stream.value(online)),
           sharedPreferencesProvider.overrideWithValue(prefs),
           if (actions != null) statusActionProvider.overrideWith(() => actions),
+          ...extra,
         ],
         child: MaterialApp.router(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routerConfig: router,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(disableAnimations: reduceMotion),
-            child: child!,
+            data: MediaQuery.of(context).copyWith(
+              disableAnimations: reduceMotion,
+              textScaler: TextScaler.linear(textScale),
+            ),
+            child: RepaintBoundary(key: _shotKey, child: child),
           ),
         ),
       ),
@@ -259,6 +293,62 @@ void main() {
     expect(find.bySemanticsIdentifier('arul_status_whatsapp'), findsWidgets);
     expect(find.bySemanticsIdentifier('arul_status_save'), findsWidgets);
     expect(find.bySemanticsIdentifier('arul_header_settings'), findsOneWidget);
+  });
+
+  testWidgets('the first visit asks the language once; the pick leads the chips', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      languageAsked: false,
+      catalog: () async => [..._clips, _tamil],
+    );
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsOneWidget);
+    expect(prefs.getBool(StatusScreen.languageAskedKey), isTrue);
+
+    await tester.tap(find.text('தமிழ்'));
+    await _settle(tester);
+    expect(prefs.getString('arul_locale'), 'ta');
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(StatusScreen)),
+    );
+    expect(scope.read(activeStatusCategoryProvider), 'tamil');
+    expect(
+      tester.getTopLeft(find.bySemanticsIdentifier('arul_status_chip_tamil')).dx,
+      lessThan(
+        tester
+            .getTopLeft(
+              find.bySemanticsIdentifier(
+                'arul_status_chip_${WallpaperCategory.allSlug}',
+              ),
+            )
+            .dx,
+      ),
+    );
+  });
+
+  testWidgets('a cold status link is never interrupted by the language sheet', (
+    tester,
+  ) async {
+    ArulDeepLink.requestTarget(StatusLinkTarget(_clips[1].id));
+    await pump(tester, languageAsked: false, visible: true);
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsNothing);
+    expect(prefs.getBool(StatusScreen.languageAskedKey), isNull);
+  });
+
+  testWidgets('Photo on a phone that cannot export explains itself', (
+    tester,
+  ) async {
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('com.hsrutility.arul/share_watermark'),
+      (_) async => {'supported': false, 'sdkInt': 30},
+    );
+    await pump(tester);
+    await tester.tap(find.bySemanticsIdentifier('arul_status_photo').first);
+    await _settle(tester);
+    expect(find.text('Needs Android 12 or newer'), findsOneWidget);
   });
 
   testWidgets('an empty catalog shows the empty face', (tester) async {
@@ -644,4 +734,121 @@ void main() {
       expect(tester.getRect(find.byType(CachedNetworkImage)), box);
     });
   });
+
+  // The screen sizes signed-in users actually have (PostHog, 30 days, dp): 360 wide dominates,
+  // 320x600 is the smallest and 432x960 the largest seen in volume.
+  group('real user resolutions, with a photo and a name', () {
+    setUpAll(loadRealFonts);
+
+    for (final size in const [
+      Size(320, 600),
+      Size(360, 680),
+      Size(360, 720),
+      Size(360, 800),
+      Size(384, 840),
+      Size(392, 840),
+      Size(411, 880),
+      Size(432, 960),
+    ]) {
+      for (final scale in const [1.0, 1.3]) {
+        testWidgets('${size.width.toInt()}x${size.height.toInt()} @$scale', (
+          tester,
+        ) async {
+          tester.view
+            ..devicePixelRatio = 2
+            ..physicalSize = size * 2;
+          addTearDown(tester.view.reset);
+          // The screenshot step runs real async, where the image cache and the player's event
+          // stream reach for plugins a test does not have.
+          final messenger = tester.binding.defaultBinaryMessenger
+            ..setMockMethodCallHandler(
+              const MethodChannel('plugins.flutter.io/path_provider'),
+              (_) async => Directory.systemTemp.path,
+            )
+            ..setMockMethodCallHandler(
+              const MethodChannel('arul_test/status_video_events'),
+              (_) async => null,
+            );
+          addTearDown(() {
+            messenger
+              ..setMockMethodCallHandler(
+                const MethodChannel('plugins.flutter.io/path_provider'),
+                null,
+              )
+              ..setMockMethodCallHandler(
+                const MethodChannel('arul_test/status_video_events'),
+                null,
+              );
+          });
+          final photo = await tester.runAsync(_photo);
+          await pump(
+            tester,
+            textScale: scale,
+            catalog: () async => [_tamil, ..._clips],
+            extra: [
+              statusPersonaSupportedProvider.overrideWith((_) async => true),
+              statusPersonaProvider.overrideWith(
+                () => _Persona(StatusPersona(photo: photo)),
+              ),
+              statusPersonaNameProvider.overrideWithValue(
+                'Anish Kumar Jha Murugan',
+              ),
+            ],
+          );
+          await tester.pump(const Duration(milliseconds: 300));
+
+          final screen = Offset.zero & size;
+          final clip = tester.getRect(find.byType(StatusMedia).first);
+          expect(screen.contains(clip.topLeft), isTrue);
+          expect(clip.bottom, lessThanOrEqualTo(size.height));
+          for (final id in const [
+            'arul_status_photo',
+            'arul_status_whatsapp',
+            'arul_status_save',
+          ]) {
+            final r = tester.getRect(find.bySemanticsIdentifier(id).first);
+            expect(r.bottom, lessThanOrEqualTo(size.height), reason: id);
+            expect(r.right, lessThanOrEqualTo(size.width), reason: id);
+            expect(r.top, greaterThanOrEqualTo(clip.bottom - 0.5), reason: '$id sits under the clip');
+            expect(r.width, greaterThan(40), reason: '$id stays a real target, was $r');
+          }
+          expect(find.byType(StatusMedia), findsWidgets);
+          final dir = Platform.environment['STATUS_SHOTS'];
+          if (dir != null) {
+            await tester.runAsync(() async {
+              final boundary =
+                  _shotKey.currentContext!.findRenderObject()!
+                      as RenderRepaintBoundary;
+              final image = await boundary.toImage(pixelRatio: 2);
+              final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+              File(
+                '$dir/status-${size.width.toInt()}x${size.height.toInt()}-$scale.png',
+              ).writeAsBytesSync(bytes!.buffer.asUint8List());
+            });
+          }
+        });
+      }
+    }
+  });
+}
+
+class _Persona extends StatusPersonaNotifier {
+  _Persona(this.persona);
+
+  final StatusPersona persona;
+
+  @override
+  Future<StatusPersona> build() async => persona;
+}
+
+Future<ui.Image> _photo() {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)
+    ..drawRect(
+      const Rect.fromLTWH(0, 0, 128, 128),
+      Paint()..color = const Color(0xFF7090C0),
+    )
+    ..drawCircle(const Offset(64, 50), 26, Paint()..color = const Color(0xFFEBCDB4));
+  canvas.drawCircle(const Offset(64, 140), 50, Paint()..color = const Color(0xFF304060));
+  return recorder.endRecording().toImage(128, 128);
 }

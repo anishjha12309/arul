@@ -62,6 +62,9 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   for `StatefulNavigationShellState` as go_router moves the branch screens across. `ArulShellScope`
   keeps the link landing ([deep-links.md](deep-links.md)); the fix is go_router 17's top-level `onEnter`
   parking a warm link with `Block.stop()` (a cold one still needs the `/` hop). Untried on device.
+- **A CMS media replace keeps the clip's old `photo_slot`** (the replace UPDATE never names it), so the
+  new clip would draw the photo in the old clip's frame. No CMS upload carries a slot today, so nothing
+  breaks yet; clear the slot on replace before any slotted clip is re-uploaded.
 
 ## Traps already paid for
 
@@ -81,8 +84,8 @@ What is broken or unverified right now, and traps no other doc owns. Close a lin
   `Transformer.start()` throws `NoClassDefFoundError` on Android 9–11 (androidx/media#2535). No version
   bump or ProGuard rule fixes it. `NoClassDefFoundError` is an `Error`, so `ShareWatermarkChannel`
   catches **`Throwable`** — never narrow it. Consequence: live wallpaper shares below API 31 go out
-  unwatermarked ([share.md](share.md)); status clips carry no watermark on any version. Fixing it
-  means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
+  unwatermarked ([share.md](share.md)), and a status's photo-and-name burn-in exists only on API 31+
+  ([status.md](status.md)). Fixing it means pinning back to 1.7.1 or hand-rolling MediaCodec+GL.
 - **Never pass a `--dart-define` containing `&` on the command line.** The shell (zsh, bash)
   treats an unquoted `&` as a command separator, so the define arrives cut and the rest
   fails silently. Use `--dart-define-from-file`.

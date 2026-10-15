@@ -293,5 +293,21 @@
   "cancelOfferTryAgain": "फिर से कोशिश करें",
   "cancelOfferNothingChanged": "कुछ नहीं बदला। आप अभी भी {price}/माह वाले प्लान पर हैं।",
   "cancelOfferSwitchedToast": "अब आपका प्लान {price}/माह है।",
-  "cancelOfferUnavailable": "यह ऑफ़र अब उपलब्ध नहीं है।"
+  "cancelOfferUnavailable": "यह ऑफ़र अब उपलब्ध नहीं है।",
+  "statusPhoto": "फ़ोटो",
+  "statusAddPhoto": "अपनी फ़ोटो जोड़ें",
+  "statusPersonaTitle": "आपकी फ़ोटो और नाम",
+  "statusPersonaBody": "आप जो भी स्टेटस शेयर या सेव करेंगे, उस पर दिखेगा।",
+  "statusPersonaChoosePhoto": "फ़ोटो चुनें",
+  "statusPersonaChangePhoto": "फ़ोटो बदलें",
+  "statusPersonaRemovePhoto": "फ़ोटो हटाएं",
+  "statusPersonaNameLabel": "आपका नाम",
+  "statusPersonaShowPhoto": "मेरी फ़ोटो दिखाएं",
+  "statusPersonaShowName": "मेरा नाम दिखाएं",
+  "statusPersonaDone": "हो गया",
+  "statusPersonaPhotoFailed": "वह फ़ोटो इस्तेमाल नहीं हो सकी। कोई और आज़माएं।",
+  "statusPersonaNameFailed": "आपका नाम सेव नहीं हो सका। फिर कोशिश करें।",
+  "statusPersonaOldTitle": "Android 12 या नया चाहिए",
+  "statusPersonaOldBody": "स्टेटस पर अपनी फ़ोटो और नाम जोड़ने के लिए Android 12 या नया वर्ज़न चाहिए। हर स्टेटस को आप पहले की तरह शेयर और सेव कर सकते हैं।",
+  "statusPersonaOldOk": "ठीक है"
 }

@@ -293,5 +293,21 @@
   "cancelOfferTryAgain": "വീണ്ടും ശ്രമിക്കൂ",
   "cancelOfferNothingChanged": "ഒന്നും മാറിയിട്ടില്ല. നിങ്ങൾ ഇപ്പോഴും പ്രതിമാസം {price} പ്ലാനിൽ തന്നെയാണ്.",
   "cancelOfferSwitchedToast": "ഇനി നിങ്ങൾക്ക് പ്രതിമാസം {price} മാത്രം.",
-  "cancelOfferUnavailable": "ഈ ഓഫർ ഇപ്പോൾ ലഭ്യമല്ല."
+  "cancelOfferUnavailable": "ഈ ഓഫർ ഇപ്പോൾ ലഭ്യമല്ല.",
+  "statusPhoto": "ഫോട്ടോ",
+  "statusAddPhoto": "നിങ്ങളുടെ ഫോട്ടോ ചേർക്കൂ",
+  "statusPersonaTitle": "നിങ്ങളുടെ ഫോട്ടോ & പേര്",
+  "statusPersonaBody": "നിങ്ങൾ ഷെയർ ചെയ്യുന്ന അല്ലെങ്കിൽ സേവ് ചെയ്യുന്ന എല്ലാ സ്റ്റാറ്റസിലും കാണിക്കും.",
+  "statusPersonaChoosePhoto": "ഫോട്ടോ തിരഞ്ഞെടുക്കൂ",
+  "statusPersonaChangePhoto": "ഫോട്ടോ മാറ്റൂ",
+  "statusPersonaRemovePhoto": "ഫോട്ടോ നീക്കം ചെയ്യൂ",
+  "statusPersonaNameLabel": "നിങ്ങളുടെ പേര്",
+  "statusPersonaShowPhoto": "എന്റെ ഫോട്ടോ കാണിക്കുക",
+  "statusPersonaShowName": "എന്റെ പേര് കാണിക്കുക",
+  "statusPersonaDone": "കഴിഞ്ഞു",
+  "statusPersonaPhotoFailed": "ആ ഫോട്ടോ ഉപയോഗിക്കാനായില്ല. മറ്റൊന്ന് ശ്രമിക്കൂ.",
+  "statusPersonaNameFailed": "നിങ്ങളുടെ പേര് സേവ് ആയില്ല. വീണ്ടും ശ്രമിക്കൂ.",
+  "statusPersonaOldTitle": "Android 12 അല്ലെങ്കിൽ പുതിയത് വേണം",
+  "statusPersonaOldBody": "സ്റ്റാറ്റസുകളിൽ നിങ്ങളുടെ ഫോട്ടോയും പേരും ചേർക്കാൻ Android 12 അല്ലെങ്കിൽ പുതിയ പതിപ്പ് വേണം. എല്ലാ സ്റ്റാറ്റസും ഇപ്പോഴുള്ളതുപോലെ ഷെയർ ചെയ്യാം, സേവ് ചെയ്യാം.",
+  "statusPersonaOldOk": "ശരി"
 }

@@ -357,12 +357,24 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
   /// A creation snapshots it before awaiting and discards itself if the value moved.
   int _releaseEpoch = 0;
 
+  /// Set by [holdDecoders], cleared only by [reclaimDecoders]: no swipe, resume or tab return
+  /// re-opens a player in between.
+  bool _decodersHeld = false;
+
+  /// [releaseDecoders] for a hardware export: a budget SoC fits ~2 codecs and the export needs both,
+  /// so a swipe under the card must not re-grab one until [reclaimDecoders].
+  Future<void> holdDecoders() {
+    _decodersHeld = true;
+    return releaseDecoders();
+  }
+
   /// Rebuilds the player window after an apply that kept the app FOREGROUND.
   ///
   /// The resumed-lifecycle reconcile never fires without a chooser or a backgrounding.
   /// Without this, every live card stranded on a poster that never revealed.
   /// A no-op while backgrounded — the resume path owns that case — and idempotent when serving.
   void reclaimDecoders() {
+    _decodersHeld = false;
     // Hidden -> the shell reclaims on the way back in; cancelling the leave grace here would hold the
     // pool with no timer, and the other reel would then decode alongside it.
     if (_disposed || _appPaused || !_visible) return;
@@ -427,7 +439,7 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
   /// New players are created only until the pool reaches [_poolSize].
   /// Notifies listeners -> the feed's itemBuilder re-reads [slotForIndex].
   void _reconcile() {
-    if (_disposed || _items.isEmpty) return;
+    if (_disposed || _decodersHeld || _items.isEmpty) return;
 
     // Target set: the LIVE indices inside the current window that deserve a player.
     // Previous + current + next at the full budget, shrunk on codec-starved SoCs.

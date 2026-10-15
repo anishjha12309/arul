@@ -25,12 +25,19 @@ class ArulChip extends StatefulWidget {
     this.onTap,
     this.variant = ArulChipVariant.feed,
     this.identifier,
+    this.dense = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback? onTap;
   final ArulChipVariant variant;
+
+  /// Shubh's smaller pill (28 drawn, 13 sp, a [denseStripHeight] hit box) for the Status tab, where
+  /// every dp above the reel is taken from the clip's width.
+  final bool dense;
+
+  static const double denseStripHeight = 36;
 
   /// Stable accessibility id (`Semantics(identifier:)`): announced to nobody, so it is free at
   /// the UI layer and survives every locale.
@@ -67,10 +74,12 @@ class _ArulChipState extends State<ArulChip> {
     );
 
     final Widget visual = Container(
-      height: variant == ArulChipVariant.category ? _categoryHeight : null,
+      height: variant == ArulChipVariant.category
+          ? (widget.dense ? 28 : _categoryHeight)
+          : null,
       alignment: variant == ArulChipVariant.category ? Alignment.center : null,
       padding: variant == ArulChipVariant.category
-          ? const EdgeInsets.symmetric(horizontal: 16)
+          ? EdgeInsets.symmetric(horizontal: widget.dense ? 14 : 16)
           // ArulTokens.chip pins `height: 1` -> the label's box lost the theme's 1.45 leading, ~6px.
           // So vertical padding is 10, not the spec's 7 -> the chip stays the size it always was.
           : const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
@@ -83,6 +92,7 @@ class _ArulChipState extends State<ArulChip> {
         label,
         style: (selected ? ArulTokens.chipActive : ArulTokens.chip).copyWith(
           color: fg,
+          fontSize: widget.dense ? 13 : null,
         ),
       ),
     );
@@ -103,7 +113,9 @@ class _ArulChipState extends State<ArulChip> {
       // `opaque` is what makes that slack tappable rather than decorative. The strips that host the
       // browse row own the matching height; a form's Wrap simply runs a little airier.
       child: SizedBox(
-        height: ArulTokens.minHitTarget,
+        height: widget.dense
+            ? ArulChip.denseStripHeight
+            : ArulTokens.minHitTarget,
         child: Center(
           widthFactor: 1,
           child: AnimatedOpacity(

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../../app/widgets/reel/reel_item.dart';
+import 'status_photo_slot.dart';
 
 /// One status clip, from the Worker-built `catalog/statuses/all_{page}.json` (snake_case fields).
 /// Every row is a clip with music -> unlike a wallpaper there is no still case.
@@ -16,6 +17,7 @@ class StatusVideo implements ReelItem {
     this.height,
     this.feedRank,
     this.publishedAt,
+    this.photoSlot,
   });
 
   factory StatusVideo.fromJson(Map<String, dynamic> json) => StatusVideo(
@@ -29,6 +31,7 @@ class StatusVideo implements ReelItem {
     height: (json['height'] as num?)?.toInt(),
     feedRank: (json['feed_rank'] as num?)?.toInt(),
     publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
+    photoSlot: StatusPhotoSlot.tryParse(json['photo_slot']),
   );
 
   @override
@@ -58,6 +61,9 @@ class StatusVideo implements ReelItem {
   /// Position from build-catalog's ORDER BY; null only on a row the Worker could not number.
   final int? feedRank;
   final DateTime? publishedAt;
+
+  /// Null on a clip with no designed slot -> the photo is a ringed avatar in the clip's bottom-right corner.
+  final StatusPhotoSlot? photoSlot;
 
   String get categoryLabel => category.isEmpty
       ? category

@@ -118,13 +118,15 @@ class ArulDialogCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.message,
-    required this.cancel,
     required this.confirm,
+    this.cancel,
   });
 
   final String title;
   final String message;
-  final ArulDialogButton cancel;
+
+  /// Null for a dialog that only informs: [confirm] then spans the card alone.
+  final ArulDialogButton? cancel;
   final ArulDialogButton confirm;
 
   @override
@@ -166,7 +168,10 @@ class ArulDialogCard extends StatelessWidget {
                     style: ArulTokens.body.copyWith(color: p.textSecondary),
                   ),
                   const SizedBox(height: ArulSpace.s20),
-                  ArulDialogActions(cancel: cancel, confirm: confirm),
+                  if (cancel case final cancel?)
+                    ArulDialogActions(cancel: cancel, confirm: confirm)
+                  else
+                    confirm,
                 ],
               ),
             ),

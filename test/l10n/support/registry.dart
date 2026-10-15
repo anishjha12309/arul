@@ -14,10 +14,10 @@ import 'dart:async';
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
-import 'package:arul/app/widgets/arul_browse_header.dart';
+import 'package:arul/app/widgets/arul_chip.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
+import 'package:arul/app/widgets/arul_screen_header.dart';
 import 'package:arul/app/widgets/arul_toast.dart';
-import 'package:arul/app/widgets/reel/reel_card.dart';
 import 'package:arul/app/widgets/state_views.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/providers/locale_provider.dart';
@@ -45,10 +45,12 @@ import 'package:arul/features/settings/presentation/settings_screen.dart';
 import 'package:arul/features/settings/presentation/theme_sheet.dart';
 import 'package:arul/features/share/share_moment_sheet.dart';
 import 'package:arul/features/status/domain/status_video.dart';
+import 'package:arul/features/status/presentation/status_persona_sheet.dart';
 import 'package:arul/features/status/presentation/status_preparing_card.dart';
 import 'package:arul/features/status/presentation/status_screen.dart';
 import 'package:arul/features/status/presentation/status_share_sheet.dart';
 import 'package:arul/features/status/providers/status_action_provider.dart';
+import 'package:arul/features/status/providers/status_persona_provider.dart';
 import 'package:arul/features/status/providers/status_providers.dart';
 import 'package:arul/features/upload/presentation/upload_category_sheet.dart';
 import 'package:arul/features/upload/presentation/upload_screen.dart';
@@ -384,26 +386,23 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
             final l10n = AppLocalizations.of(context);
             return Column(
               children: [
-                ArulBrowseHeader(
-                  title: l10n.statusTitle,
-                  chips: const StatusChips(),
+                ArulScreenHeader(title: l10n.statusTitle),
+                const SizedBox(
+                  height: ArulChip.denseStripHeight,
+                  child: StatusChips(),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30),
-                  child: ReelActionBar(
+                const Spacer(),
+                // The bar measures its w600 labels against the inherited style. Here a family IS a weight,
+                // so inherit the w600 face the pills paint, as a phone's own weight resolution gives.
+                DefaultTextStyle.merge(
+                  style: realizeTextStyle(
+                    const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  child: StatusActionBar(
                     busy: false,
-                    primary: ReelAction(
-                      icon: Icons.send_rounded,
-                      label: l10n.statusWhatsapp,
-                      semanticsId: 'arul_status_whatsapp',
-                      onTap: () {},
-                    ),
-                    secondary: ReelAction(
-                      icon: Icons.download_rounded,
-                      label: l10n.statusSave,
-                      semanticsId: 'arul_status_save',
-                      onTap: () {},
-                    ),
+                    onPhoto: () {},
+                    onSave: () {},
+                    onShare: () {},
                   ),
                 ),
               ],
@@ -454,6 +453,20 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
       ),
       overrides: [statusActionProvider.overrideWith(() => _PreparingAt(stage))],
     ),
+
+  ScreenEntry(
+    id: 'status.persona_sheet',
+    textField: true,
+    build: () => SheetHost(open: StatusPersonaSheet.show),
+    overrides: [
+      statusPersonaProvider.overrideWith(_NoPersona.new),
+      statusPersonaNameProvider.overrideWithValue('Anish Kumar'),
+    ],
+  ),
+  ScreenEntry(
+    id: 'status.persona_unsupported',
+    build: () => SheetHost(open: StatusPersonaSheet.showUnsupported),
+  ),
 
   ScreenEntry(id: 'settings.screen', build: () => const SettingsScreen()),
   ScreenEntry(
@@ -855,4 +868,9 @@ void installFakeChannels(TestDefaultBinaryMessenger messenger) {
   for (final name in kFakeChannels) {
     messenger.setMockMethodCallHandler(MethodChannel(name), (_) async => null);
   }
+}
+
+class _NoPersona extends StatusPersonaNotifier {
+  @override
+  Future<StatusPersona> build() async => const StatusPersona();
 }

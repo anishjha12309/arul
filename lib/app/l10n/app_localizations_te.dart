@@ -1014,4 +1014,56 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'ఈ ఆఫర్ ఇప్పుడు అందుబాటులో లేదు.';
+
+  @override
+  String get statusPhoto => 'ఫోటో';
+
+  @override
+  String get statusAddPhoto => 'మీ ఫోటో జోడించండి';
+
+  @override
+  String get statusPersonaTitle => 'మీ ఫోటో & పేరు';
+
+  @override
+  String get statusPersonaBody =>
+      'మీరు షేర్ చేసే లేదా సేవ్ చేసే ప్రతి స్టేటస్‌లో కనిపిస్తుంది.';
+
+  @override
+  String get statusPersonaChoosePhoto => 'ఫోటో ఎంచుకోండి';
+
+  @override
+  String get statusPersonaChangePhoto => 'ఫోటో మార్చండి';
+
+  @override
+  String get statusPersonaRemovePhoto => 'ఫోటో తీసివేయండి';
+
+  @override
+  String get statusPersonaNameLabel => 'మీ పేరు';
+
+  @override
+  String get statusPersonaShowPhoto => 'నా ఫోటో చూపించు';
+
+  @override
+  String get statusPersonaShowName => 'నా పేరు చూపించు';
+
+  @override
+  String get statusPersonaDone => 'అయింది';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'ఆ ఫోటోను వాడలేకపోయాం. వేరేది ప్రయత్నించండి.';
+
+  @override
+  String get statusPersonaNameFailed =>
+      'మీ పేరు సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి.';
+
+  @override
+  String get statusPersonaOldTitle => 'Android 12 లేదా కొత్తది అవసరం';
+
+  @override
+  String get statusPersonaOldBody =>
+      'స్టేటస్‌లకు మీ ఫోటో, పేరు జోడించడానికి Android 12 లేదా కొత్త వెర్షన్ అవసరం. ప్రతి స్టేటస్‌ను ఇప్పటిలాగే షేర్ చేయవచ్చు, సేవ్ చేయవచ్చు.';
+
+  @override
+  String get statusPersonaOldOk => 'సరే';
 }

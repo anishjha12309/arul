@@ -4,10 +4,14 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.Log
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import android.graphics.Matrix
 import androidx.media3.effect.BitmapOverlay
+import androidx.media3.effect.MatrixTransformation
 import androidx.media3.effect.OverlayEffect
+import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -56,6 +60,10 @@ class ShareWatermarkChannel(private val context: Context) :
                 ),
             )
             "watermarkVideo" -> watermarkVideo(call, result)
+            "cancelExport" -> {
+                cancelActive()
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -80,6 +88,10 @@ class ShareWatermarkChannel(private val context: Context) :
         val inputPath = call.argument<String>("inputPath")
         val outputPath = call.argument<String>("outputPath")
         val overlayPng = call.argument<ByteArray>("overlayPng")
+        // A status with a name band: the frame grows to the canvas and the picture moves to its top.
+        val canvasWidth = call.argument<Int>("canvasWidth") ?: 0
+        val canvasHeight = call.argument<Int>("canvasHeight") ?: 0
+        val contentHeight = call.argument<Int>("contentHeight") ?: 0
 
         if (inputPath.isNullOrEmpty() || outputPath.isNullOrEmpty() ||
             overlayPng == null || overlayPng.isEmpty()
@@ -114,7 +126,8 @@ class ShareWatermarkChannel(private val context: Context) :
             val overlay = BitmapOverlay.createStaticBitmapOverlay(overlayBitmap)
             val effects = Effects(
                 /* audioProcessors = */ emptyList(),
-                /* videoEffects = */ listOf(OverlayEffect(listOf(overlay))),
+                /* videoEffects = */ canvasEffects(canvasWidth, canvasHeight, contentHeight) +
+                    OverlayEffect(listOf(overlay)),
             )
             val editedItem = EditedMediaItem.Builder(MediaItem.fromUri(toFileUri(inputFile)))
                 .setEffects(effects)
@@ -134,6 +147,17 @@ class ShareWatermarkChannel(private val context: Context) :
             File(outputPath).delete()
             result.error("transform_failed", e.message ?: "could not start export", null)
         }
+    }
+
+    // SCALE_TO_FIT letterboxes the clip in the taller frame, centred; the matrix then lifts it by half
+    // the added height (in -1..1 coordinates, +y is up) so all of it lands under the clip as one band.
+    private fun canvasEffects(width: Int, height: Int, content: Int): List<Effect> {
+        if (width <= 0 || height <= content || content <= 0) return emptyList()
+        val lift = (height - content).toFloat() / height
+        return listOf(
+            Presentation.createForWidthAndHeight(width, height, Presentation.LAYOUT_SCALE_TO_FIT),
+            MatrixTransformation { _ -> Matrix().apply { postTranslate(0f, lift) } },
+        )
     }
 
     private fun exportListener(): Transformer.Listener = object : Transformer.Listener {
@@ -184,6 +208,20 @@ class ShareWatermarkChannel(private val context: Context) :
     }
 
     private fun toFileUri(file: File): android.net.Uri = android.net.Uri.fromFile(file)
+
+    /** Dart timed out: free the one export slot, or every later share answers "busy". */
+    private fun cancelActive() {
+        val export = activeExport ?: return
+        try {
+            export.transformer.cancel()
+        } catch (e: Throwable) {
+            Log.w(TAG, "cancel on timeout failed", e)
+        }
+        finish {
+            File(it.outputPath).delete()
+            it.result.error("transform_failed", "cancelled", null)
+        }
+    }
 
     fun dispose() {
         val export = activeExport ?: return

@@ -27,6 +27,12 @@ class ShareWatermarkUnsupportedException extends ShareWatermarkException {
   final int sdkInt;
 }
 
+/// The native export ran past its timeout and was cancelled.
+/// A stalled encoder stalls again, so a caller never retries this one.
+class ShareWatermarkTimeoutException extends ShareWatermarkException {
+  const ShareWatermarkTimeoutException() : super('video watermark timed out');
+}
+
 /// One share's watermark plan — WHERE the logo and code go, and WHICH code identifies this copy.
 /// A leaked share is then traceable to the share EVENT, not just to the wallpaper.
 ///
@@ -48,9 +54,14 @@ class ShareWatermarkService {
     Future<Uint8List> Function()? loadLogoBytes,
     Random? random,
     MethodChannel? channel,
+    this._exportTimeout = const Duration(minutes: 2),
   }) : _loadLogoBytes = loadLogoBytes ?? _loadBundledLogo,
        _random = random ?? Random.secure(),
        _channel = channel ?? const MethodChannel(channelName);
+
+  /// A 30 s clip exports in seconds even on a budget SoC; an encoder that never calls back would
+  /// otherwise hold the preparing card, and the reel's decoders, forever.
+  final Duration _exportTimeout;
 
   /// EXACT contract with the native side (built in parallel) — do not change.
   static const channelName = 'com.hsrutility.arul/share_watermark';
@@ -391,12 +402,52 @@ class ShareWatermarkService {
       throw ShareWatermarkUnsupportedException(support.sdkInt);
     }
     final overlay = await renderOverlayPng(spec, width: 1024, height: 1824);
+    return _exportOverlay(src, overlay, outPath: outPath, support: support);
+  }
+
+  /// Burns [overlayPng], sized exactly [canvasWidth]×[canvasHeight] (Media3 places it 1:1), into [src];
+  /// a canvas taller than [contentHeight] keeps the picture at the top over a band. Throws below API 31.
+  Future<File> overlayVideo(
+    File src,
+    Uint8List overlayPng, {
+    required String outPath,
+    int? canvasWidth,
+    int? canvasHeight,
+    int? contentHeight,
+  }) async {
+    final support = await videoWatermarkSupport();
+    if (!support.supported) {
+      throw ShareWatermarkUnsupportedException(support.sdkInt);
+    }
+    return _exportOverlay(
+      src,
+      overlayPng,
+      outPath: outPath,
+      support: support,
+      canvas: {
+        'canvasWidth': ?canvasWidth,
+        'canvasHeight': ?canvasHeight,
+        'contentHeight': ?contentHeight,
+      },
+    );
+  }
+
+  Future<File> _exportOverlay(
+    File src,
+    Uint8List overlay, {
+    required String outPath,
+    required ({bool supported, int sdkInt}) support,
+    Map<String, int> canvas = const {},
+  }) async {
     try {
-      final result = await _channel.invokeMethod<String>('watermarkVideo', {
-        'inputPath': src.path,
-        'outputPath': outPath,
-        'overlayPng': overlay,
-      });
+      final result = await _channel
+          .invokeMethod<String>('watermarkVideo', {
+            'inputPath': src.path,
+            'outputPath': outPath,
+            'overlayPng': overlay,
+            ...canvas,
+          })
+          .timeout(_exportTimeout, onTimeout: _cancelStalled);
       return File(result ?? outPath);
     } on PlatformException catch (e) {
       // Codes: transform_failed | bad_input | unsupported_api.
@@ -410,6 +461,16 @@ class ShareWatermarkService {
     } on MissingPluginException {
       throw const ShareWatermarkException('watermark channel unavailable');
     }
+  }
+
+  /// Frees the native side's one export slot, or every later share answers "busy".
+  Future<String?> _cancelStalled() async {
+    try {
+      await _channel.invokeMethod<void>('cancelExport');
+    } on Object {
+      // A native side that cannot cancel is still a timed-out export to the caller.
+    }
+    throw const ShareWatermarkTimeoutException();
   }
 }
 

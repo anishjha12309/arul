@@ -829,5 +829,69 @@
   "cancelOfferUnavailable": "This offer isn't available any more.",
   "@cancelOfferUnavailable": {
     "description": "Toast when the server no longer offers the ₹99 switch (409 offer_unavailable). The subscription is unchanged."
+  },
+  "statusPhoto": "Photo",
+  "@statusPhoto": {
+    "description": "Label of the Photo pill in the Status tab's bottom bar; opens 'your photo & name'. ONE short noun."
+  },
+  "statusAddPhoto": "Add your photo",
+  "@statusAddPhoto": {
+    "description": "Spoken by TalkBack for the add-photo medallion on a status clip's empty photo spot; not shown."
+  },
+  "statusPersonaTitle": "Your photo & name",
+  "@statusPersonaTitle": {
+    "description": "Title of the sheet where the user sets the photo and name shown on their statuses."
+  },
+  "statusPersonaBody": "Shown on every status you share or save.",
+  "@statusPersonaBody": {
+    "description": "One line under the sheet title."
+  },
+  "statusPersonaChoosePhoto": "Choose photo",
+  "@statusPersonaChoosePhoto": {
+    "description": "Button: pick a photo from the gallery (no photo yet)."
+  },
+  "statusPersonaChangePhoto": "Change photo",
+  "@statusPersonaChangePhoto": {
+    "description": "Button: pick a different photo."
+  },
+  "statusPersonaRemovePhoto": "Remove photo",
+  "@statusPersonaRemovePhoto": {
+    "description": "Button: remove the saved photo."
+  },
+  "statusPersonaNameLabel": "Your name",
+  "@statusPersonaNameLabel": {
+    "description": "Label over the name field; the name is printed along the bottom of every status."
+  },
+  "statusPersonaShowPhoto": "Show my photo",
+  "@statusPersonaShowPhoto": {
+    "description": "Switch: draw my photo on statuses."
+  },
+  "statusPersonaShowName": "Show my name",
+  "@statusPersonaShowName": {
+    "description": "Switch: print my name on statuses."
+  },
+  "statusPersonaDone": "Done",
+  "@statusPersonaDone": {
+    "description": "Closes the sheet and keeps the changes."
+  },
+  "statusPersonaPhotoFailed": "Couldn't use that photo. Try another one.",
+  "@statusPersonaPhotoFailed": {
+    "description": "Toast when a picked photo cannot be read or cropped."
+  },
+  "statusPersonaNameFailed": "Couldn't save your name. Try again.",
+  "@statusPersonaNameFailed": {
+    "description": "Toast when the new name could not be saved (usually offline)."
+  },
+  "statusPersonaOldTitle": "Needs Android 12 or newer",
+  "@statusPersonaOldTitle": {
+    "description": "Title of the popup on Android 11 and older, where the photo and name cannot be added to videos."
+  },
+  "statusPersonaOldBody": "Adding your photo and name to statuses needs Android 12 or newer. You can still share and save every status as it is.",
+  "@statusPersonaOldBody": {
+    "description": "Body of that popup: the feature needs a newer Android; sharing and saving still work as before."
+  },
+  "statusPersonaOldOk": "OK",
+  "@statusPersonaOldOk": {
+    "description": "Closes the popup."
   }
 }

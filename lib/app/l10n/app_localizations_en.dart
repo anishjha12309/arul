@@ -1008,4 +1008,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'This offer isn\'t available any more.';
+
+  @override
+  String get statusPhoto => 'Photo';
+
+  @override
+  String get statusAddPhoto => 'Add your photo';
+
+  @override
+  String get statusPersonaTitle => 'Your photo & name';
+
+  @override
+  String get statusPersonaBody => 'Shown on every status you share or save.';
+
+  @override
+  String get statusPersonaChoosePhoto => 'Choose photo';
+
+  @override
+  String get statusPersonaChangePhoto => 'Change photo';
+
+  @override
+  String get statusPersonaRemovePhoto => 'Remove photo';
+
+  @override
+  String get statusPersonaNameLabel => 'Your name';
+
+  @override
+  String get statusPersonaShowPhoto => 'Show my photo';
+
+  @override
+  String get statusPersonaShowName => 'Show my name';
+
+  @override
+  String get statusPersonaDone => 'Done';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'Couldn\'t use that photo. Try another one.';
+
+  @override
+  String get statusPersonaNameFailed => 'Couldn\'t save your name. Try again.';
+
+  @override
+  String get statusPersonaOldTitle => 'Needs Android 12 or newer';
+
+  @override
+  String get statusPersonaOldBody =>
+      'Adding your photo and name to statuses needs Android 12 or newer. You can still share and save every status as it is.';
+
+  @override
+  String get statusPersonaOldOk => 'OK';
 }

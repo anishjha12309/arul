@@ -30,13 +30,19 @@ AND bring someone back; these rules were paid for by getting the second half wro
 - [ ] **A live export frees the feed's decoders first**, as apply does: it needs a hardware decoder AND
       encoder, and on a budget SoC the feed's pool held them, so both attempts died with a codec
       exception and the share never went out. The feed reclaims after (a no-op while backgrounded).
+- [ ] **An export that never calls back times out at 2 min** and sends `cancelExport`: the native side
+      runs one export at a time, so a stalled one left uncancelled answers every later share `busy`. A
+      timeout is never retried — a stalled encoder stalls again.
 - [ ] Share has a re-entrancy guard, like apply and set: a double tap must not run two flows.
 
 ## Status clips — a card, then the user picks
 
-- [ ] **Status clips go out CLEAN on Share and Save, on every Android version** (owner). No Media3 export
-      on the status path: the re-encode was the long bare wait before every share. `watermarked` stays on
-      the status events, always false. The wallpaper rules above are untouched.
+- [ ] **No trace watermark on a status, ever; the user's own photo and name are the only burn-in**
+      (owner). With either on and API 31+, Share AND Save export through `overlayVideo` (the same Media3
+      channel, decoders freed first, as above); else the fetched clip goes out byte for byte — the old
+      trace re-encode was the long bare wait before every share. `watermarked` stays false; `with_photo`
+      and `with_name` say what was burnt in ([status.md](status.md) §Your photo and name). The wallpaper
+      rules above are untouched.
 - [ ] Tap → the preparing card (`StatusPreparingCard`, root navigator, the sheet's own scrim): one
       localized line per REAL stage and the download's real progress — never a timer, never a percentage.
       Back hides it and abandons the hand-off, but the action guard holds until the fetch settles, so a

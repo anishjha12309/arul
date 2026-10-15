@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -330,6 +331,35 @@ void main() {
         ),
         throwsA(isA<ShareWatermarkUnsupportedException>()),
       );
+    });
+
+    test('a stalled export times out, cancels the native slot and is '
+        'never mistaken for a plain failure', () async {
+      final methods = <String>[];
+      final never = Completer<String>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            methods.add(call.method);
+            if (call.method == 'videoWatermarkSupport') {
+              return {'supported': true, 'sdkInt': 34};
+            }
+            if (call.method == 'cancelExport') return null;
+            return never.future;
+          });
+      final service = ShareWatermarkService(
+        loadLogoBytes: () async => _testLogoPng(),
+        exportTimeout: const Duration(milliseconds: 50),
+      );
+
+      await expectLater(
+        service.overlayVideo(
+          File('/in/clip.mp4'),
+          Uint8List(0),
+          outPath: '/out/x.mp4',
+        ),
+        throwsA(isA<ShareWatermarkTimeoutException>()),
+      );
+      expect(methods, contains('cancelExport'));
     });
   });
 }

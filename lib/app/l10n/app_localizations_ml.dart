@@ -1019,4 +1019,56 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'ഈ ഓഫർ ഇപ്പോൾ ലഭ്യമല്ല.';
+
+  @override
+  String get statusPhoto => 'ഫോട്ടോ';
+
+  @override
+  String get statusAddPhoto => 'നിങ്ങളുടെ ഫോട്ടോ ചേർക്കൂ';
+
+  @override
+  String get statusPersonaTitle => 'നിങ്ങളുടെ ഫോട്ടോ & പേര്';
+
+  @override
+  String get statusPersonaBody =>
+      'നിങ്ങൾ ഷെയർ ചെയ്യുന്ന അല്ലെങ്കിൽ സേവ് ചെയ്യുന്ന എല്ലാ സ്റ്റാറ്റസിലും കാണിക്കും.';
+
+  @override
+  String get statusPersonaChoosePhoto => 'ഫോട്ടോ തിരഞ്ഞെടുക്കൂ';
+
+  @override
+  String get statusPersonaChangePhoto => 'ഫോട്ടോ മാറ്റൂ';
+
+  @override
+  String get statusPersonaRemovePhoto => 'ഫോട്ടോ നീക്കം ചെയ്യൂ';
+
+  @override
+  String get statusPersonaNameLabel => 'നിങ്ങളുടെ പേര്';
+
+  @override
+  String get statusPersonaShowPhoto => 'എന്റെ ഫോട്ടോ കാണിക്കുക';
+
+  @override
+  String get statusPersonaShowName => 'എന്റെ പേര് കാണിക്കുക';
+
+  @override
+  String get statusPersonaDone => 'കഴിഞ്ഞു';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'ആ ഫോട്ടോ ഉപയോഗിക്കാനായില്ല. മറ്റൊന്ന് ശ്രമിക്കൂ.';
+
+  @override
+  String get statusPersonaNameFailed =>
+      'നിങ്ങളുടെ പേര് സേവ് ആയില്ല. വീണ്ടും ശ്രമിക്കൂ.';
+
+  @override
+  String get statusPersonaOldTitle => 'Android 12 അല്ലെങ്കിൽ പുതിയത് വേണം';
+
+  @override
+  String get statusPersonaOldBody =>
+      'സ്റ്റാറ്റസുകളിൽ നിങ്ങളുടെ ഫോട്ടോയും പേരും ചേർക്കാൻ Android 12 അല്ലെങ്കിൽ പുതിയ പതിപ്പ് വേണം. എല്ലാ സ്റ്റാറ്റസും ഇപ്പോഴുള്ളതുപോലെ ഷെയർ ചെയ്യാം, സേവ് ചെയ്യാം.';
+
+  @override
+  String get statusPersonaOldOk => 'ശരി';
 }

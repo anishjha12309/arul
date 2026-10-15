@@ -1008,4 +1008,56 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get cancelOfferUnavailable => 'यह ऑफ़र अब उपलब्ध नहीं है।';
+
+  @override
+  String get statusPhoto => 'फ़ोटो';
+
+  @override
+  String get statusAddPhoto => 'अपनी फ़ोटो जोड़ें';
+
+  @override
+  String get statusPersonaTitle => 'आपकी फ़ोटो और नाम';
+
+  @override
+  String get statusPersonaBody =>
+      'आप जो भी स्टेटस शेयर या सेव करेंगे, उस पर दिखेगा।';
+
+  @override
+  String get statusPersonaChoosePhoto => 'फ़ोटो चुनें';
+
+  @override
+  String get statusPersonaChangePhoto => 'फ़ोटो बदलें';
+
+  @override
+  String get statusPersonaRemovePhoto => 'फ़ोटो हटाएं';
+
+  @override
+  String get statusPersonaNameLabel => 'आपका नाम';
+
+  @override
+  String get statusPersonaShowPhoto => 'मेरी फ़ोटो दिखाएं';
+
+  @override
+  String get statusPersonaShowName => 'मेरा नाम दिखाएं';
+
+  @override
+  String get statusPersonaDone => 'हो गया';
+
+  @override
+  String get statusPersonaPhotoFailed =>
+      'वह फ़ोटो इस्तेमाल नहीं हो सकी। कोई और आज़माएं।';
+
+  @override
+  String get statusPersonaNameFailed =>
+      'आपका नाम सेव नहीं हो सका। फिर कोशिश करें।';
+
+  @override
+  String get statusPersonaOldTitle => 'Android 12 या नया चाहिए';
+
+  @override
+  String get statusPersonaOldBody =>
+      'स्टेटस पर अपनी फ़ोटो और नाम जोड़ने के लिए Android 12 या नया वर्ज़न चाहिए। हर स्टेटस को आप पहले की तरह शेयर और सेव कर सकते हैं।';
+
+  @override
+  String get statusPersonaOldOk => 'ठीक है';
 }

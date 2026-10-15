@@ -259,6 +259,8 @@ class WallpaperShareNotifier extends Notifier<WallpaperShareState> {
       return await _watermark(wallpaper, src, tmpPath);
     } on ShareWatermarkUnsupportedException {
       rethrow;
+    } on ShareWatermarkTimeoutException {
+      rethrow;
     } on Object {
       await Future<void>.delayed(const Duration(milliseconds: 600));
       return _watermark(wallpaper, src, tmpPath);

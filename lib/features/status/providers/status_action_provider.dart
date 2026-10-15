@@ -12,9 +12,12 @@ import '../../../core/error/app_exception.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../premium/providers/entitlement_provider.dart';
 import '../../wallpapers/data/direct_share_service.dart';
+import '../../wallpapers/data/share_watermark_service.dart';
 import '../../wallpapers/providers/wallpaper_share_provider.dart';
 import '../data/status_media_service.dart';
+import '../data/status_overlay.dart';
 import '../domain/status_video.dart';
+import 'status_persona_provider.dart';
 import 'status_providers.dart';
 
 sealed class StatusActionState {
@@ -38,11 +41,24 @@ final class StatusActionBusy extends StatusActionState {
 
 // The clip is on disk and the sheet is up: still not idle, so a second tap waits.
 final class StatusActionChoosing extends StatusActionState {
-  const StatusActionChoosing(this._status, this._file, this._whatsApp);
+  const StatusActionChoosing(
+    this._status,
+    this._file,
+    this._whatsApp, [
+    this._personal = (photo: false, name: false),
+  ]);
 
   final StatusVideo _status;
   final File _file;
   final bool _whatsApp;
+  final StatusPersonalised _personal;
+}
+
+/// What the outgoing clip carries of the user: their photo, their name, or neither.
+typedef StatusPersonalised = ({bool photo, bool name});
+
+extension on StatusPersonalised {
+  Map<String, Object> get props => {'with_photo': photo, 'with_name': name};
 }
 
 // WhatsApp is opening: the sheet ignores taps on its way out, so a fast second tap reaches the reel.
@@ -106,12 +122,14 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     state = const StatusActionBusy();
     final direct = ref.read(directShareServiceProvider);
     try {
-      final file = await _source(status, StatusMediaAction.share);
+      final source = await _source(status, StatusMediaAction.share);
       if (!ref.mounted) return null;
       state = const StatusActionBusy(stage: StatusActionStage.preparing);
+      final (:file, :personal) = await _personalise(status, source);
+      if (!ref.mounted) return null;
       final whatsApp = await direct.hasWhatsApp(mimeType: _mime);
       if (!ref.mounted) return null;
-      state = StatusActionChoosing(status, file, whatsApp);
+      state = StatusActionChoosing(status, file, whatsApp, personal);
       return StatusShareReady(whatsApp: whatsApp);
     } catch (e, st) {
       return StatusShareSettled(_fail(e, st, reason: 'status share failed'));
@@ -126,6 +144,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
       _status: final status,
       _file: final file,
       _whatsApp: final whatsApp,
+      _personal: final personal,
     )) {
       state = const StatusActionSending();
       final direct = ref.read(directShareServiceProvider);
@@ -173,8 +192,9 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
             'status_id': status.id,
             'category': status.category,
             'result': result.name,
-            // Status clips go out clean (owner); kept so the dashboards' column stays filled.
+            // No trace code on statuses (owner); kept so the dashboards' column stays filled.
             'watermarked': false,
+            ...personal.props,
             'channel': target.channel,
             'via': via,
             // More and "no WhatsApp at all" both read channel=sheet; this tells them apart.
@@ -196,17 +216,19 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     if (state is StatusActionChoosing) _idle();
   }
 
-  // Byte for byte: the gallery file is the fetched clip. Null when another action is running.
+  // The gallery copy matches what a share sends: the user's photo and name burnt in when this phone
+  // can, else the fetched clip byte for byte. Null when another action is running.
   Future<StatusActionOutcome?> save(StatusVideo status) async {
     if (state is! StatusActionIdle) return null;
     state = const StatusActionBusy();
     final analytics = ref.read(analyticsServiceProvider);
     final media = ref.read(statusMediaServiceProvider);
     try {
-      final file = await _source(status, StatusMediaAction.download);
+      final source = await _source(status, StatusMediaAction.download);
       if (ref.mounted) {
         state = const StatusActionBusy(stage: StatusActionStage.saving);
       }
+      final (:file, :personal) = await _personalise(status, source);
       final saved = await media.saveToGallery(
         file.path,
         _recipientFilename(status, unique: true),
@@ -220,6 +242,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
               'status_id': status.id,
               'category': status.category,
               'watermarked': false,
+              ...personal.props,
             },
           );
           return StatusActionOutcome.done;
@@ -314,10 +337,91 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     });
   }
 
+  /// The clip with the user's photo and name burnt in when there is something to draw and this
+  /// phone can export (API 31+); otherwise [src] untouched, as every clip went out before.
+  Future<({File file, StatusPersonalised personal})> _personalise(
+    StatusVideo status,
+    File src,
+  ) async {
+    const plain = (photo: false, name: false);
+    StatusPersona persona;
+    try {
+      persona = await ref.read(statusPersonaProvider.future);
+    } catch (_) {
+      // No readable persona is the same as none: the clip goes out as it is.
+      return (file: src, personal: plain);
+    }
+    final width = status.width;
+    final height = status.height;
+    // The PNG is placed 1:1 on the frame, so an unknown size would misplace it -> send the clip as is.
+    if (!ref.mounted || width == null || height == null || width <= 0 || height <= 0) {
+      return (file: src, personal: plain);
+    }
+    final spec = StatusOverlaySpec(
+      photo: persona.shownPhoto,
+      name: persona.showName ? ref.read(statusPersonaNameProvider) : null,
+      slot: status.photoSlot,
+      clipHeightPx: height,
+    );
+    if (spec.isEmpty) return (file: src, personal: plain);
+    final export = ref.read(shareWatermarkServiceProvider);
+    if (!(await export.videoWatermarkSupport()).supported) {
+      return (file: src, personal: plain);
+    }
+    // The name rides in a band under the clip: the exported frame grows by it.
+    final canvasHeight =
+        height + (spec.band > 0 ? StatusOverlaySpec.bandPxFor(height) : 0);
+    // Past 1920 tall the hardware encoder refuses the grown frame.
+    if (canvasHeight > 1920) return (file: src, personal: plain);
+    final png = await renderStatusOverlayPng(
+      spec,
+      width: width,
+      height: canvasHeight,
+    );
+    // The export decodes AND encodes in hardware; a budget SoC fits ~2 codecs and the reel holds
+    // them -> free them first and keep a swipe under the card from re-grabbing one.
+    if (!ref.mounted) return (file: src, personal: plain);
+    final reel = ref.read(statusVideoControllerProvider);
+    await reel.holdDecoders();
+    try {
+      Future<File> run() => export.overlayVideo(
+        src,
+        png,
+        outPath:
+            '${src.parent.path}/status-${status.id}-me-${DateTime.now().millisecondsSinceEpoch}.mp4',
+        canvasWidth: width,
+        canvasHeight: canvasHeight,
+        contentHeight: height,
+      );
+      File out;
+      try {
+        out = await run();
+      } on ShareWatermarkUnsupportedException {
+        rethrow;
+      } on ShareWatermarkTimeoutException {
+        // A stalled encoder stalls again: a retry would only double the wait.
+        rethrow;
+      } on Object {
+        // One retry, as the wallpaper share does: a codec still closing from the reel fails the first try.
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        out = await run();
+      }
+      return (
+        file: out,
+        personal: (photo: spec.photo != null, name: spec.name != null),
+      );
+    } finally {
+      reel.reclaimDecoders();
+    }
+  }
+
   /// The ~8 MB source copies accumulate, one per clip ever acted on -> sweep status copies over a
   /// day old (older builds' watermarked ones included); never [keep], which is about to be read.
+  /// A personalised export is a fresh file per tap, so it goes after an hour.
   void _cleanStaleCopies(String dir, {required String keep}) {
-    final cutoff = DateTime.now().subtract(const Duration(days: 1));
+    final now = DateTime.now();
+    final cutoff = now.subtract(const Duration(days: 1));
+    final exportCutoff = now.subtract(const Duration(hours: 1));
     Future(() async {
       await for (final entry in Directory(dir).list()) {
         if (entry is! File ||
@@ -325,8 +429,11 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
           continue;
         }
         if (entry.path == keep) continue;
+        final limit = entry.uri.pathSegments.last.contains('-me-')
+            ? exportCutoff
+            : cutoff;
         try {
-          if ((await entry.stat()).modified.isBefore(cutoff)) {
+          if ((await entry.stat()).modified.isBefore(limit)) {
             await entry.delete();
           }
         } catch (_) {

@@ -293,5 +293,21 @@
   "cancelOfferTryAgain": "మళ్లీ ప్రయత్నించండి",
   "cancelOfferNothingChanged": "ఏమీ మారలేదు. మీరు ఇప్పటికీ నెలకు {price} ప్లాన్‌లోనే ఉన్నారు.",
   "cancelOfferSwitchedToast": "ఇకపై మీకు నెలకు {price} మాత్రమే.",
-  "cancelOfferUnavailable": "ఈ ఆఫర్ ఇప్పుడు అందుబాటులో లేదు."
+  "cancelOfferUnavailable": "ఈ ఆఫర్ ఇప్పుడు అందుబాటులో లేదు.",
+  "statusPhoto": "ఫోటో",
+  "statusAddPhoto": "మీ ఫోటో జోడించండి",
+  "statusPersonaTitle": "మీ ఫోటో & పేరు",
+  "statusPersonaBody": "మీరు షేర్ చేసే లేదా సేవ్ చేసే ప్రతి స్టేటస్‌లో కనిపిస్తుంది.",
+  "statusPersonaChoosePhoto": "ఫోటో ఎంచుకోండి",
+  "statusPersonaChangePhoto": "ఫోటో మార్చండి",
+  "statusPersonaRemovePhoto": "ఫోటో తీసివేయండి",
+  "statusPersonaNameLabel": "మీ పేరు",
+  "statusPersonaShowPhoto": "నా ఫోటో చూపించు",
+  "statusPersonaShowName": "నా పేరు చూపించు",
+  "statusPersonaDone": "అయింది",
+  "statusPersonaPhotoFailed": "ఆ ఫోటోను వాడలేకపోయాం. వేరేది ప్రయత్నించండి.",
+  "statusPersonaNameFailed": "మీ పేరు సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి.",
+  "statusPersonaOldTitle": "Android 12 లేదా కొత్తది అవసరం",
+  "statusPersonaOldBody": "స్టేటస్‌లకు మీ ఫోటో, పేరు జోడించడానికి Android 12 లేదా కొత్త వెర్షన్ అవసరం. ప్రతి స్టేటస్‌ను ఇప్పటిలాగే షేర్ చేయవచ్చు, సేవ్ చేయవచ్చు.",
+  "statusPersonaOldOk": "సరే"
 }

@@ -20,6 +20,9 @@ enum MediaPickKind {
 
   /// The documents picker opened at the audio root: what a ringtone submission needs.
   audio,
+
+  /// The Photo Picker filtered to images: the user's own photo for statuses.
+  image,
 }
 
 /// Asks the native side to open the system picker for [MediaPickKind] and hand back a copy.
@@ -42,6 +45,7 @@ class MediaPickService {
           MediaPickKind.visual => 'visual',
           MediaPickKind.video => 'video',
           MediaPickKind.audio => 'audio',
+          MediaPickKind.image => 'image',
         },
       });
     } on MissingPluginException {
@@ -52,5 +56,19 @@ class MediaPickService {
     final name = answer?['name'] as String?;
     if (path == null || name == null) return null;
     return PickedMedia(path: path, name: name);
+  }
+
+  /// Decodes [inputPath] (HEIC and EXIF rotation included), centre-crops it to a square and writes
+  /// a [side]-pixel JPEG to [outputPath]. Throws when the native side cannot.
+  Future<void> squarePhoto({
+    required String inputPath,
+    required String outputPath,
+    required int side,
+  }) async {
+    await _channel.invokeMethod<void>('squarePhoto', {
+      'inputPath': inputPath,
+      'outputPath': outputPath,
+      'side': side,
+    });
   }
 }

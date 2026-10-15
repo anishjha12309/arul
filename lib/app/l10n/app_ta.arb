@@ -293,5 +293,21 @@
   "cancelOfferTryAgain": "மீண்டும் முயற்சிக்கவும்",
   "cancelOfferNothingChanged": "எதுவும் மாறவில்லை. நீங்கள் இன்னும் மாதம் {price} திட்டத்திலேயே இருக்கிறீர்கள்.",
   "cancelOfferSwitchedToast": "இனி உங்களுக்கு மாதம் {price} மட்டுமே.",
-  "cancelOfferUnavailable": "இந்தச் சலுகை இப்போது கிடைக்கவில்லை."
+  "cancelOfferUnavailable": "இந்தச் சலுகை இப்போது கிடைக்கவில்லை.",
+  "statusPhoto": "புகைப்படம்",
+  "statusAddPhoto": "உங்கள் புகைப்படம் சேர்க்கவும்",
+  "statusPersonaTitle": "உங்கள் புகைப்படம் & பெயர்",
+  "statusPersonaBody": "நீங்கள் பகிரும் அல்லது சேமிக்கும் ஒவ்வொரு ஸ்டேட்டஸிலும் காட்டப்படும்.",
+  "statusPersonaChoosePhoto": "புகைப்படம் தேர்வுசெய்",
+  "statusPersonaChangePhoto": "புகைப்படத்தை மாற்று",
+  "statusPersonaRemovePhoto": "புகைப்படத்தை நீக்கு",
+  "statusPersonaNameLabel": "உங்கள் பெயர்",
+  "statusPersonaShowPhoto": "என் புகைப்படத்தைக் காட்டு",
+  "statusPersonaShowName": "என் பெயரைக் காட்டு",
+  "statusPersonaDone": "முடிந்தது",
+  "statusPersonaPhotoFailed": "அந்தப் புகைப்படத்தைப் பயன்படுத்த முடியவில்லை. வேறொன்றை முயற்சிக்கவும்.",
+  "statusPersonaNameFailed": "உங்கள் பெயரைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
+  "statusPersonaOldTitle": "Android 12 அல்லது புதியது தேவை",
+  "statusPersonaOldBody": "ஸ்டேட்டஸில் உங்கள் புகைப்படமும் பெயரும் சேர்க்க Android 12 அல்லது புதிய பதிப்பு தேவை. எல்லா ஸ்டேட்டஸையும் இப்போது உள்ளபடியே பகிரலாம், சேமிக்கலாம்.",
+  "statusPersonaOldOk": "சரி"
 }

@@ -27,7 +27,10 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] The status catalog loads on the first open of the tab, never in the pre-first-paint drain
 - [ ] Status clips prefetch into their OWN cache store — they never evict live wallpapers
 - [ ] Share and Save re-read entitlement every time; a cached clip is never a licence
-- [ ] Share and Save send the clip byte for byte — no watermark, no Media3 export (owner)
+- [ ] No trace watermark on a status; photo/name burnt in only when on AND API 31+, else byte for byte;
+      Save sends what Share sends (owner)
+- [ ] Card preview and export PNG are ONE painter; the PNG and the exported frame are clip + name band
+- [ ] Below API 31: no photo preview, Photo explains itself, clips go out as before
 - [ ] No WhatsApp → no Arul sheet; Back on the preparing card or a closed sheet sends and tracks nothing;
       one pick per sheet, and a second tap while an action runs is refused
 - [ ] Save is a fresh MediaStore entry, copied off the main thread; ≤Android 9 asks storage on the first
@@ -37,6 +40,10 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] A pull on the first card refreshes and the clips stay on screen through it
 - [ ] A cold `/s/` link opens on its clip — card 0 is never opened or staged first
 - [ ] One status per page, no peek; the box is the clip's own shape, whole, on a 320 dp phone too
+- [ ] The verbs sit in the fixed bar under the reel, never over the clip's bottom edge
+- [ ] A malformed `photo_slot` never drops its row; a 768×1152 clip or a new language parses like any
+- [ ] The first Status visit asks the language once, never over a cold `/s/` link; the app language's
+      category leads the chips and opens the reel; a status link keeps All
 - [ ] The status chips stay on every page; nothing folds or hides them on a swipe
 - [ ] Groups, WhatsApp and Status in the status share sheet all wear the WhatsApp logo
 
