@@ -409,6 +409,50 @@ void main() {
     expect(_feedIds(scopeOf(tester)), [_tamil.id]);
   });
 
+  testWidgets('a catalog that lands behind Settings asks on the way back, never over it', (
+    tester,
+  ) async {
+    final gate = Completer<List<StatusVideo>>();
+    await pump(
+      tester,
+      languageAsked: false,
+      shell: true,
+      catalog: () => gate.future,
+    );
+    unawaited(router.push('/settings'));
+    await _settle(tester);
+    gate.complete([..._clips, _tamil]);
+    await _settle(tester);
+    expect(find.text('settings'), findsOneWidget);
+    expect(find.text('தமிழ்'), findsNothing);
+
+    router.pop();
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsOneWidget);
+  });
+
+  testWidgets('a link that lands behind the open sheet survives the pick', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      languageAsked: false,
+      visible: true,
+      catalog: () async => [..._clips, _tamil],
+    );
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsOneWidget);
+
+    ArulDeepLink.requestTarget(StatusLinkTarget(_clips[1].id));
+    await _settle(tester);
+    expect(ArulDeepLink.pendingTarget, isNull, reason: 'consumed');
+
+    await tester.tap(find.text('தமிழ்'));
+    await _settle(tester);
+    expect(scopeOf(tester).read(statusLanguageProvider), 'ta');
+    expect(prefetch.ids, [_clips[1].id, _tamil.id]);
+  });
+
   test('English has no status category', () {
     expect(statusSlugForLanguage('en'), isNull);
     expect(statusSlugForLanguage('ta'), 'tamil');

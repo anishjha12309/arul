@@ -83,6 +83,12 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   bool _linkThisVisit = false;
   bool _asking = false;
 
+  /// A link that landed behind the open sheet survives the pick made on it, saved over several frames.
+  bool _pickKeepsLink = false;
+
+  /// The catalog landed while Status was hidden -> ask when it shows, never over another screen.
+  bool _askWhenShown = false;
+
   bool _shown = true;
   int? _ownBranch;
   bool _leftTab = false;
@@ -113,8 +119,9 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     if (!shown) {
       _leftTab = branch != _ownBranch;
       if (_leftTab) _linkThisVisit = false;
-    } else if (_leftTab) {
+    } else if (_leftTab || _askWhenShown) {
       _leftTab = false;
+      _askWhenShown = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskLanguage());
     }
   }
@@ -139,6 +146,11 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
       final prefs = ref.read(sharedPreferencesProvider);
       final asked = prefs.getBool(StatusScreen.languageAskedKey) ?? false;
       if (current != null && asked) return;
+      // After the reads: a paused provider left stale here refreshes inside the resume build and asserts.
+      if (!_shown) {
+        _askWhenShown = true;
+        return;
+      }
       final next = await showLanguageSheet(
         context,
         current == null ? null : appLanguageName(current),
@@ -146,6 +158,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
       );
       if (!mounted) return;
       final picked = next == null ? null : appLanguageCodeFor(next);
+      _pickKeepsLink = picked != null && _linked != null;
       final code = picked ?? current;
       if (code == null) return;
       await ref.read(statusLanguagePicksProvider.notifier).remember(code);
@@ -161,6 +174,10 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
           .setLocale(Locale(picked), source: LanguageSource.pick);
     } finally {
       _asking = false;
+      if (_pickKeepsLink && mounted) {
+        _pickKeepsLink = false;
+        _linkedLanguage = ref.read(statusLanguageProvider);
+      }
     }
   }
 
@@ -265,7 +282,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
   List<StatusVideo> _withLinked(List<StatusVideo> feed, String? language) {
     final linked = _linked;
     if (linked == null) return feed;
-    if (language != _linkedLanguage) {
+    if (language != _linkedLanguage && !_pickKeepsLink) {
       _linked = null;
       return feed;
     }

@@ -36,15 +36,20 @@ per paid-for bug, binding whatever the UI; walk them on device before a release.
 - [ ] Save is a fresh MediaStore entry, copied off the main thread; ≤Android 9 asks storage on the first
       save, never at launch; a denial is a localized message
 - [ ] Entering Status stops the ringtone preview
-- [ ] Loading, empty, error and offline faces say status videos, never wallpapers; empty offers Browse all
+- [ ] Loading, empty, error and offline faces say status videos, never wallpapers
 - [ ] A pull on the first card refreshes and the clips stay on screen through it
 - [ ] A cold `/s/` link opens on its clip — card 0 is never opened or staged first
 - [ ] One status per page, no peek; the box is the clip's own shape, whole, on a 320 dp phone too
 - [ ] The verbs sit in the fixed bar under the reel, never over the clip's bottom edge
 - [ ] A malformed `photo_slot` never drops its row; a 768×1152 clip or a new language parses like any
-- [ ] The first Status visit asks the language once, never over a cold `/s/` link; the app language's
-      category leads the chips and opens the reel; a status link keeps All
-- [ ] The status chips stay on every page; nothing folds or hides them on a swipe
+- [ ] The reel is one language's clips, no chips; the sheet lists only languages that have clips
+- [ ] None chosen → the sheet asks on every tab visit, not on a return from Settings, never over another
+      screen (a catalog that lands behind one asks on the way back); closed = every clip for now. One
+      chosen → asks once, preselected
+- [ ] A cold `/s/` link skips the sheet and plays its clip first, then the user's language; a pick on a
+      sheet the link landed behind keeps the clip first
+- [ ] Settings: a language with clips switches Status too; English or Hindi changes only the app text
+- [ ] A failed catalog drain reports once per run, however many times Riverpod retries it
 - [ ] Groups, WhatsApp and Status in the status share sheet all wear the WhatsApp logo
 
 ## Status uploads — [status-clips.md](status-clips.md), [architecture.md](architecture.md) §Uploads

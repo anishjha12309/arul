@@ -36,6 +36,8 @@ final statusVideoControllerProvider =
         visible: false,
         onGaveUp: (status, code) {
           if (!ref.mounted) return;
+          // Media3 names a dropped or timed-out connection ERROR_CODE_IO_NETWORK_*: nothing to fix.
+          final network = code.startsWith('ERROR_CODE_IO_NETWORK');
           ref
               .read(analyticsServiceProvider)
               .track(
@@ -44,11 +46,18 @@ final statusVideoControllerProvider =
                   'status_id': status.id,
                   'category': status.category,
                   'code': code,
+                  'reason': network ? 'network' : code,
                 },
               );
-          ref
-              .read(crashReporterProvider)
-              .log('status ${status.id} gave up: $code');
+          final crash = ref.read(crashReporterProvider)
+            ..log('status ${status.id} gave up: $code');
+          if (!network) {
+            crash.recordError(
+              StateError('status play gave up: $code'),
+              StackTrace.current,
+              reason: 'status play failed',
+            );
+          }
         },
       );
       ref.onDispose(controller.dispose);
