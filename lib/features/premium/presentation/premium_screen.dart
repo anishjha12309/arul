@@ -19,6 +19,7 @@ import '../../../core/analytics/analytics_service.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/data_saver.dart';
+import '../../../core/experiments/experiments.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
@@ -1244,8 +1245,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen>
             ? _selectedUpiPackage
             : upiApps.first.packageName);
 
-  List<UpiApp> _orderedUpiApps(List<UpiApp> apps) =>
-      UpiApps.ordered(apps, _selectedUpiPackage);
+  List<UpiApp> _orderedUpiApps(List<UpiApp> apps) => UpiApps.ordered(
+    apps,
+    _selectedUpiPackage,
+    lead: ref.read(experimentsProvider).upiLeadPackage,
+  );
 
   /// The picker, open in EVERY state including a resumable one.
   Future<void> _openUpiPicker(

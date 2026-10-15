@@ -223,5 +223,36 @@ void main() {
     test('an empty list stays empty whatever is remembered', () {
       expect(UpiApps.ordered(const [], _phonepe), isEmpty);
     });
+
+    test('the Paytm arm leads with Paytm, the rest keep the owner order', () {
+      final gpayFirst = [_phonepe, _gpay, _paytm, _bhim].map(_app).toList();
+      expect(
+        UpiApps.ordered(
+          gpayFirst,
+          null,
+          lead: _paytm,
+        ).map((a) => a.packageName),
+        [_paytm, _phonepe, _gpay, _bhim],
+      );
+    });
+
+    test('a remembered pick still outranks the arm', () {
+      expect(
+        UpiApps.ordered(
+          installed,
+          _gpay,
+          lead: _paytm,
+        ).map((a) => a.packageName),
+        [_gpay, _paytm, _phonepe, _bhim],
+      );
+    });
+
+    test('no Paytm on the phone -> the arm moves nothing', () {
+      final noPaytm = [_phonepe, _gpay, _bhim].map(_app).toList();
+      expect(
+        identical(UpiApps.ordered(noPaytm, null, lead: _paytm), noPaytm),
+        isTrue,
+      );
+    });
   });
 }

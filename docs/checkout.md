@@ -1,7 +1,6 @@
 # Checkout — the app side of a UPI Autopay setup
 
-Read before touching `lib/features/premium/**` (the purchase notifier, the UPI picker, the QR, the
-return page). The Worker contract it drives: [phonepe.md](phonepe.md).
+Read before touching `lib/features/premium/**`. The Worker contract it drives: [phonepe.md](phonepe.md).
 
 ## Which apps the picker offers
 
@@ -15,6 +14,9 @@ return page). The Worker contract it drives: [phonepe.md](phonepe.md).
 - **Never reorder it off observed completion rates** — they are self-selected by the position the app
   already holds (an app reached by scrolling past the top two selects for determined payers). A reorder
   needs a split test.
+- **`exp_upi_top` is that test** (50/50, once per install): `paytm` floats Paytm to the head, the default
+  app; `phonepe` keeps this order. A remembered pick outranks both. `feature_flags.exp_upi_top = false`
+  ends it.
 - **No hosted-page fallback** — it almost never completed, and a route that cannot finish is worse than
   none.
 
@@ -28,7 +30,7 @@ return page). The Worker contract it drives: [phonepe.md](phonepe.md).
   `kUpiPickQr` sentinel in place of a package and nothing reaches `arul_upi_app`, or a curious tap would
   leave the CTA launching an app nobody chose.
 - Over an open order it abandons like an app switch, and `switchApp`'s same-app guard MUST skip it —
-  the QR names `com.phonepe.app` as a formality and would read as "the app you already picked".
+  the QR names `com.phonepe.app` only as a formality.
 - Pass `mode: "qr"` on initiate, or the order files under `com.phonepe.app` and mandates PhonePe never
   saw pollute the column that ranks apps by completions. A QR request the Worker answers with the SDK
   page is a dead end (that page needs an app on THIS phone), so the app abandons instead.

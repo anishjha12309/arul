@@ -19,24 +19,30 @@ void main() {
   }
 
   group('after the test', () {
-    test('an install without an arm gets the regional wall and stamps no arm', () async {
-      final none = Experiments.read(await prefsWith({}));
-      expect(none.regional, isNull);
-      expect(none.analyticsProperties, isEmpty);
-      expect(none.regionalActive, isTrue);
-      expect(none.geoLanguageApplies, isTrue);
-    });
+    test(
+      'an install without an arm gets the regional wall and stamps no arm',
+      () async {
+        final none = Experiments.read(await prefsWith({}));
+        expect(none.regional, isNull);
+        expect(none.analyticsProperties, isEmpty);
+        expect(none.regionalActive, isTrue);
+        expect(none.geoLanguageApplies, isTrue);
+      },
+    );
 
-    test('a control install gets the regional wall too, and keeps its arm', () async {
-      final control = Experiments.read(
-        await prefsWith({Experiments.regionalKey: 'control'}),
-      );
-      expect(control.regional, RegionalArm.control);
-      expect(control.analyticsProperties, {'exp_regional': 'control'});
-      expect(control.regionalActive, isTrue);
-      // A hint a control install stored was never applied -> applying it now would flip its language.
-      expect(control.geoLanguageApplies, isFalse);
-    });
+    test(
+      'a control install gets the regional wall too, and keeps its arm',
+      () async {
+        final control = Experiments.read(
+          await prefsWith({Experiments.regionalKey: 'control'}),
+        );
+        expect(control.regional, RegionalArm.control);
+        expect(control.analyticsProperties, {'exp_regional': 'control'});
+        expect(control.regionalActive, isTrue);
+        // A hint a control install stored was never applied -> applying it now would flip its language.
+        expect(control.geoLanguageApplies, isFalse);
+      },
+    );
   });
 
   group('what the arms mean', () {
@@ -85,6 +91,59 @@ void main() {
         expect(Experiments.read(prefs).regionalOff, isFalse);
       },
     );
+  });
+
+  group('PhonePe or Paytm on top', () {
+    test(
+      'a launch with no arm deals one, and a stored arm is never re-dealt',
+      () async {
+        final prefs = await prefsWith({});
+        Experiments.dealUpiTop(prefs);
+        final dealt = Experiments.read(prefs).upiTop;
+        expect(dealt, isNotNull);
+        expect(Experiments.read(prefs).analyticsProperties, {
+          'exp_upi_top': dealt!.name,
+        });
+
+        final other = UpiTopArm.values.firstWhere((a) => a != dealt);
+        Experiments.dealUpiTop(prefs, qaArm: other.name);
+        expect(Experiments.read(prefs).upiTop, dealt);
+      },
+    );
+
+    test('the coin lands on both arms', () async {
+      final seen = <UpiTopArm>{};
+      for (var i = 0; i < 40 && seen.length < 2; i++) {
+        final prefs = await prefsWith({});
+        Experiments.dealUpiTop(prefs);
+        seen.add(Experiments.read(prefs).upiTop!);
+      }
+      expect(seen, UpiTopArm.values.toSet());
+    });
+
+    test('only the live Paytm arm moves Paytm up', () async {
+      Future<String?> lead(Map<String, Object> v) async =>
+          Experiments.read(await prefsWith(v)).upiLeadPackage;
+      expect(await lead({Experiments.upiTopKey: 'paytm'}), 'net.one97.paytm');
+      expect(await lead({Experiments.upiTopKey: 'phonepe'}), isNull);
+      expect(await lead({}), isNull);
+      expect(
+        await lead({
+          Experiments.upiTopKey: 'paytm',
+          Experiments.upiTopOffKey: true,
+        }),
+        isNull,
+      );
+    });
+
+    test('switched off, it still stamps the arm it dealt', () async {
+      final prefs = await prefsWith({Experiments.upiTopKey: 'paytm'});
+      await Experiments.persistKillSwitches(prefs, {'exp_upi_top': false});
+      final e = Experiments.read(prefs);
+      expect(e.upiTopOff, isTrue);
+      expect(e.analyticsProperties, {'exp_upi_top': 'paytm'});
+      expect(e.regionalOff, isFalse);
+    });
   });
 
   group('the control arm and the region', () {

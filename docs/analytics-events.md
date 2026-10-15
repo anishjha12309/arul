@@ -63,7 +63,6 @@ outcome is a process that died under Google's surface — the only way that loss
   `meta_ads` when Meta's Install Referrer (`MetaInstallReferrer.kt`) holds a view-through or
   later-session touch. A content link adds `+wallpaper`/`+ringtone`/`+status` to the SAME value —
   split on `+`, never compare the whole string. Also **`low_ram`** (the poster rule's verdict).
-- Free-text values stay ≤100 chars; GA4 silently drops longer ones.
 
 ## The checkout and paywall events (GA4-only)
 
@@ -126,6 +125,7 @@ property, a `register()` super property or a person property — [analytics-sign
 - `language_source` (`pick`·`link`·`geo`·`phone`·`default`; `geo` = an older build's region language)
   and `geo_region` (Cloudflare's region or `none`, `none` until `GET /geo` answers). GA4 hides both
   until registered as user-scoped custom dimensions.
-- **`exp_regional` (`control`|`regional`)** is the ENDED regional A/B: no new install gets an arm; dealt
-  installs keep stamping the ASSIGNMENT, not the kill state. `feature_flags.exp_regional = false` still
-  turns the regional wall off from the next cold start.
+- **An experiment arm stamps the ASSIGNMENT, never the kill state; a kill switch acts from the next cold
+  start.** `exp_regional` (`control`|`regional`) is ENDED: no new install gets an arm, and
+  `feature_flags.exp_regional = false` still turns the regional wall off. `exp_upi_top`
+  (`phonepe`|`paytm`): [checkout.md](checkout.md).

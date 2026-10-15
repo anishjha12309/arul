@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,10 +13,24 @@ part 'experiments.g.dart';
 /// dealt one, and a stored arm is kept only for analytics and the legacy language gate.
 enum RegionalArm { control, regional }
 
+/// Which UPI app heads the paywall picker for someone who has never picked one. `phonepe` is the
+/// channel's own order; `paytm` floats Paytm above it (checkout.md: a reorder needs a split test).
+enum UpiTopArm { phonepe, paytm }
+
 final class Experiments {
-  const Experiments({this.regional, this.regionalOff = false});
+  const Experiments({
+    this.regional,
+    this.regionalOff = false,
+    this.upiTop,
+    this.upiTopOff = false,
+  });
 
   final RegionalArm? regional;
+
+  final UpiTopArm? upiTop;
+
+  /// `feature_flags.exp_upi_top` = false -> every arm gets the channel order from the next cold start.
+  final bool upiTopOff;
 
   /// `feature_flags.exp_regional` = false, persisted when a config lands -> takes effect from the
   /// NEXT cold start, because the first launch has no config yet.
@@ -23,10 +38,16 @@ final class Experiments {
 
   static const regionalKey = 'arul_exp_regional_v1';
   static const regionalOffKey = 'arul_exp_regional_off';
+  static const upiTopKey = 'arul_exp_upi_top_v1';
+  static const upiTopOffKey = 'arul_exp_upi_top_off';
 
   static const regionalProperty = 'exp_regional';
+  static const upiTopProperty = 'exp_upi_top';
 
   static const regionalFlag = 'exp_regional';
+  static const upiTopFlag = 'exp_upi_top';
+
+  static const paytmPackage = 'net.one97.paytm';
 
   /// Every install gets the regional wall unless the kill switch is on.
   bool get regionalActive => !regionalOff;
@@ -37,14 +58,40 @@ final class Experiments {
   bool get geoLanguageApplies =>
       regional == null || (regional == RegionalArm.regional && !regionalOff);
 
+  /// The package the picker floats to the head before the remembered pick, or null for channel order.
+  String? get upiLeadPackage =>
+      upiTop == UpiTopArm.paytm && !upiTopOff ? paytmPackage : null;
+
   /// The assignment, never the kill state: the arm a person was dealt is what the read splits on.
   Map<String, Object> get analyticsProperties => {
     regionalProperty: ?regional?.name,
+    upiTopProperty: ?upiTop?.name,
   };
+
+  /// Once per install, on whichever launch first runs a build that has the test, so existing installs
+  /// join too. Never re-dealt: a stored arm is read back as it is.
+  ///
+  /// [qaArm] (`QA_EXP_ARMS=paytm` on a sideload only) deals that arm instead of the coin.
+  static void dealUpiTop(
+    SharedPreferences prefs, {
+    Random? random,
+    String qaArm = '',
+  }) {
+    if (prefs.getString(upiTopKey) != null) return;
+    final forced = _arm(UpiTopArm.values, qaArm.trim());
+    final arm =
+        forced ??
+        UpiTopArm.values[(random ?? Random()).nextInt(UpiTopArm.values.length)];
+    // Prefs caches synchronously -> `read` sees the arm at once; a failed disk write re-deals next
+    // launch, before anything was shown, so it is still a fair coin.
+    unawaited(prefs.setString(upiTopKey, arm.name));
+  }
 
   static Experiments read(SharedPreferences prefs) => Experiments(
     regional: _arm(RegionalArm.values, prefs.getString(regionalKey)),
     regionalOff: prefs.getBool(regionalOffKey) ?? false,
+    upiTop: _arm(UpiTopArm.values, prefs.getString(upiTopKey)),
+    upiTopOff: prefs.getBool(upiTopOffKey) ?? false,
   );
 
   /// Persists the kill switch from a landed config. Only an explicit `false` turns the arm off, so a
@@ -54,7 +101,10 @@ final class Experiments {
     Map<String, dynamic>? featureFlags,
   ) async {
     if (featureFlags == null) return;
-    await prefs.setBool(regionalOffKey, featureFlags[regionalFlag] == false);
+    await Future.wait([
+      prefs.setBool(regionalOffKey, featureFlags[regionalFlag] == false),
+      prefs.setBool(upiTopOffKey, featureFlags[upiTopFlag] == false),
+    ]);
   }
 
   static T? _arm<T extends Enum>(List<T> values, String? stored) {

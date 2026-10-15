@@ -308,6 +308,13 @@ Future<void> _startApp() async {
     prefs,
     freshInstall: AnalyticsCohort.isFreshInstall,
   );
+  // Before PostHog primes its super properties, so the first event already carries the arm.
+  Experiments.dealUpiTop(
+    prefs,
+    qaArm: PlayInstall.isPlay
+        ? ''
+        : const String.fromEnvironment('QA_EXP_ARMS'),
+  );
   if (AppConfig.posthogEnabled && PlayInstall.isPlay && inCohort) {
     final config = PostHogConfig(AppConfig.posthogKey)
       ..host = AppConfig.posthogHost
