@@ -110,12 +110,16 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
     this._preloadAhead = 1,
     this._audio = false,
     this._visible = true,
+    this.onGaveUp,
   }) : _prefetch = prefetch, // ignore: prefer_initializing_formals
        _pool = pool ?? FeedVideoPlayerPool() {
     WidgetsBinding.instance.addObserver(this);
   }
 
   final String cdnBaseUrl;
+
+  /// Called when an item's player has failed past every retry and the card stays on its poster.
+  final void Function(T item, String codeName)? onGaveUp;
 
   /// Downloads upcoming live MP4 bytes to disk ahead of the decoder window. Owns NO decoders.
   ///
@@ -771,6 +775,7 @@ class VideoPreloadController<T extends ReelItem> extends ChangeNotifier
         'FeedVideo: giving up on index $index after $codeName '
         '(budget $_decoderBudget)',
       );
+      if (index < _items.length) onGaveUp?.call(_items[index], codeName);
       return;
     }
     pooled.retriesThisOpen++;

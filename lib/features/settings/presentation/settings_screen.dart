@@ -26,6 +26,7 @@ import '../../premium/providers/entitlement_provider.dart';
 import '../../push/providers/push_providers.dart';
 import '../../quick_bar/providers/quick_bar_providers.dart';
 import '../../share/tell_a_friend.dart';
+import '../../status/providers/status_providers.dart';
 import '../providers/theme_mode_provider.dart';
 import 'confirm_dialog.dart';
 import 'edit_name_sheet.dart';
@@ -229,6 +230,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final next = await showLanguageSheet(context, current);
     final code = next == null ? null : appLanguageCodeFor(next);
     if (code == null) return;
+    // Owner: a language with statuses switches Status too; English or Hindi keeps what it showed.
+    final picks = ref.read(statusLanguagePicksProvider.notifier);
+    await picks.remember(ref.read(localeProvider).languageCode);
+    await picks.remember(code);
     await ref
         .read(localeProvider.notifier)
         .setLocale(Locale(code), source: LanguageSource.pick);

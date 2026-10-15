@@ -20,8 +20,9 @@ paths:
 - **One status per page, its clip's own shape, whole** (owner, after Shubh): `FeedCardGeometry.contain`
   of the reel above the verb bar, then `BoxFit.fill` — no peek, never cover, never bars, never a blur
   beside the clip. The verbs live in ONE fixed bar under the reel (Shubh's), never over the clip.
-- The app language's category leads the chips and opens the reel; a pending `/s/` link keeps All. A
-  language chip's tap sets the app language, and a new app language clears the chip pick.
+- **Status shows one language's clips, no chips** (owner): `statusLanguageProvider`; the sheet lists
+  only languages with clips. A `/s/` clip plays first, then the user's language.
+- A failure tracks a GA4 `status_*_failed`, plus a Crashlytics record unless it is network or a 403.
 - Share = preparing card → Groups · WhatsApp · Status · More (owner's labels and order); no WhatsApp →
   the system sheet. The status surfaces (composer, `SEND_TO_STATUS`) carry no link; the picker and
   the sheet carry the `/s/` link ALONE, never a sentence. A closed sheet tracks nothing.

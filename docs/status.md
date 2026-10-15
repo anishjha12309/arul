@@ -21,15 +21,17 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   pre-first-paint drain, so a phone that never opens the tab never pays a byte for it. A missing page 1
   is the error state with retry: every status publish writes it, so a user meeting it is an operational
   fault.
-- Chips derive from the items, ordered by `category_order.statuses` bar the app language's lead
-  (§Language); row order is the catalog's `feed_rank`, never re-derived on the phone (§Order).
+- The reel is one language's clips (§Language) in the catalog's `feed_rank`, never re-derived on the
+  phone (§Order).
+- **Failures go to GA4, and to Crashlytics unless network** ([analytics-events.md](analytics-events.md)).
+  Riverpod retries a failed catalog build up to 10 times, each keeping the error: report the first only.
 
 ## Order — a weighted shuffle, redrawn every hour (owner)
 
 - **No pins and no fixed order.** `build-catalog` draws a weighted random order (`weightedShuffle`,
   `statusWeight` in `workers/src/lib/feed-score.ts`) and numbers it into `feed_rank`; the `feed_rank`
   COLUMN is ignored for statuses and the CMS no longer offers a status pin. Same order for every phone
-  until the next draw; a category chip is All filtered, as on the other tabs.
+  until the next draw; a language's reel is that order filtered.
 - **Weight = 1 + 3 × uses + 3 × fresh.** Uses = `share_count + download_count`, log-scaled against the
   busiest clip so one viral clip cannot own slot 1. Fresh fades 1 → 0 over 7 days from the later of
   `published_at` and `renewed_at` (a CMS Renew restarts it). The floor of 1 keeps every clip in reach.
@@ -39,23 +41,24 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   join two draws and show a clip twice. The app drains it once per process, so a new draw lands on the
   next cold start or pull-to-refresh, never mid-scroll.
 - **The tab wears the feed's faces with its own words**: the loading card says status videos
-  (`statusLoadingBody`), never wallpapers; empty is `FeedEmpty` with Browse all; a failure is
+  (`statusLoadingBody`), never wallpapers; empty is `FeedEmpty` (`statusEmpty`); a failure is
   `FeedError`; offline with NOTHING loaded is the offline card (`offlineStatusBody`), while clips
   already in hand keep playing from cache and Share/Save report offline themselves.
 - A pull on the first card re-reads the catalog like the wallpaper reel's; `refresh()` keeps the
   clips on screen through the fetch and after a failure — only a reel with nothing shows loading.
-- **A cold `/s/` link lands ON its clip.** On first data with All selected the screen seeds the pager
-  and the pool with the target index before the first sync; opening card 0 first staged card 0 + 1
-  against the linked clip (three transfers, 34–60 s on a slow 4G).
+- **A `/s/` link plays its clip first, any language, then the user's** (owner); a language change drops
+  it. The pager and pool start ON it: card 0 first staged 0 + 1 against it (34–60 s on a slow 4G).
 
-## Language — asked once, it leads (owner)
+## Language — only the chosen language's clips (owner)
 
-- **The first Status visit asks the language ONCE** and makes it the APP language (`setLocale`, `pick`).
-  `arul_status_lang_asked` is set before the sheet opens, so a dismissal counts; a pending cold `/s/`
-  link skips the ask (flag unset): the link answers first.
-- **Categories are named after languages** (`statusSlugForLanguage`), so the app language's category is
-  the first chip, ahead of All, and opens the reel when the catalog has it. The selection is null until
-  a pick: read `activeStatusCategoryProvider`. A pending status link keeps All and pins it once consumed.
+- **Categories are named after languages** (`statusSlugForLanguage`). The reel's language is the app
+  language if it has clips, else the latest Status pick that does (`arul_status_langs`: Settings never
+  loads the catalog), else none = every clip. A non-language category reaches only that last group.
+- **The sheet lists only languages with clips.** None chosen → it asks every visit (a tab switch, not
+  a return from Settings); closed = every clip for now. One chosen → it asks ONCE
+  (`arul_status_lang_asked`), closing keeps it. A link visit skips it. A pick sets the APP language.
+- **No chips** (owner). In Settings a language with clips switches Status too; English or Hindi changes
+  only the app text.
 
 ## The gate — same contract as the feed
 
@@ -93,8 +96,6 @@ decoders and audio: [video-feed.md](video-feed.md) · the share chain: [share.md
   No peek of the next clip, no card geometry, no end mark. Never cover (it cut the title first on short
   phones) and never a blur or a bar beside the picture (a stretched-poster blur read as a blurred clip).
   `tools/status-reencode.mjs` cut the first library's baked fill bands ([status-clips.md](status-clips.md)).
-- **The chip row stays through every swipe** (owner): a fold that gave the page its ~60 dp read as
-  the categories vanishing. The page is what is left under the chips.
 - **The verbs sit in ONE fixed 56 dp bar under the reel, never over the clip** (owner):
   Photo · Save as quiet pills, the green WhatsApp pill filling the rest; it acts on the clip in view.
   `_BarFit` picks, for the whole row: translations with glyphs, else an overflowing label in plain

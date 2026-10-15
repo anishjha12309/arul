@@ -9,6 +9,8 @@ import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/app/widgets/reel/video_preload_controller.dart';
 import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
+import 'package:arul/core/crash/crash_provider.dart';
+import 'package:arul/core/crash/crash_reporter.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/features/auth/domain/auth_service.dart';
 import 'package:arul/features/auth/providers/auth_providers.dart';
@@ -37,10 +39,11 @@ const _clip = StatusVideo(
 );
 
 class _FakeMedia implements StatusMediaService {
-  _FakeMedia({this.premiumRequired = false, this.save});
+  _FakeMedia({this.premiumRequired = false, this.save, this.downloadError});
 
   final bool premiumRequired;
   final StatusSaveResult? save;
+  final Object? downloadError;
   final grants = <StatusMediaAction>[];
   final downloads = <String>[];
   final saved = <String>[];
@@ -62,6 +65,7 @@ class _FakeMedia implements StatusMediaService {
     void Function(double) onProgress,
   ) async {
     downloads.add(url);
+    if (downloadError case final e?) throw e;
     onProgress(1);
     return File(outPath)..writeAsBytesSync(List.filled(32, 7));
   }
@@ -274,11 +278,24 @@ class _RecordingAnalytics implements AnalyticsService {
   void register(String key, Object value) {}
 }
 
+class _RecordingCrash extends NoOpCrashReporter {
+  final reasons = <String?>[];
+
+  @override
+  void recordError(
+    Object error,
+    StackTrace? stack, {
+    String? reason,
+    bool fatal = false,
+  }) => reasons.add(reason);
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory tmp;
   late _RecordingAnalytics analytics;
+  late _RecordingCrash crash;
   late List<ShareParams> sheet;
   late _FakeWatermark watermark;
   late List<StatusActionState> stateAtSheet;
@@ -286,6 +303,7 @@ void main() {
   setUp(() {
     tmp = Directory.systemTemp.createTempSync('status_action_test');
     analytics = _RecordingAnalytics();
+    crash = _RecordingCrash();
     sheet = [];
     watermark = _FakeWatermark();
     stateAtSheet = [];
@@ -322,6 +340,7 @@ void main() {
         shareWatermarkServiceProvider.overrideWithValue(watermark),
         localeProvider.overrideWith(_FixedLocale.new),
         analyticsServiceProvider.overrideWithValue(analytics),
+        crashReporterProvider.overrideWithValue(crash),
         authStateStreamProvider.overrideWith(
           (ref) => Stream.value(AuthUserState.unauthenticated()),
         ),
@@ -407,7 +426,47 @@ void main() {
       );
       expect(direct.calls, isEmpty);
       expect(analytics.events, isNot(contains('status_shared')));
+      expect(analytics.events, isNot(contains('status_share_failed')));
+      expect(crash.reasons, isEmpty);
       expect(c.read(statusActionProvider), isA<StatusActionIdle>());
+    });
+
+    test('a broken download is tracked and goes to Crashlytics', () async {
+      final c = container(
+        media: _FakeMedia(downloadError: const FormatException('bad bytes')),
+      );
+
+      final prep = await c
+          .read(statusActionProvider.notifier)
+          .prepareShare(_clip);
+
+      expect(
+        (prep! as StatusShareSettled).outcome,
+        StatusActionOutcome.failed,
+      );
+      expect(analytics.props['status_share_failed'], {
+        'status_id': _clip.id,
+        'reason': 'FormatException',
+        'stage': 'prepare',
+      });
+      expect(crash.reasons, ['status share failed']);
+    });
+
+    test('offline is tracked as network, never as a crash', () async {
+      final c = container(
+        media: _FakeMedia(downloadError: const SocketException('down')),
+      );
+
+      final prep = await c
+          .read(statusActionProvider.notifier)
+          .prepareShare(_clip);
+
+      expect(
+        (prep! as StatusShareSettled).outcome,
+        StatusActionOutcome.offline,
+      );
+      expect(analytics.props['status_share_failed']?['reason'], 'network');
+      expect(crash.reasons, isEmpty);
     });
 
     test('cached bytes skip the download but never the gate', () async {

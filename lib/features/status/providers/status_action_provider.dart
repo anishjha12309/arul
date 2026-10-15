@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/analytics/analytics_service.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/crash/crash_provider.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
@@ -121,6 +122,7 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
     if (state is! StatusActionIdle) return null;
     state = const StatusActionBusy();
     final direct = ref.read(directShareServiceProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     try {
       final source = await _source(status, StatusMediaAction.share);
       if (!ref.mounted) return null;
@@ -132,7 +134,16 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
       state = StatusActionChoosing(status, file, whatsApp, personal);
       return StatusShareReady(whatsApp: whatsApp);
     } catch (e, st) {
-      return StatusShareSettled(_fail(e, st, reason: 'status share failed'));
+      final outcome = _fail(e, st, reason: 'status share failed');
+      _trackFailure(
+        analytics,
+        'status_share_failed',
+        status,
+        e,
+        outcome,
+        stage: 'prepare',
+      );
+      return StatusShareSettled(outcome);
     }
   }
 
@@ -203,7 +214,16 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
         );
         return StatusActionOutcome.done;
       } catch (e, st) {
-        return _fail(e, st, reason: 'status share failed');
+        final outcome = _fail(e, st, reason: 'status share failed');
+        _trackFailure(
+          analytics,
+          'status_share_failed',
+          status,
+          e,
+          outcome,
+          stage: 'send',
+        );
+        return outcome;
       } finally {
         if (state is StatusActionSending) _idle();
       }
@@ -264,23 +284,35 @@ class StatusActionNotifier extends Notifier<StatusActionState> {
       }
     } catch (e, st) {
       final outcome = _fail(e, st, reason: 'status save failed');
-      if (outcome != StatusActionOutcome.premiumRequired) {
-        analytics.track(
-          'status_save_failed',
-          properties: {
-            'status_id': status.id,
-            'reason': outcome == StatusActionOutcome.offline
-                ? 'network'
-                : _clip(e.runtimeType.toString()),
-          },
-        );
-      }
+      _trackFailure(analytics, 'status_save_failed', status, e, outcome);
       return outcome;
     }
   }
 
   void _idle() {
     if (ref.mounted) state = const StatusActionIdle();
+  }
+
+  // A paywall is its own event (`status_*_blocked_premium`), never a failure.
+  void _trackFailure(
+    AnalyticsService analytics,
+    String event,
+    StatusVideo status,
+    Object e,
+    StatusActionOutcome outcome, {
+    String? stage,
+  }) {
+    if (outcome == StatusActionOutcome.premiumRequired) return;
+    analytics.track(
+      event,
+      properties: {
+        'status_id': status.id,
+        'reason': outcome == StatusActionOutcome.offline
+            ? 'network'
+            : _clip(e.runtimeType.toString()),
+        'stage': ?stage,
+      },
+    );
   }
 
   StatusActionOutcome _fail(Object e, StackTrace st, {required String reason}) {

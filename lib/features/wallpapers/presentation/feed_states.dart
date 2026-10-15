@@ -288,9 +288,10 @@ class _OpacityPulseState extends State<_OpacityPulse>
 }
 
 class FeedEmpty extends StatelessWidget {
-  const FeedEmpty({super.key, required this.onBrowseAll, this.title});
+  const FeedEmpty({super.key, this.onBrowseAll, this.title});
 
-  final VoidCallback onBrowseAll;
+  /// Null on a reel without categories -> no "try another category" and no pill.
+  final VoidCallback? onBrowseAll;
 
   /// A reel's own title; the body and the Browse-all pill are shared.
   final String? title;
@@ -315,21 +316,23 @@ class FeedEmpty extends StatelessWidget {
             textAlign: TextAlign.center,
             style: ArulTokens.screenTitle.copyWith(fontSize: 20, color: p.text),
           ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.feedEmptyBody,
-            textAlign: TextAlign.center,
-            style: ArulTokens.body.copyWith(color: p.textMuted),
-          ),
-          const SizedBox(height: 20),
-          Semantics(
-            container: true,
-            identifier: 'arul_feed_browse_all',
-            child: _OutlinedAccentPill(
-              label: l10n.feedBrowseAll,
-              onTap: onBrowseAll,
+          if (onBrowseAll case final browseAll?) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.feedEmptyBody,
+              textAlign: TextAlign.center,
+              style: ArulTokens.body.copyWith(color: p.textMuted),
             ),
-          ),
+            const SizedBox(height: 20),
+            Semantics(
+              container: true,
+              identifier: 'arul_feed_browse_all',
+              child: _OutlinedAccentPill(
+                label: l10n.feedBrowseAll,
+                onTap: browseAll,
+              ),
+            ),
+          ],
         ],
       ),
     );

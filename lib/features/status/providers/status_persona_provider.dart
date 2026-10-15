@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/analytics/analytics_provider.dart';
+import '../../../core/crash/crash_provider.dart';
+import '../../../core/error/app_exception.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
 import '../../auth/providers/auth_providers.dart';
 import '../../upload/data/media_pick_service.dart';
@@ -107,6 +110,44 @@ class StatusPersonaNotifier extends AsyncNotifier<StatusPersona> {
 
   /// Opens the photo picker and stores a centre-cropped square. False when the user backed out.
   Future<bool> pickPhoto() async {
+    final report = _failureReport('photo');
+    try {
+      return await _pickPhoto();
+    } catch (e, st) {
+      report(e, st);
+      rethrow;
+    }
+  }
+
+  /// Saves the name burnt under the clip; throws when the server refuses it.
+  Future<void> saveName(String name) async {
+    final report = _failureReport('name');
+    try {
+      await ref.read(authControllerProvider.notifier).updateDisplayName(name);
+    } catch (e, st) {
+      report(e, st);
+      rethrow;
+    }
+  }
+
+  // Read before the await: the sheet may close, and this notifier with it, while the pick runs.
+  void Function(Object, StackTrace) _failureReport(String step) {
+    final analytics = ref.read(analyticsServiceProvider);
+    final crash = ref.read(crashReporterProvider);
+    return (e, st) {
+      final network = isNetworkError(e);
+      analytics.track(
+        'status_persona_failed',
+        properties: {
+          'step': step,
+          'reason': network ? 'network' : '${e.runtimeType}',
+        },
+      );
+      if (!network) crash.recordError(e, st, reason: 'status $step failed');
+    };
+  }
+
+  Future<bool> _pickPhoto() async {
     final picker = ref.read(mediaPickServiceProvider);
     final picked = await picker.pick(MediaPickKind.image);
     if (picked == null || !ref.mounted) return false;

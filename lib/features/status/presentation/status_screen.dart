@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/l10n/app_localizations.dart';
-import '../../../app/widgets/arul_chip.dart';
 import '../../../app/widgets/arul_icon_tap.dart';
 import '../../../app/widgets/arul_line_icons.dart';
 import '../../../app/widgets/arul_pressable.dart';
@@ -20,12 +19,12 @@ import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/analytics/journey_stamps.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/connectivity/connectivity_provider.dart';
+import '../../../core/crash/crash_provider.dart';
 import '../../../core/deeplink/deep_link_target.dart';
 import '../../../core/deeplink/install_referrer_service.dart';
 import '../../../core/haptics/arul_haptics.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/providers/shared_preferences_provider.dart';
-import '../../../data/models/wallpaper.dart';
 import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
 import '../../premium/providers/entitlement_provider.dart';
@@ -54,7 +53,7 @@ enum StatusVerb {
 class StatusScreen extends ConsumerStatefulWidget {
   const StatusScreen({super.key});
 
-  /// Set once the first visit has asked the language (owner: never twice).
+  /// Set once Status has asked with a language already chosen (owner: never twice).
   static const languageAskedKey = 'arul_status_lang_asked';
 
   @override
@@ -76,6 +75,18 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
 
   bool _fetchingBehind = false;
 
+  /// A shared clip leads the reel, ahead of the language's own (owner); dropped when the language changes.
+  StatusVideo? _linked;
+  String? _linkedLanguage;
+
+  /// A link that opened this visit answers instead of the language sheet.
+  bool _linkThisVisit = false;
+  bool _asking = false;
+
+  bool _shown = true;
+  int? _ownBranch;
+  bool _leftTab = false;
+
   /// A swipe passing through is not engagement -> `status_engaged` fires after a 2 s dwell.
   Timer? _dwellTimer;
   static const _dwellThreshold = Duration(seconds: 2);
@@ -89,22 +100,72 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskLanguage());
   }
 
-  /// Owner: the first Status visit asks the language ONCE and makes it the app language, so
-  /// that language's statuses lead. A visit that arrives on a status link answers first.
-  Future<void> _maybeAskLanguage() async {
-    final prefs = ref.read(sharedPreferencesProvider);
-    if (prefs.getBool(StatusScreen.languageAskedKey) ?? false) return;
-    if (ArulDeepLink.pendingTarget is StatusLinkTarget) return;
-    await prefs.setBool(StatusScreen.languageAskedKey, true);
-    if (!mounted) return;
-    final current = appLanguageName(ref.read(localeProvider).languageCode);
-    final next = await showLanguageSheet(context, current);
-    final code = next == null ? null : appLanguageCodeFor(next);
-    if (code == null || !mounted) return;
-    await ref
-        .read(localeProvider.notifier)
-        .setLocale(Locale(code), source: LanguageSource.pick);
+  /// A return from another tab is a visit; a return from Settings or the paywall is not, and only a
+  /// tab switch moves the shell off this screen's branch.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final shown = TickerMode.valuesOf(context).enabled;
+    final branch = StatefulNavigationShell.maybeOf(context)?.currentIndex;
+    if (shown) _ownBranch ??= branch;
+    if (shown == _shown) return;
+    _shown = shown;
+    if (!shown) {
+      _leftTab = branch != _ownBranch;
+      if (_leftTab) _linkThisVisit = false;
+    } else if (_leftTab) {
+      _leftTab = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAskLanguage());
+    }
   }
+
+  /// Owner: Status shows one language's clips and asks which, offering only languages it has clips
+  /// in. With none chosen it asks every visit (closed -> every clip for now); with one it asks once,
+  /// that one selected, and closing keeps it. A pick is also the app language.
+  Future<void> _maybeAskLanguage() async {
+    if (_asking || !mounted) return;
+    _asking = true;
+    try {
+      if (_linkPending()) return;
+      try {
+        await ref.read(statusCatalogProvider.future);
+      } catch (_) {
+        return; // The error card owns a failed drain; the next visit asks.
+      }
+      if (!mounted || _linkPending()) return;
+      final langs = ref.read(statusLanguagesProvider);
+      if (langs.isEmpty) return;
+      final current = ref.read(statusLanguageProvider);
+      final prefs = ref.read(sharedPreferencesProvider);
+      final asked = prefs.getBool(StatusScreen.languageAskedKey) ?? false;
+      if (current != null && asked) return;
+      final next = await showLanguageSheet(
+        context,
+        current == null ? null : appLanguageName(current),
+        only: langs,
+      );
+      if (!mounted) return;
+      final picked = next == null ? null : appLanguageCodeFor(next);
+      final code = picked ?? current;
+      if (code == null) return;
+      await ref.read(statusLanguagePicksProvider.notifier).remember(code);
+      await prefs.setBool(StatusScreen.languageAskedKey, true);
+      // Closing keeps the app language: it may be English with Tamil statuses, by a Settings choice.
+      if (!mounted ||
+          picked == null ||
+          picked == ref.read(localeProvider).languageCode) {
+        return;
+      }
+      await ref
+          .read(localeProvider.notifier)
+          .setLocale(Locale(picked), source: LanguageSource.pick);
+    } finally {
+      _asking = false;
+    }
+  }
+
+  bool _linkPending() =>
+      _linkThisVisit || ArulDeepLink.pendingTarget is StatusLinkTarget;
 
   void _onDeepLinkChanged() {
     scheduleMicrotask(() {
@@ -125,6 +186,12 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
 
   void _onCardSettled(StatusVideo status) {
     _dwellTimer?.cancel();
+    ref.read(crashReporterProvider)
+      ..setCustomKey('last_status_id', status.id)
+      ..setCustomKey(
+        'status_language',
+        ref.read(statusLanguageProvider) ?? 'all',
+      );
     _dwellTimer = Timer(_dwellThreshold, () {
       if (!mounted) return;
       ref
@@ -136,7 +203,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     });
   }
 
-  /// Re-points the pager and the pool when the filtered list changes — chip switch, first data, link.
+  /// Re-points the pager and the pool when the filtered list changes — language, first data, link.
   void _sync(List<StatusVideo> items) {
     final previous = _served;
     if (previous != null &&
@@ -173,7 +240,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     return true;
   }
 
-  /// Opens the clip a share or ad link asked for, on All. A miss is silent — it may be unpublished.
+  /// Puts the clip a share or ad link asked for first. A miss is silent — it may be unpublished.
   void _maybeOpenDeepLink(List<StatusVideo> all) {
     if (all.isEmpty) return;
     final target = ArulDeepLink.consumeStatus(
@@ -181,37 +248,28 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     );
     if (target == null) return;
     unawaited(ref.read(installReferrerServiceProvider).clearPendingTarget());
-
-    const allSlug = WallpaperCategory.allSlug;
-    final index = statusFeedOrder(
-      allSlug,
-      all,
-    ).indexWhere((s) => s.id == target.id);
-    if (index < 0) return;
+    final linked = all.where((s) => s.id == target.id).firstOrNull;
+    if (linked == null) return;
     ref
         .read(analyticsServiceProvider)
         .track('deep_link_opened', properties: target.analyticsProperties);
-    // First data on All: the build that follows runs [_sync] -> the pager and the pool start ON the
-    // target. A detour through card 0 opened its clip and staged card 1 against the one the link
+    // Runs in build, before the reel -> its [_sync] starts the pager and the pool ON the clip. A
+    // detour through another card opened its clip and staged the next against the one the link
     // asked for: three transfers for one card, 34-60 s on a slow 4G.
-    if (_served == null && ref.read(activeStatusCategoryProvider) == allSlug) {
-      _pendingIndex = index;
-      // Pin All -> the app language's category must not take the reel once the link is spent.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          ref.read(selectedStatusCategoryProvider.notifier).select(allSlug);
-        }
-      });
-      return;
+    _linked = linked;
+    _linkedLanguage = ref.read(statusLanguageProvider);
+    _linkThisVisit = true;
+    _pendingIndex = 0;
+  }
+
+  List<StatusVideo> _withLinked(List<StatusVideo> feed, String? language) {
+    final linked = _linked;
+    if (linked == null) return feed;
+    if (language != _linkedLanguage) {
+      _linked = null;
+      return feed;
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() {
-        _pendingIndex = index;
-        _served = null;
-      });
-      ref.read(selectedStatusCategoryProvider.notifier).select(allSlug);
-    });
+    return [linked, ...feed.where((s) => s.id != linked.id)];
   }
 
   Future<bool> _isPremium() async {
@@ -345,7 +403,10 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
     if (ref.watch(statusCatalogProvider) case AsyncData(:final value)) {
       _maybeOpenDeepLink(value);
     }
-    final feed = ref.watch(statusFeedProvider);
+    final language = ref.watch(statusLanguageProvider);
+    final feed = ref
+        .watch(statusFeedProvider)
+        .whenData((items) => _withLinked(items, language));
     // Kept warm so a gated tap reads a resolved value instead of a fresh /me round trip.
     ref.watch(entitlementProvider);
     // Offline with nothing loaded is the offline card, never a generic failure. With clips already
@@ -368,8 +429,8 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Shubh's status header: the title band, then a 36 dp chip row and 12 dp of air -> every dp
-              // the browse tabs spend above their reels here goes to the clip's width instead.
+              // The title band and then the reel: no chips (owner: the language is chosen once, in a
+              // sheet) -> every dp the browse tabs spend above their reels goes to the clip's width.
               ArulScreenHeader(
                 title: l10n.headerStatus,
                 fallbackTitle: lookupAppLocalizations(
@@ -384,13 +445,6 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                   ),
                 ],
               ),
-              SizedBox(
-                height: ArulChip.denseStripHeight,
-                child: feed.hasValue
-                    ? const StatusChips()
-                    : const FeedChipsSkeleton(),
-              ),
-              const SizedBox(height: 12),
               Expanded(
                 // One LayoutBuilder for loading AND reel -> the skeleton and the card share a rect.
                 child: offline
@@ -409,14 +463,7 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
                         builder: (context, constraints) {
                           return switch (feed) {
                             AsyncValue(:final value?) when value.isEmpty =>
-                              FeedEmpty(
-                                title: l10n.statusEmpty,
-                                onBrowseAll: () => ref
-                                    .read(
-                                      selectedStatusCategoryProvider.notifier,
-                                    )
-                                    .select(WallpaperCategory.allSlug),
-                              ),
+                              FeedEmpty(title: l10n.statusEmpty),
                             AsyncValue(:final value?) => _buildReel(
                               value,
                               constraints.biggest,
@@ -684,51 +731,6 @@ class _StatusTransferProgress extends ConsumerWidget {
       ),
     );
     return ReelTransferBar(progress: progress);
-  }
-}
-
-/// The status chip row — the same control and the same strip as the feed's.
-class StatusChips extends ConsumerWidget {
-  const StatusChips({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final categories = ref.watch(statusCategoriesProvider);
-    final selected = ref.watch(activeStatusCategoryProvider);
-    if (categories.isEmpty) return const SizedBox.shrink();
-    final all = WallpaperCategory(WallpaperCategory.allSlug, l10n.categoryAll);
-    // The app language's category leads even All (owner); the provider already put it first.
-    final lead = statusSlugForLanguage(ref.watch(localeProvider).languageCode);
-    final items = categories.first.slug == lead
-        ? <WallpaperCategory>[categories.first, all, ...categories.skip(1)]
-        : <WallpaperCategory>[all, ...categories];
-    return SizedBox(
-      height: ArulChip.denseStripHeight,
-      child: ListView.separated(
-        // A new language moves its chip to the front -> restart at the front so the pick stays in view.
-        key: ValueKey(lead),
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(
-          horizontal: ArulTokens.screenPadding,
-        ),
-        itemCount: items.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final c = items[i];
-          return ArulChip(
-            label: c.label,
-            selected: c.slug == selected,
-            variant: ArulChipVariant.category,
-            dense: true,
-            identifier: 'arul_status_chip_${c.slug}',
-            onTap: () => unawaited(
-              ref.read(selectedStatusCategoryProvider.notifier).pick(c.slug),
-            ),
-          );
-        },
-      ),
-    );
   }
 }
 

@@ -14,7 +14,6 @@ import 'dart:async';
 import 'package:arul/app/l10n/app_localizations.dart';
 import 'package:arul/app/shell/app_shell.dart';
 import 'package:arul/app/theme/theme.dart';
-import 'package:arul/app/widgets/arul_chip.dart';
 import 'package:arul/app/widgets/arul_line_icons.dart';
 import 'package:arul/app/widgets/arul_screen_header.dart';
 import 'package:arul/app/widgets/arul_toast.dart';
@@ -377,7 +376,7 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
   ScreenEntry(
     // The screen's own words without its reel: the reel's posters go through the network image
     // cache, which needs platform directories the matrix does not have (the feed reel is absent
-    // for the same reason). Same header, chip row and action bar the screen builds.
+    // for the same reason). Same header and action bar the screen builds.
     id: 'status.screen',
     build: () => Scaffold(
       body: SafeArea(
@@ -391,10 +390,6 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
                   fallbackTitle: lookupAppLocalizations(
                     const Locale('en'),
                   ).headerStatus,
-                ),
-                const SizedBox(
-                  height: ArulChip.denseStripHeight,
-                  child: StatusChips(),
                 ),
                 const Spacer(),
                 // The bar measures its w600 labels against the inherited style. Here a family IS a weight,

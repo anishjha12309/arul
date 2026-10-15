@@ -48,12 +48,12 @@ class ArulScreenHeader extends StatelessWidget {
   static const double _titleOpticalInset = 3;
 
   // Indic letters fall back to the system Noto, whose ink sits off the Cinzel caps' centre.
-  // Per script: its three tab titles' mean ink offset from English (under 1 dp left out), in ems
-  // of the 24 dp title -> the drop follows a size change in the token.
+  // Per script: its three tab titles' mean ink offset from the gear's centre (under 1 dp left out),
+  // in ems of the 20 dp title -> the drop follows a size change in the token.
   static const _scriptDropEm = <String, double>{
-    'hi': 2.0 / 24,
-    'ml': -1.0 / 24,
-    'ta': -1.5 / 24,
+    'hi': 2.0 / 20,
+    'kn': 1.5 / 20,
+    'te': 1.5 / 20,
   };
 
   @override

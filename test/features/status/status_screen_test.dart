@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:arul/app/l10n/app_localizations.dart';
+import 'package:arul/app/widgets/arul_screen_header.dart';
 import 'package:arul/app/widgets/reel/reel_card.dart';
 import 'package:arul/app/widgets/reel/reel_prefetch_service.dart';
 import 'package:arul/app/widgets/reel/video_preload_controller.dart';
@@ -15,7 +16,6 @@ import 'package:arul/core/deeplink/deep_link_target.dart';
 import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
-import 'package:arul/data/models/wallpaper.dart';
 import 'package:arul/data/repositories/repository_providers.dart';
 import 'package:arul/features/premium/providers/entitlement_provider.dart';
 import 'package:arul/features/status/domain/status_video.dart';
@@ -92,12 +92,17 @@ class _NoPrefetch extends ReelPrefetchService<StatusVideo> {
   /// Every index the pool asked to stage around, in order — the first one is the card it opened on.
   final indices = <int>[];
 
+  /// The reel's list as the pool last staged it.
+  List<String> ids = const [];
+
   @override
   Future<String?> cachedPathOrNull(String url) async => null;
 
   @override
-  void prefetchAround(List<StatusVideo> items, int currentIndex) =>
-      indices.add(currentIndex);
+  void prefetchAround(List<StatusVideo> items, int currentIndex) {
+    indices.add(currentIndex);
+    ids = [for (final s in items) s.id];
+  }
 }
 
 class _Catalog extends StatusCatalogNotifier {
@@ -189,6 +194,10 @@ class _FakeActions extends StatusActionNotifier {
 
 const _method = MethodChannel('arul_test/status_video');
 
+List<String> _feedIds(ProviderContainer c) => [
+  for (final s in c.read(statusFeedProvider).value!) s.id,
+];
+
 void main() {
   late List<int> builds;
   late _RecordingAnalytics analytics;
@@ -199,6 +208,7 @@ void main() {
   tearDown(ArulDeepLink.reset);
 
   late SharedPreferences prefs;
+  late GoRouter router;
 
   Future<void> pump(
     WidgetTester tester, {
@@ -209,6 +219,8 @@ void main() {
     _FakeActions? actions,
     bool reduceMotion = false,
     bool languageAsked = true,
+    String? appLanguage,
+    bool shell = false,
     double textScale = 1,
     List<Override> extra = const [],
   }) async {
@@ -219,6 +231,7 @@ void main() {
     // The deep-link consume clears its persisted copy through installReferrerServiceProvider.
     SharedPreferences.setMockInitialValues({
       if (languageAsked) StatusScreen.languageAskedKey: true,
+      appLocalePrefsKey: ?appLanguage,
     });
     prefs = await SharedPreferences.getInstance();
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -236,10 +249,25 @@ void main() {
       audio: true,
       visible: visible,
     );
-    final router = GoRouter(
+    final status = GoRoute(path: '/', builder: (_, _) => const StatusScreen());
+    router = GoRouter(
       initialLocation: '/',
       routes: [
-        GoRoute(path: '/', builder: (_, _) => const StatusScreen()),
+        if (shell)
+          // The app's shell hides a tab it leaves behind TickerMode, as this one does.
+          StatefulShellRoute.indexedStack(
+            builder: (_, _, navigationShell) => navigationShell,
+            branches: [
+              StatefulShellBranch(routes: [status]),
+              StatefulShellBranch(
+                routes: [
+                  GoRoute(path: '/other', builder: (_, _) => const Text('other')),
+                ],
+              ),
+            ],
+          )
+        else
+          status,
         GoRoute(
           path: '/premium',
           builder: (_, state) {
@@ -286,17 +314,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   }
 
-  testWidgets('the reel, the chips and both actions', (tester) async {
+  testWidgets('the reel and both actions, no category chips', (tester) async {
     await pump(tester);
     expect(builds, [1]);
     expect(find.text('Status and Greet'), findsOneWidget);
-    expect(find.text('Murugan'), findsOneWidget);
+    expect(find.text('Murugan'), findsNothing);
     expect(find.bySemanticsIdentifier('arul_status_whatsapp'), findsWidgets);
     expect(find.bySemanticsIdentifier('arul_status_save'), findsWidgets);
     expect(find.bySemanticsIdentifier('arul_header_settings'), findsOneWidget);
   });
 
-  testWidgets('the first visit asks the language once; the pick leads the chips', (
+  ProviderContainer scopeOf(WidgetTester tester) =>
+      ProviderScope.containerOf(tester.element(find.byType(StatusScreen)));
+
+  testWidgets('the sheet offers only languages with statuses; the pick narrows the reel and the app', (
     tester,
   ) async {
     await pump(
@@ -306,63 +337,133 @@ void main() {
     );
     await _settle(tester);
     expect(find.text('தமிழ்'), findsOneWidget);
-    expect(prefs.getBool(StatusScreen.languageAskedKey), isTrue);
+    expect(find.text('English'), findsNothing);
+    expect(find.text('हिन्दी'), findsNothing);
+    expect(find.text('മലയാളം'), findsNothing, reason: 'no Malayalam clips here');
 
     await tester.tap(find.text('தமிழ்'));
     await _settle(tester);
-    expect(prefs.getString('arul_locale'), 'ta');
-    final scope = ProviderScope.containerOf(
-      tester.element(find.byType(StatusScreen)),
-    );
-    expect(scope.read(activeStatusCategoryProvider), 'tamil');
-    expect(
-      tester.getTopLeft(find.bySemanticsIdentifier('arul_status_chip_tamil')).dx,
-      lessThan(
-        tester
-            .getTopLeft(
-              find.bySemanticsIdentifier(
-                'arul_status_chip_${WallpaperCategory.allSlug}',
-              ),
-            )
-            .dx,
-      ),
-    );
+    final scope = scopeOf(tester);
+    expect(prefs.getString(appLocalePrefsKey), 'ta');
+    expect(prefs.getBool(StatusScreen.languageAskedKey), isTrue);
+    expect(scope.read(statusLanguageProvider), 'ta');
+    expect(_feedIds(scope), [_tamil.id]);
   });
 
-  test('a language category maps back to its app language', () {
-    expect(appLanguageForStatusSlug('hindi'), 'hi');
-    expect(appLanguageForStatusSlug('malayalam'), 'ml');
-    expect(appLanguageForStatusSlug('krishna'), isNull);
-    expect(statusSlugForLanguage('en'), isNull);
-  });
-
-  testWidgets('a language chip sets the app language; a new language moves the chip', (
+  testWidgets('a closed sheet with no language shows every clip and asks again on the next visit', (
     tester,
   ) async {
-    await pump(tester, catalog: () async => [..._clips, _tamil]);
-    await _settle(tester);
-    final scope = ProviderScope.containerOf(
-      tester.element(find.byType(StatusScreen)),
+    await pump(
+      tester,
+      languageAsked: false,
+      shell: true,
+      catalog: () async => [..._clips, _tamil],
     );
-    expect(scope.read(activeStatusCategoryProvider), WallpaperCategory.allSlug);
-
-    await tester.tap(find.bySemanticsIdentifier('arul_status_chip_tamil'));
     await _settle(tester);
-    expect(prefs.getString('arul_locale'), 'ta');
-    expect(scope.read(localeProvider).languageCode, 'ta');
-    expect(scope.read(activeStatusCategoryProvider), 'tamil');
-
-    await tester.tap(find.bySemanticsIdentifier('arul_status_chip_murugan'));
+    expect(find.text('தமிழ்'), findsOneWidget);
+    await tester.tapAt(const Offset(20, 20));
     await _settle(tester);
-    expect(scope.read(localeProvider).languageCode, 'ta');
-    expect(scope.read(activeStatusCategoryProvider), 'murugan');
+    expect(find.text('தமிழ்'), findsNothing);
+    final scope = scopeOf(tester);
+    expect(scope.read(statusLanguageProvider), isNull);
+    expect(_feedIds(scope), hasLength(3));
+    expect(prefs.getString(appLocalePrefsKey), isNull);
 
-    // A change made in Settings clears the pick, so the chips follow the app language.
-    await scope
-        .read(localeProvider.notifier)
-        .setLocale(const Locale('en'), source: LanguageSource.pick);
+    // Back from a pushed page is not a visit.
+    unawaited(router.push('/settings'));
     await _settle(tester);
-    expect(scope.read(activeStatusCategoryProvider), WallpaperCategory.allSlug);
+    router.pop();
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsNothing);
+
+    router.go('/other');
+    await _settle(tester);
+    router.go('/');
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsOneWidget);
+  });
+
+  testWidgets('an app language with statuses is asked once, selected, and closing keeps it', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      languageAsked: false,
+      appLanguage: 'ta',
+      shell: true,
+      catalog: () async => [..._clips, _tamil],
+    );
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsOneWidget);
+    expect(_feedIds(scopeOf(tester)), [_tamil.id]);
+    await tester.tapAt(const Offset(20, 20));
+    await _settle(tester);
+    expect(prefs.getBool(StatusScreen.languageAskedKey), isTrue);
+    expect(prefs.getStringList(StatusLanguagePicks.prefsKey), ['ta']);
+
+    router.go('/other');
+    await _settle(tester);
+    router.go('/');
+    await _settle(tester);
+    expect(find.text('தமிழ்'), findsNothing, reason: 'never twice');
+    expect(_feedIds(scopeOf(tester)), [_tamil.id]);
+  });
+
+  test('English has no status category', () {
+    expect(statusSlugForLanguage('en'), isNull);
+    expect(statusSlugForLanguage('ta'), 'tamil');
+  });
+
+  group('the status language', () {
+    Future<ProviderContainer> container({
+      String? app,
+      List<String> picks = const [],
+    }) async {
+      SharedPreferences.setMockInitialValues({
+        appLocalePrefsKey: ?app,
+        if (picks.isNotEmpty) StatusLanguagePicks.prefsKey: picks,
+      });
+      prefs = await SharedPreferences.getInstance();
+      final c = ProviderContainer.test(
+        overrides: [
+          statusCatalogProvider.overrideWith(
+            () => _Catalog(() async => [..._clips, _tamil], []),
+          ),
+          sharedPreferencesProvider.overrideWithValue(prefs),
+        ],
+      );
+      await c.read(statusCatalogProvider.future);
+      return c;
+    }
+
+    test('is the app language when it has clips', () async {
+      final c = await container(app: 'ta', picks: ['ml']);
+      expect(c.read(statusLanguageProvider), 'ta');
+      expect(_feedIds(c), [_tamil.id]);
+    });
+
+    test('falls back to the latest pick with clips, past one without', () async {
+      final c = await container(app: 'hi', picks: ['hi', 'ta']);
+      expect(c.read(statusLanguageProvider), 'ta');
+      expect(_feedIds(c), [_tamil.id]);
+    });
+
+    test('is none for English with no pick -> every clip', () async {
+      final c = await container(app: 'en');
+      expect(c.read(statusLanguageProvider), isNull);
+      expect(_feedIds(c), hasLength(3));
+    });
+
+    test('a pick goes first, once; English is never kept', () async {
+      final c = await container();
+      final picks = c.read(statusLanguagePicksProvider.notifier);
+      await picks.remember('ta');
+      await picks.remember('en');
+      await picks.remember('ml');
+      await picks.remember('ta');
+      expect(c.read(statusLanguagePicksProvider), ['ta', 'ml']);
+      expect(prefs.getStringList(StatusLanguagePicks.prefsKey), ['ta', 'ml']);
+    });
   });
 
   testWidgets('a cold status link is never interrupted by the language sheet', (
@@ -391,7 +492,11 @@ void main() {
   testWidgets('an empty catalog shows the empty face', (tester) async {
     await pump(tester, catalog: () async => const []);
     expect(find.text('No status videos yet'), findsOneWidget);
-    expect(find.bySemanticsIdentifier('arul_feed_browse_all'), findsOneWidget);
+    expect(
+      find.bySemanticsIdentifier('arul_feed_browse_all'),
+      findsNothing,
+      reason: 'no categories to browse',
+    );
   });
 
   testWidgets('the loading card names status videos, never wallpapers', (
@@ -423,22 +528,33 @@ void main() {
     expect(find.bySemanticsIdentifier('arul_status_retry'), findsOneWidget);
   });
 
-  testWidgets('a cold link lands ON its clip: card 0 is never opened first', (
+  testWidgets('a cold link leads with its clip, in any language, then the user\'s own', (
     tester,
   ) async {
     ArulDeepLink.requestTarget(StatusLinkTarget(_clips[1].id));
-    await pump(tester, visible: true);
+    await pump(
+      tester,
+      visible: true,
+      appLanguage: 'ta',
+      catalog: () async => [..._clips, _tamil],
+    );
     await tester.pump(const Duration(milliseconds: 300));
 
     final pager = tester.widget<PageView>(find.byType(PageView)).controller!;
-    expect(pager.initialPage, 1);
-    // Fractional viewport + padEnds false -> the page reads a hair under its index.
-    expect(pager.page, closeTo(1, 0.1));
+    expect(pager.initialPage, 0);
     expect(prefetch.indices, isNotEmpty);
-    expect(prefetch.indices.first, 1, reason: 'the pool opened on the target');
-    expect(prefetch.indices, isNot(contains(0)));
+    expect(prefetch.indices.first, 0, reason: 'the pool opened on the target');
+    expect(prefetch.ids, [_clips[1].id, _tamil.id]);
     expect(ArulDeepLink.pendingTarget, isNull, reason: 'consumed');
     expect(analytics.events.map((e) => e.$1), contains('deep_link_opened'));
+
+    // A new status language drops the linked clip.
+    await ProviderScope.containerOf(tester.element(find.byType(StatusScreen)))
+        .read(localeProvider.notifier)
+        .setLocale(const Locale('en'), source: LanguageSource.pick);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(prefetch.ids, hasLength(3));
   });
 
   testWidgets('offline with clips in hand keeps the reel', (tester) async {
@@ -710,14 +826,14 @@ void main() {
   });
 
   group('a card is its clip\'s own shape, whole — never cut, never padded', () {
-    testWidgets('the chips stay through every swipe', (tester) async {
+    testWidgets('the header stays through every swipe', (tester) async {
       await pump(tester, reduceMotion: true);
-      final before = tester.getRect(find.byType(StatusChips));
+      final before = tester.getRect(find.byType(ArulScreenHeader));
       await tester.fling(find.byType(PageView), const Offset(0, -300), 1500);
       for (var i = 0; i < 10; i++) {
         await tester.pump(const Duration(milliseconds: 100));
       }
-      expect(tester.getRect(find.byType(StatusChips)), before);
+      expect(tester.getRect(find.byType(ArulScreenHeader)), before);
     });
 
     testWidgets('a 2:3 clip and a 9:16 clip each get a card of their shape inside the slot', (
@@ -821,6 +937,7 @@ void main() {
           await pump(
             tester,
             textScale: scale,
+            appLanguage: 'ta',
             catalog: () async => [_tamil, ..._clips],
             extra: [
               statusPersonaSupportedProvider.overrideWith((_) async => true),

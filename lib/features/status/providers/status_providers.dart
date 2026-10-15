@@ -1,12 +1,13 @@
-import 'dart:ui' show Locale;
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/widgets/reel/reel_prefetch_service.dart';
 import '../../../app/widgets/reel/video_preload_controller.dart';
+import '../../../core/analytics/analytics_provider.dart';
 import '../../../core/config/app_config.dart';
-import '../../../core/deeplink/deep_link_target.dart';
+import '../../../core/crash/crash_provider.dart';
+import '../../../core/error/app_exception.dart';
 import '../../../core/providers/locale_provider.dart';
+import '../../../core/providers/shared_preferences_provider.dart';
 import '../../../data/models/catalog_page.dart';
 import '../../../data/models/wallpaper.dart';
 import '../../../data/repositories/repository_providers.dart';
@@ -33,6 +34,22 @@ final statusVideoControllerProvider =
         keepBehind: 0,
         audio: true,
         visible: false,
+        onGaveUp: (status, code) {
+          if (!ref.mounted) return;
+          ref
+              .read(analyticsServiceProvider)
+              .track(
+                'status_play_failed',
+                properties: {
+                  'status_id': status.id,
+                  'category': status.category,
+                  'code': code,
+                },
+              );
+          ref
+              .read(crashReporterProvider)
+              .log('status ${status.id} gave up: $code');
+        },
       );
       ref.onDispose(controller.dispose);
       return controller;
@@ -51,7 +68,30 @@ final statusCatalogProvider =
 
 class StatusCatalogNotifier extends AsyncNotifier<List<StatusVideo>> {
   @override
-  Future<List<StatusVideo>> build() => _fetch();
+  Future<List<StatusVideo>> build() {
+    // Riverpod retries a failed build up to 10 times, each keeping the error -> one report per run.
+    listenSelf((previous, next) {
+      if (next.hasError && !(previous?.hasError ?? false)) {
+        _reportLoadFailure(next.error!, next.stackTrace);
+      }
+    });
+    return _fetch();
+  }
+
+  void _reportLoadFailure(Object e, StackTrace? st) {
+    final network = isNetworkError(e);
+    ref
+        .read(analyticsServiceProvider)
+        .track(
+          'status_load_failed',
+          properties: {'reason': network ? 'network' : '${e.runtimeType}'},
+        );
+    if (!network) {
+      ref
+          .read(crashReporterProvider)
+          .recordError(e, st, reason: 'status catalog load failed');
+    }
+  }
 
   int _fetchSeq = 0;
 
@@ -129,68 +169,63 @@ const _statusSlugByLanguage = {
   'hi': 'hindi',
 };
 
-/// The status category of an app language (owner: the app language's statuses lead). English has
-/// none and opens on All.
+/// The status category of an app language. English has none.
 String? statusSlugForLanguage(String code) => _statusSlugByLanguage[code];
 
-/// The app language a status category stands for, or null for a non-language category.
-String? appLanguageForStatusSlug(String slug) {
-  for (final e in _statusSlugByLanguage.entries) {
-    if (e.value == slug) return e.key;
-  }
-  return null;
-}
-
-/// The app language's category when the catalog has it -> first chip and the opening selection.
-/// Never while a status link waits: the link must land on All, on its own clip.
-final statusPreferredCategoryProvider = Provider<String?>((ref) {
-  final slug = statusSlugForLanguage(ref.watch(localeProvider).languageCode);
-  if (slug == null || ArulDeepLink.pendingTarget is StatusLinkTarget) {
-    return null;
-  }
+/// The app languages the catalog has statuses for, in the app's own order -> the only ones the
+/// Status language sheet offers (owner). Empty until the catalog lands.
+final statusLanguagesProvider = Provider<List<String>>((ref) {
   final all = switch (ref.watch(statusCatalogProvider)) {
     AsyncData(:final value) => value,
     _ => const <StatusVideo>[],
   };
-  return all.any((s) => s.category == slug) ? slug : null;
+  final slugs = {for (final s in all) s.category};
+  return [
+    for (final l in supportedAppLocales)
+      if (slugs.contains(statusSlugForLanguage(l.languageCode))) l.languageCode,
+  ];
 });
 
-final selectedStatusCategoryProvider =
-    NotifierProvider<SelectedStatusCategory, String?>(
-      SelectedStatusCategory.new,
+final statusLanguagePicksProvider =
+    NotifierProvider<StatusLanguagePicks, List<String>>(
+      StatusLanguagePicks.new,
     );
 
-/// Null until a chip, a link or Browse all picks one -> until then the preferred category leads.
-/// A new app language clears the pick, so the chips follow a change made in Settings.
-class SelectedStatusCategory extends Notifier<String?> {
+/// Every language picked for Status, latest first. A list, not one value: Settings never loads the
+/// catalog, so it cannot tell whether a pick has statuses, and Hindi must not wipe the Tamil before it.
+class StatusLanguagePicks extends Notifier<List<String>> {
+  static const prefsKey = 'arul_status_langs';
+
   @override
-  String? build() {
-    ref.watch(localeProvider.select((l) => l.languageCode));
-    return null;
-  }
+  List<String> build() =>
+      ref.read(sharedPreferencesProvider).getStringList(prefsKey) ?? const [];
 
-  void select(String slug) => state = slug;
-
-  /// A chip tap. A language's chip also makes it the app language (owner: one language everywhere).
-  Future<void> pick(String slug) async {
-    state = slug;
-    final code = appLanguageForStatusSlug(slug);
-    if (code == null || code == ref.read(localeProvider).languageCode) return;
-    await ref
-        .read(localeProvider.notifier)
-        .setLocale(Locale(code), source: LanguageSource.pick);
+  /// Puts [code] first; a language with no status category is never kept.
+  Future<void> remember(String code) async {
+    if (statusSlugForLanguage(code) == null) return;
+    if (state.isNotEmpty && state.first == code) return;
+    final next = List<String>.unmodifiable([
+      code,
+      ...state.where((c) => c != code),
+    ]);
+    state = next;
+    await ref.read(sharedPreferencesProvider).setStringList(prefsKey, next);
   }
 }
 
-/// The chip the reel shows: the user's pick, else the app language's category, else All.
-final activeStatusCategoryProvider = Provider<String>(
-  (ref) =>
-      ref.watch(selectedStatusCategoryProvider) ??
-      ref.watch(statusPreferredCategoryProvider) ??
-      WallpaperCategory.allSlug,
-);
+/// The language whose clips the reel shows (owner): the app language when it has statuses, else the
+/// latest pick that does, else null -> every clip, and Status asks.
+final statusLanguageProvider = Provider<String?>((ref) {
+  final has = ref.watch(statusLanguagesProvider);
+  final app = ref.watch(localeProvider).languageCode;
+  if (has.contains(app)) return app;
+  for (final code in ref.watch(statusLanguagePicksProvider)) {
+    if (has.contains(code)) return code;
+  }
+  return null;
+});
 
-/// The catalog filtered to the selected chip, in `feed_rank` order (nulls last, catalog order next).
+/// The catalog filtered to one category, in `feed_rank` order (nulls last, catalog order next).
 List<StatusVideo> statusFeedOrder(String slug, List<StatusVideo> all) =>
     orderedByUse(
       slug == WallpaperCategory.allSlug
@@ -201,7 +236,10 @@ List<StatusVideo> statusFeedOrder(String slug, List<StatusVideo> all) =>
     );
 
 final statusFeedProvider = Provider<AsyncValue<List<StatusVideo>>>((ref) {
-  final slug = ref.watch(activeStatusCategoryProvider);
+  final code = ref.watch(statusLanguageProvider);
+  final slug =
+      (code == null ? null : statusSlugForLanguage(code)) ??
+      WallpaperCategory.allSlug;
   return ref
       .watch(statusCatalogProvider)
       .whenData((all) => statusFeedOrder(slug, all));

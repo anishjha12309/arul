@@ -16,32 +16,35 @@ class _Lang {
   final String name;
 }
 
-final _langs = <_Lang>[
-  for (final locale in supportedAppLocales)
-    _Lang(
-      appLanguageNativeName(locale.languageCode),
-      appLanguageName(locale.languageCode),
-    ),
-];
-
 /// The sheet only RESOLVES the choice and applies nothing — it returns the chosen English name.
-/// The caller persists it and drives the app locale from it.
+/// The caller persists it and drives the app locale from it. [only] narrows the tiles to those
+/// language codes (Status offers only the languages it has clips in); null [current] selects none.
 Future<String?> showLanguageSheet(
   BuildContext context,
-  String current, {
+  String? current, {
   Brightness? brightness,
+  List<String>? only,
 }) {
+  final langs = <_Lang>[
+    for (final locale in supportedAppLocales)
+      if (only == null || only.contains(locale.languageCode))
+        _Lang(
+          appLanguageNativeName(locale.languageCode),
+          appLanguageName(locale.languageCode),
+        ),
+  ];
   return showArulSheet<String>(
     context,
     brightness: brightness,
-    builder: (_) => _LanguageSheet(current: current),
+    builder: (_) => _LanguageSheet(current: current, langs: langs),
   );
 }
 
 class _LanguageSheet extends StatelessWidget {
-  const _LanguageSheet({required this.current});
+  const _LanguageSheet({required this.current, required this.langs});
 
-  final String current;
+  final String? current;
+  final List<_Lang> langs;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +66,7 @@ class _LanguageSheet extends StatelessWidget {
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: _langs.length,
+            itemCount: langs.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               mainAxisSpacing: 10,
@@ -73,7 +76,7 @@ class _LanguageSheet extends StatelessWidget {
               mainAxisExtent: MediaQuery.textScalerOf(context).scale(48) + 32,
             ),
             itemBuilder: (_, i) {
-              final l = _langs[i];
+              final l = langs[i];
               return _LangTile(
                 lang: l,
                 on: l.name == current,

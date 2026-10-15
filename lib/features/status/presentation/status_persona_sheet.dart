@@ -13,7 +13,6 @@ import '../../../app/widgets/arul_toast.dart';
 import '../../../app/widgets/button_kind.dart' show ArulButtonPalette;
 import '../../../theme/arul_palette.dart';
 import '../../../theme/arul_tokens.dart';
-import '../../auth/providers/auth_providers.dart';
 import '../providers/status_persona_provider.dart';
 
 /// The user's photo and name on statuses, after Shubh's photo sheet: one place to pick the photo,
@@ -94,7 +93,7 @@ class _PersonaBodyState extends ConsumerState<_PersonaBody> {
     if (name.isNotEmpty && name != _initialName) {
       setState(() => _saving = true);
       try {
-        await ref.read(authControllerProvider.notifier).updateDisplayName(name);
+        await ref.read(statusPersonaProvider.notifier).saveName(name);
       } catch (_) {
         if (mounted) {
           setState(() => _saving = false);

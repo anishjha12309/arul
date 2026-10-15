@@ -56,8 +56,8 @@ Never add a second header style to "fix" it; watch ascender clipping. Jost's lin
   pick). `.04em` on lowercase spread "Ringtones" into loose letters. Tracking belongs to the wordmark (one
   short word) and to caps, never to a lowercase title.
 - `ArulScreenHeader`'s per-script drop is in ems of the title, so it follows a size change; after one,
-  re-measure each script's three titles' ink-bbox centre against English's in the real-font harness
-  (`test/l10n/support`, within ~1 dp of the device); skip anything under 1 dp.
+  `arul_screen_header_centre_test` holds each script's three titles' ink on the gear's centre
+  (mean under 0.75 dp) in real fonts (`test/l10n/support`, ~1 dp of the device).
 
 **`/premium` is the ONE screen off this stack**: Cinzel over Lora/Gelasio, bundled, instanced and subset by
 `tools/build-fonts.py`, styled from the `paywall*` tokens. **No bundled serif carries U+20B9 ₹ except

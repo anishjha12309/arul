@@ -103,8 +103,8 @@ property, a `register()` super property or a person property — [analytics-sign
 - **Feed engagement is GA4-only.** `wallpaper_engaged` (once per dwelled card) is the one real volume
   risk; `deep_link_opened` stays off too and must never feed an optimiser.
 - **Status is GA4-only**: `status_engaged` (2 s dwell), `status_shared` (`channel` = cell tapped, `via` =
-  what opened: [share.md](share.md); `watermarked` always false), `status_saved`, `status_save_failed`
-  (`reason`), `status_{share,save}_blocked_premium`. Its gate kinds reach PostHog via `trial_started`.
+  what opened: [share.md](share.md)), `status_saved`, `status_{save,share,load,play,persona}_failed`,
+  `status_{share,save}_blocked_premium`. Its gate kinds reach PostHog via `trial_started`.
 - **Analytics never ranks the feed**; Neon counters do ([browse.md](browse.md)).
 
 ## Property conventions
