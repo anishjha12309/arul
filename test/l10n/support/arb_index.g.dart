@@ -323,6 +323,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Needs Android 12 or newer',
     'statusPersonaOldBody': 'Adding your photo and name to statuses needs Android 12 or newer. You can still share and save every status as it is.',
     'statusPersonaOldOk': 'OK',
+    'headerWallpapers': 'Arul Wallpapers',
+    'headerStatus': 'Status and Greet',
   },
   'ta': {
     'appName': 'அருள்',
@@ -635,6 +637,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Android 12 அல்லது புதியது தேவை',
     'statusPersonaOldBody': 'ஸ்டேட்டஸில் உங்கள் புகைப்படமும் பெயரும் சேர்க்க Android 12 அல்லது புதிய பதிப்பு தேவை. எல்லா ஸ்டேட்டஸையும் இப்போது உள்ளபடியே பகிரலாம், சேமிக்கலாம்.',
     'statusPersonaOldOk': 'சரி',
+    'headerWallpapers': 'Arul வால்பேப்பர்',
+    'headerStatus': 'ஸ்டேட்டஸ் & வாழ்த்து',
   },
   'te': {
     'appName': 'అరుళ్',
@@ -947,6 +951,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Android 12 లేదా కొత్తది అవసరం',
     'statusPersonaOldBody': 'స్టేటస్‌లకు మీ ఫోటో, పేరు జోడించడానికి Android 12 లేదా కొత్త వెర్షన్ అవసరం. ప్రతి స్టేటస్‌ను ఇప్పటిలాగే షేర్ చేయవచ్చు, సేవ్ చేయవచ్చు.',
     'statusPersonaOldOk': 'సరే',
+    'headerWallpapers': 'Arul వాల్‌పేపర్',
+    'headerStatus': 'స్టేటస్ & శుభాకాంక్షలు',
   },
   'kn': {
     'appName': 'ಅರುಳ್',
@@ -1259,6 +1265,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Android 12 ಅಥವಾ ಹೊಸದು ಬೇಕು',
     'statusPersonaOldBody': 'ಸ್ಟೇಟಸ್‌ಗಳಿಗೆ ನಿಮ್ಮ ಫೋಟೋ ಮತ್ತು ಹೆಸರು ಸೇರಿಸಲು Android 12 ಅಥವಾ ಹೊಸ ಆವೃತ್ತಿ ಬೇಕು. ಪ್ರತಿ ಸ್ಟೇಟಸ್ ಅನ್ನು ಈಗಿನಂತೆಯೇ ಹಂಚಿಕೊಳ್ಳಬಹುದು, ಉಳಿಸಬಹುದು.',
     'statusPersonaOldOk': 'ಸರಿ',
+    'headerWallpapers': 'Arul ವಾಲ್‌ಪೇಪರ್',
+    'headerStatus': 'ಸ್ಟೇಟಸ್ & ಶುಭಾಶಯ',
   },
   'ml': {
     'appName': 'അരുൾ',
@@ -1571,6 +1579,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Android 12 അല്ലെങ്കിൽ പുതിയത് വേണം',
     'statusPersonaOldBody': 'സ്റ്റാറ്റസുകളിൽ നിങ്ങളുടെ ഫോട്ടോയും പേരും ചേർക്കാൻ Android 12 അല്ലെങ്കിൽ പുതിയ പതിപ്പ് വേണം. എല്ലാ സ്റ്റാറ്റസും ഇപ്പോഴുള്ളതുപോലെ ഷെയർ ചെയ്യാം, സേവ് ചെയ്യാം.',
     'statusPersonaOldOk': 'ശരി',
+    'headerWallpapers': 'Arul വാൾപേപ്പർ',
+    'headerStatus': 'സ്റ്റാറ്റസ് & ആശംസ',
   },
   'hi': {
     'appName': 'अरुल',
@@ -1883,6 +1893,8 @@ const Map<String, Map<String, String>> kArbStrings = {
     'statusPersonaOldTitle': 'Android 12 या नया चाहिए',
     'statusPersonaOldBody': 'स्टेटस पर अपनी फ़ोटो और नाम जोड़ने के लिए Android 12 या नया वर्ज़न चाहिए। हर स्टेटस को आप पहले की तरह शेयर और सेव कर सकते हैं।',
     'statusPersonaOldOk': 'ठीक है',
+    'headerWallpapers': 'Arul वॉलपेपर',
+    'headerStatus': 'स्टेटस & शुभकामनाएं',
   },
 };
 

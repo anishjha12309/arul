@@ -18,9 +18,10 @@ because the legacy `Gap.md` is 12.
 
 - One header band per tab (`ArulScreenHeader`): **48 tall to the finger, 34 to the eye** — the air lives
   inside the band (`bandHeight`/`bandPadding`), so an action spans it as a real target while drawing its
-  34 px pill (42 was tried and reverted). The Marcellus title takes a +3 optical left inset and SHRINKS
-  before it clips — never re-add an ellipsis (it cut a Malayalam title at 320 dp/1.3). Never tune title
-  size per screen: tabs cross-fade, and per-screen sizes read as the screen jumping. The band's height is
+  34 px pill (42 was tried and reverted). The title takes a +3 optical left inset. A translation too wide
+  for the band shows in ENGLISH (owner: never shrink or cut one); only English scales down — never re-add
+  an ellipsis (it cut a Malayalam title at 320 dp/1.3). Never tune title size per screen: tabs cross-fade,
+  and per-screen sizes read as the screen jumping. The band's height is
   what the reel card is solved against ([feed-card.md](feed-card.md)).
 - `ArulChipVariant.category` is the browse chip on both tabs. No rule under the chips.
 - **Forms (Upload is the reference):** a MODE is `ArulSegmented` with the dock's glyphs; a pick-one of
@@ -46,18 +47,19 @@ because the legacy `Gap.md` is 12.
 ## Type
 
 Base: Roboto (system). Display and wordmark: **Marcellus**, BUNDLED and wired in
-`lib/app/theme/typography.dart`. Every string must render in Tamil, Telugu, Kannada and Malayalam, so the
-serif is confined to display/headline plus the Latin wordmark. It reaches ONE localized string — the
-header title — safely: **Marcellus has no Indic glyphs**, so those titles resolve per glyph through Noto
-at the same size and tracking. Never add a second header style to "fix" it; watch for ascender clipping.
+`lib/app/theme/typography.dart`. Every string must render in Tamil, Telugu, Kannada and Malayalam, so a
+serif is confined to display/headline, the Latin wordmark and ONE localized string — the tab title.
+**No bundled serif has Indic glyphs**, so those titles resolve per glyph through Noto at the same size.
+Never add a second header style to "fix" it; watch for ascender clipping.
 
-- **The header title is 24 px Marcellus, UNTRACKED** — a step under the 28 px wordmark. `.04em` on
-  lowercase spread "Ringtones" into loose letters, and at 26 the title passed for a second brand mark.
-  Tracking belongs to the wordmark (one short word) and to caps, never to a lowercase title.
+- **The tab title is 24 px Cinzel SemiBold (wght 650, registered as 600), UNTRACKED** (owner's
+  pick). `.04em` on lowercase spread "Ringtones" into loose letters. Tracking belongs to the wordmark (one
+  short word) and to caps, never to a lowercase title.
 - `ArulScreenHeader`'s per-script drop is in ems of the title, so it follows a size change; after one,
-  re-measure each script's ink centre against the wordmark's on device (±0.75 dp held at 24).
+  re-measure each script's three titles' ink-bbox centre against English's in the real-font harness
+  (`test/l10n/support`, within ~1 dp of the device); skip anything under 1 dp.
 
-**`/premium` is the ONE screen off this stack**: Cinzel/Lora/Gelasio, bundled, instanced and subset by
+**`/premium` is the ONE screen off this stack** (bar the tab title): Cinzel/Lora/Gelasio, bundled, instanced and subset by
 `tools/build-fonts.py`, styled from the `paywall*` tokens. **No bundled serif carries U+20B9 ₹ except
 Gelasio**, so every paywall Lora style names Gelasio in `fontFamilyFallback`, or a bare ₹ drops to Roboto
 mid-sentence. Gelasio sets OLD-STYLE figures, so an amount's ink centre MOVES with its digits — centring

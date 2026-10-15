@@ -1071,4 +1071,10 @@ class AppLocalizationsMl extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'ശരി';
+
+  @override
+  String get headerWallpapers => 'Arul വാൾപേപ്പർ';
+
+  @override
+  String get headerStatus => 'സ്റ്റാറ്റസ് & ആശംസ';
 }

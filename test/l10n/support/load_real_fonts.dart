@@ -130,7 +130,9 @@ Future<void> loadRealFonts() async {
   // The remaining bundled faces under their shipping names -> the paywall tree is English-by-decision and out of scope.
   // But the app builds these styles while constructing the theme -> a missing family would surface as noise, not signal.
   for (final entry in const {
-    'Cinzel': ['Cinzel-Medium.ttf'],
+    // The first face wins every request (Trap 2) -> the localized tab titles' 600 cut goes first.
+    // The paywall's 500 then measures a little wide, which can only fail safe.
+    'Cinzel': ['Cinzel-SemiBold.ttf', 'Cinzel-Medium.ttf'],
     'Lora': [
       'Lora-Regular.ttf',
       'Lora-Medium.ttf',

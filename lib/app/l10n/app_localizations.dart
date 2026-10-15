@@ -1971,6 +1971,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'OK'**
   String get statusPersonaOldOk;
+
+  /// Wallpapers screen title, top-left, sharing its band with the settings gear. Keep 'Arul' in Latin letters, then the word for Wallpapers. When it does not fit the phone, the English title shows instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Arul Wallpapers'**
+  String get headerWallpapers;
+
+  /// Status screen title (WhatsApp status clips and festival greetings), top-left, sharing its band with the settings gear. When it does not fit the phone, the English title shows instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Status and Greet'**
+  String get headerStatus;
 }
 
 class _AppLocalizationsDelegate

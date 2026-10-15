@@ -252,6 +252,9 @@ class _RingtonesScreenState extends ConsumerState<RingtonesScreen> {
               // The tabs cross-fade -> anything that differed up here read as the screen jumping.
               ArulBrowseHeader(
                 title: l10n.tabRingtones,
+                fallbackTitle: lookupAppLocalizations(
+                  const Locale('en'),
+                ).tabRingtones,
                 // Literally the SAME control the feed puts here, not a matching one.
                 // Two look-alike buttons is how they drifted apart the first time.
                 actions: [

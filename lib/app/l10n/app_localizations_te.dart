@@ -1066,4 +1066,10 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'సరే';
+
+  @override
+  String get headerWallpapers => 'Arul వాల్‌పేపర్';
+
+  @override
+  String get headerStatus => 'స్టేటస్ & శుభాకాంక్షలు';
 }

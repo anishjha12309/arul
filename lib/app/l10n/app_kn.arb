@@ -309,5 +309,7 @@
   "statusPersonaNameFailed": "ನಿಮ್ಮ ಹೆಸರು ಉಳಿಸಲು ಆಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
   "statusPersonaOldTitle": "Android 12 ಅಥವಾ ಹೊಸದು ಬೇಕು",
   "statusPersonaOldBody": "ಸ್ಟೇಟಸ್‌ಗಳಿಗೆ ನಿಮ್ಮ ಫೋಟೋ ಮತ್ತು ಹೆಸರು ಸೇರಿಸಲು Android 12 ಅಥವಾ ಹೊಸ ಆವೃತ್ತಿ ಬೇಕು. ಪ್ರತಿ ಸ್ಟೇಟಸ್ ಅನ್ನು ಈಗಿನಂತೆಯೇ ಹಂಚಿಕೊಳ್ಳಬಹುದು, ಉಳಿಸಬಹುದು.",
-  "statusPersonaOldOk": "ಸರಿ"
+  "statusPersonaOldOk": "ಸರಿ",
+  "headerWallpapers": "Arul ವಾಲ್‌ಪೇಪರ್",
+  "headerStatus": "ಸ್ಟೇಟಸ್ & ಶುಭಾಶಯ"
 }

@@ -1060,4 +1060,10 @@ class AppLocalizationsHi extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'ठीक है';
+
+  @override
+  String get headerWallpapers => 'Arul वॉलपेपर';
+
+  @override
+  String get headerStatus => 'स्टेटस & शुभकामनाएं';
 }

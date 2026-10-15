@@ -309,5 +309,7 @@
   "statusPersonaNameFailed": "आपका नाम सेव नहीं हो सका। फिर कोशिश करें।",
   "statusPersonaOldTitle": "Android 12 या नया चाहिए",
   "statusPersonaOldBody": "स्टेटस पर अपनी फ़ोटो और नाम जोड़ने के लिए Android 12 या नया वर्ज़न चाहिए। हर स्टेटस को आप पहले की तरह शेयर और सेव कर सकते हैं।",
-  "statusPersonaOldOk": "ठीक है"
+  "statusPersonaOldOk": "ठीक है",
+  "headerWallpapers": "Arul वॉलपेपर",
+  "headerStatus": "स्टेटस & शुभकामनाएं"
 }

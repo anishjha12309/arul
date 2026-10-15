@@ -300,6 +300,9 @@ abstract final class ArulTokens {
   /// The bundled display-serif family. Latin-only; must NOT wrap Indic text.
   static const String serif = 'Marcellus';
 
+  /// The tab titles' bundled Latin-only Cinzel; their Indic letters fall back per glyph to the system Noto.
+  static const String titleSerif = paywallDisplayFamily;
+
   /// Splash wordmark "Arul". 54px, Marcellus, ls `.04em` (54 × .04 = 2.16).
   /// With no gopuram mark the type carries the splash alone -> the largest wordmark in the app.
   static const TextStyle wordmarkSplash = TextStyle(
@@ -335,33 +338,18 @@ abstract final class ArulTokens {
     letterSpacing: 0.3,
   );
 
-  /// The title in a top-level tab's header band: 24px Marcellus, untracked.
+  /// The title in a top-level tab's header band: 24px Cinzel 600, untracked.
   ///
   /// ONE size for every tab — they cross-fade, so a resizing title read as the screen jumping.
   /// Never tune it per screen: change it here and every tab moves together.
-  /// No tracking: `.04em` on lowercase pulled "Ringtones" apart into loose letters, and at 26 the
-  /// title nearly matched the 28px wordmark — a page label passing for a second brand mark.
+  /// No tracking: `.04em` on lowercase pulled "Ringtones" apart into loose letters.
   /// 24 × 1.15 = 27.6 clears the 34 band; past ~29 the band grows, and a bigger band resizes the reel.
   static const TextStyle screenHeaderTitle = TextStyle(
-    fontFamily: serif,
+    fontFamily: titleSerif,
+    fontWeight: FontWeight.w600,
     fontSize: 24,
     height: 1.15,
     letterSpacing: 0,
-  );
-
-  /// The WORDMARK in the feed's header band — "Arul", 28px Marcellus, ls `.04em` (28 × .04 = 1.12).
-  ///
-  /// The ONE deliberate exception to "one size for every tab".
-  /// The other tabs show a page TITLE; the feed shows the brand.
-  /// A wordmark matching the labels around it read as a third tab name, not as the app's mark.
-  /// A different kind of object -> its own token, never a per-screen override of [screenHeaderTitle].
-  /// 28 is near the ceiling: `28 × 1.15 = 32.2` in a 34 band leaves 1.8, some spent on the drop.
-  /// Past ~29 the line box exceeds the band and the Row overflows — grow the band first.
-  static const TextStyle wordmarkHeader = TextStyle(
-    fontFamily: serif,
-    fontSize: 28,
-    height: 1.15,
-    letterSpacing: 1.12,
   );
 
   static const TextStyle priceNumeral = TextStyle(
@@ -805,7 +793,7 @@ abstract final class ArulTokens {
     stops: [0.0, 0.04],
   );
 
-  // Premium paywall typography — three BUNDLED, paywall-only families.
+  // Premium paywall typography — three BUNDLED families, paywall-only bar the tab titles' Cinzel.
   // Cinzel for display, Lora for everything else, Gelasio for the price numerals.
   // Tracking is quoted in `em` by the handoff and pre-multiplied here, as everywhere above.
   // Lora has no U+20B9 -> every Lora style carries Gelasio in [paywallSerifFallback].

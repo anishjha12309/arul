@@ -1061,4 +1061,10 @@ class AppLocalizationsKn extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'ಸರಿ';
+
+  @override
+  String get headerWallpapers => 'Arul ವಾಲ್‌ಪೇಪರ್';
+
+  @override
+  String get headerStatus => 'ಸ್ಟೇಟಸ್ & ಶುಭಾಶಯ';
 }

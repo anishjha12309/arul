@@ -1058,4 +1058,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'OK';
+
+  @override
+  String get headerWallpapers => 'Arul Wallpapers';
+
+  @override
+  String get headerStatus => 'Status and Greet';
 }

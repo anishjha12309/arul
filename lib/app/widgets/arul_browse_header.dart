@@ -11,17 +11,14 @@ class ArulBrowseHeader extends StatelessWidget {
     super.key,
     required this.title,
     required this.chips,
-    this.titleStyle,
-    this.titleDrop = 0,
+    this.fallbackTitle,
     this.actions = const [],
   });
 
   final String title;
 
-  /// Passed straight through to [ArulScreenHeader.titleStyle] — read its doc first. Only the feed calls it.
-  final TextStyle? titleStyle;
-
-  final double titleDrop;
+  /// See [ArulScreenHeader.fallbackTitle].
+  final String? fallbackTitle;
 
   /// The category chip row. Each tab reads its own catalog -> only this differs, never the frame.
   final Widget chips;
@@ -34,8 +31,7 @@ class ArulBrowseHeader extends StatelessWidget {
       children: [
         ArulScreenHeader(
           title: title,
-          titleStyle: titleStyle,
-          titleDrop: titleDrop,
+          fallbackTitle: fallbackTitle,
           actions: actions,
         ),
         // 8 above the chip row against 33 below left it riding high in its own band, on both tabs.

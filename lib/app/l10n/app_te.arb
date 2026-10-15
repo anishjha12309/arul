@@ -309,5 +309,7 @@
   "statusPersonaNameFailed": "మీ పేరు సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి.",
   "statusPersonaOldTitle": "Android 12 లేదా కొత్తది అవసరం",
   "statusPersonaOldBody": "స్టేటస్‌లకు మీ ఫోటో, పేరు జోడించడానికి Android 12 లేదా కొత్త వెర్షన్ అవసరం. ప్రతి స్టేటస్‌ను ఇప్పటిలాగే షేర్ చేయవచ్చు, సేవ్ చేయవచ్చు.",
-  "statusPersonaOldOk": "సరే"
+  "statusPersonaOldOk": "సరే",
+  "headerWallpapers": "Arul వాల్‌పేపర్",
+  "headerStatus": "స్టేటస్ & శుభాకాంక్షలు"
 }

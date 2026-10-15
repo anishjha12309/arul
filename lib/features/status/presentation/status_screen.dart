@@ -371,7 +371,10 @@ class _StatusScreenState extends ConsumerState<StatusScreen> {
               // Shubh's status header: the title band, then a 36 dp chip row and 12 dp of air -> every dp
               // the browse tabs spend above their reels here goes to the clip's width instead.
               ArulScreenHeader(
-                title: l10n.statusTitle,
+                title: l10n.headerStatus,
+                fallbackTitle: lookupAppLocalizations(
+                  const Locale('en'),
+                ).headerStatus,
                 actions: [
                   ArulIconTap.glyph(
                     glyph: ArulLineGlyph.settings,

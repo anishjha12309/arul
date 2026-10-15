@@ -1072,4 +1072,10 @@ class AppLocalizationsTa extends AppLocalizations {
 
   @override
   String get statusPersonaOldOk => 'சரி';
+
+  @override
+  String get headerWallpapers => 'Arul வால்பேப்பர்';
+
+  @override
+  String get headerStatus => 'ஸ்டேட்டஸ் & வாழ்த்து';
 }

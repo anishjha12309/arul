@@ -566,13 +566,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
           child: Column(
             children: [
               ArulBrowseHeader(
-                title: 'Arul',
-                // The WORDMARK, not a page title — bigger than Ringtones'
-                // label and sat a touch lower in the band, because it is the
-                // brand rather than a name for this screen. The other tabs
-                // deliberately do NOT take these.
-                titleStyle: ArulTokens.wordmarkHeader,
-                titleDrop: 1.5,
+                title: AppLocalizations.of(context).headerWallpapers,
+                fallbackTitle: lookupAppLocalizations(
+                  const Locale('en'),
+                ).headerWallpapers,
                 actions: [
                   ArulIconTap.glyph(
                     glyph: ArulLineGlyph.settings,

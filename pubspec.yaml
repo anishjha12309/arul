@@ -180,10 +180,14 @@ flutter:
     # script is the record of how to regenerate them. Licenses: assets/fonts/
     # OFL-*.txt. The paywall is English-by-decision (CLAUDE.md §5 / the handoff),
     # so a Latin-only subset can never meet a script it does not cover.
+    # Cinzel 600 also sets the localized tab titles: Flutter falls back per
+    # glyph, so their Indic letters render in the system Noto.
     - family: Cinzel
       fonts:
         - asset: assets/fonts/Cinzel-Medium.ttf
           weight: 500
+        - asset: assets/fonts/Cinzel-SemiBold.ttf
+          weight: 600
     - family: Lora
       fonts:
         - asset: assets/fonts/Lora-Regular.ttf

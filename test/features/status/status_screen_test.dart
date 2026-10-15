@@ -288,7 +288,7 @@ void main() {
   testWidgets('the reel, the chips and both actions', (tester) async {
     await pump(tester);
     expect(builds, [1]);
-    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Status and Greet'), findsOneWidget);
     expect(find.text('Murugan'), findsOneWidget);
     expect(find.bySemanticsIdentifier('arul_status_whatsapp'), findsWidgets);
     expect(find.bySemanticsIdentifier('arul_status_save'), findsWidgets);

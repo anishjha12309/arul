@@ -386,7 +386,12 @@ final List<ScreenEntry> kScreenRegistry = <ScreenEntry>[
             final l10n = AppLocalizations.of(context);
             return Column(
               children: [
-                ArulScreenHeader(title: l10n.statusTitle),
+                ArulScreenHeader(
+                  title: l10n.headerStatus,
+                  fallbackTitle: lookupAppLocalizations(
+                    const Locale('en'),
+                  ).headerStatus,
+                ),
                 const SizedBox(
                   height: ArulChip.denseStripHeight,
                   child: StatusChips(),

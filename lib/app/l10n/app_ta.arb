@@ -309,5 +309,7 @@
   "statusPersonaNameFailed": "உங்கள் பெயரைச் சேமிக்க முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",
   "statusPersonaOldTitle": "Android 12 அல்லது புதியது தேவை",
   "statusPersonaOldBody": "ஸ்டேட்டஸில் உங்கள் புகைப்படமும் பெயரும் சேர்க்க Android 12 அல்லது புதிய பதிப்பு தேவை. எல்லா ஸ்டேட்டஸையும் இப்போது உள்ளபடியே பகிரலாம், சேமிக்கலாம்.",
-  "statusPersonaOldOk": "சரி"
+  "statusPersonaOldOk": "சரி",
+  "headerWallpapers": "Arul வால்பேப்பர்",
+  "headerStatus": "ஸ்டேட்டஸ் & வாழ்த்து"
 }

@@ -9,22 +9,15 @@ class ArulScreenHeader extends StatelessWidget {
   const ArulScreenHeader({
     super.key,
     required this.title,
-    this.titleStyle,
-    this.titleDrop = 0,
+    this.fallbackTitle,
     this.leading,
     this.actions = const [],
   });
 
   final String title;
 
-  /// Overrides [ArulTokens.screenHeaderTitle] — ONE caller: the feed, whose "Arul" is the WORDMARK.
-  /// A title changing size between cross-fading tabs reads as the whole screen jumping.
-  /// So never use this to make a tab special — a wordmark is a different object; a title is not.
-  final TextStyle? titleStyle;
-
-  /// Optical drop for the title, logical px, positive = down.
-  /// A TRANSLATE -> it moves paint, never the band, so the reel below cannot be pushed around by it.
-  final double titleDrop;
+  /// The English title, shown whole when the localized [title] does not fit; a translation never shrinks.
+  final String? fallbackTitle;
 
   final Widget? leading;
 
@@ -54,15 +47,13 @@ class ArulScreenHeader extends StatelessWidget {
   /// A [leading] glyph keeps the true gutter — unlike type it has a real edge.
   static const double _titleOpticalInset = 3;
 
-  /// A localized title renders in its Noto fallback, whose taller ascent rides the ink 4–9 dp above
-  /// the Marcellus titles' (measured on device against the wordmark's). Drop it back per script.
-  // In ems of the title (measured at 26 dp) -> the drop follows a size change in the token.
+  // Indic letters fall back to the system Noto, whose ink sits off the Cinzel caps' centre.
+  // Per script: its three tab titles' mean ink offset from English (under 1 dp left out), in ems
+  // of the 24 dp title -> the drop follows a size change in the token.
   static const _scriptDropEm = <String, double>{
-    'hi': 7.2 / 26,
-    'kn': 8.8 / 26,
-    'ml': 6.1 / 26,
-    'ta': 3.6 / 26,
-    'te': 7.0 / 26,
+    'hi': 2.0 / 24,
+    'ml': -1.0 / 24,
+    'ta': -1.5 / 24,
   };
 
   @override
@@ -96,34 +87,44 @@ class ArulScreenHeader extends StatelessWidget {
                 padding: bandPadding.add(
                   const EdgeInsets.only(left: _titleOpticalInset),
                 ),
-                child: Transform.translate(
-                  offset: Offset(
-                    0,
-                    titleDrop +
-                        (titleStyle == null
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final style = ArulTokens.screenHeaderTitle.copyWith(
+                      // Gold on dark, not ivory -> the header reads as brand, not as a page
+                      // label. Light keeps its ink — gold on ivory has nothing to carry it.
+                      color: p.chromeInk,
+                    );
+                    final english = fallbackTitle;
+                    final localized =
+                        english == null ||
+                        _fits(context, title, style, constraints.maxWidth);
+                    return Transform.translate(
+                      offset: Offset(
+                        0,
+                        localized
                             ? (_scriptDropEm[Localizations.localeOf(
                                         context,
                                       ).languageCode] ??
                                       0) *
                                   ArulTokens.screenHeaderTitle.fontSize!
-                            : 0),
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        style: (titleStyle ?? ArulTokens.screenHeaderTitle).copyWith(
-                          // Gold on dark, not ivory -> the header reads as brand, not as a page
-                          // label. Light keeps its ink — gold on ivory has nothing to carry it.
-                          color: p.chromeInk,
+                            : 0,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        // A too-wide translation was swapped for English above -> only English is ever
+                        // narrowed. Past ~1.2x OS text the band's height caps every language alike.
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            localized ? title : english,
+                            maxLines: 1,
+                            style: style,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -138,5 +139,27 @@ class ArulScreenHeader extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static bool _fits(
+    BuildContext context,
+    String text,
+    TextStyle style,
+    double room,
+  ) {
+    var effective = DefaultTextStyle.of(context).style.merge(style);
+    // [Text] applies the OS bold-text setting the same way -> measure what it paints.
+    if (MediaQuery.boldTextOf(context)) {
+      effective = effective.merge(const TextStyle(fontWeight: FontWeight.bold));
+    }
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effective),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final fits = painter.width <= room;
+    painter.dispose();
+    return fits;
   }
 }

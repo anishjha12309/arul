@@ -27,8 +27,8 @@ paths:
 - **The UI is Arul's own** — never import another app's look, theme or components.
 - Perf rules SHAPE the design and are not optional polish: no glassmorphism anywhere including the
   dock, no `shimmer` package and no `ShaderMask` (a mask forces an offscreen pass — slide a gradient
-  fill instead), and no `google_fonts` or `font_awesome_flutter`. Marcellus is BUNDLED, which is the
-  only allowed way to add a face.
+  fill instead), and no `google_fonts` or `font_awesome_flutter`. Every face (Marcellus, Cinzel, Lora,
+  Gelasio) is BUNDLED, which is the only allowed way to add one.
 
 Read [docs/ui-direction.md](../../docs/ui-direction.md) — it owns the palette, the type stack and the
 chrome rules paid for on device.

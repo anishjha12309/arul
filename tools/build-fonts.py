@@ -1,11 +1,13 @@
-"""Build the paywall's bundled font cuts (`assets/fonts/`) — the ONLY way to
+"""Build the bundled paywall and tab-title font cuts (`assets/fonts/`) — the ONLY way to
 regenerate them; do not hand-edit the TTFs.
 
 Google Fonts ships these three as VARIABLE fonts and publishes no statics, so
 each weight the design uses is instanced out of the variable master and then
 subset to Latin + punctuation + the currency block. English-by-decision on
 `/premium` (CLAUDE.md §5) is what makes a Latin-only subset safe; the upstream
-Lora's Cyrillic and Vietnamese would otherwise be dead weight in the APK.
+Lora's Cyrillic and Vietnamese would otherwise be dead weight in the APK. The
+tab titles also set Cinzel over localized text: Flutter falls back per glyph,
+so their Indic letters render in the system Noto.
 
 Gelasio is the numerals cut, subset harder still. It stands in for the handoff's
 Georgia — metric-compatible with it, same old-style figures — and is the only
@@ -54,6 +56,8 @@ NUMERALS = [ord(c) for c in " 0123456789.,/-+₹"]
 
 JOBS = [
     ("Cinzel.ttf", 500, "Cinzel-Medium.ttf", UNICODES),
+    # The tab titles: 650 sits between SemiBold and Bold, heavy enough to hold 24 px.
+    ("Cinzel.ttf", 650, "Cinzel-SemiBold.ttf", UNICODES),
     ("Lora.ttf", 400, "Lora-Regular.ttf", UNICODES),
     ("Lora.ttf", 500, "Lora-Medium.ttf", UNICODES),
     ("Lora.ttf", 600, "Lora-SemiBold.ttf", UNICODES),
