@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
 
 export const MAX_SECONDS = 30;
 export const MAX_BYTES = 10_000_000;
@@ -16,9 +17,9 @@ const MIN_H = 512;
  * 1024×1536), snapped to the rule — never padded to one canvas with a blurred fill (owner, Oct 2026:
  * the fill put a blur band above every title). The snap trims at most 31 px of height.
  */
-export function frameFor(sw, sh) {
-  const h = Math.round((W * sh) / sw / H_STEP) * H_STEP;
-  return { width: W, height: Math.min(MAX_H, Math.max(MIN_H, h)) };
+export function frameFor(sw, sh, width = W) {
+  const h = Math.round((width * sh) / sw / H_STEP) * H_STEP;
+  return { width, height: Math.min(MAX_H, Math.max(MIN_H, h)) };
 }
 
 export function onVideoRule(width, height) {
@@ -44,7 +45,7 @@ export function titleFor(name) {
   return pretty || name;
 }
 
-/** UUIDv5-shaped id from the source record -> a re-run upserts the same row and overwrites the same keys. */
+/** UUIDv5-shaped id from the source record -> a re-run gets the same id: the import refuses it, the seed upserts. */
 export function stableUuid(seed) {
   const h = crypto.createHash("sha1").update(seed).digest();
   h[6] = (h[6] & 0x0f) | 0x50;
@@ -60,6 +61,7 @@ function run(cmd, args) {
 /**
  * [opts.crop] = `{ x, y, w, h }` in source pixels, taken before the scale — the re-encode of a padded
  * clip cuts its fill bands off here. [opts.copyAudio] keeps the source's AAC as is (already levelled).
+ * [opts.width] = the target width (default `W`), on the video rule.
  */
 export function transcode(src, out, opts = {}) {
   const meta = ffprobeJson(src);
@@ -68,7 +70,7 @@ export function transcode(src, out, opts = {}) {
     return { ok: false, reason: "source has no audio" };
   const v = meta.streams.find((s) => s.codec_type === "video");
   const crop = opts.crop ?? { x: 0, y: 0, w: v.width, h: v.height };
-  const { width, height } = frameFor(crop.w, crop.h);
+  const { width, height } = frameFor(crop.w, crop.h, opts.width);
   // Trimmed short of the cap: AAC frame rounding lands a `-t 30` encode at ~30.1 s, which QC refuses
   const seconds = Math.min(MAX_SECONDS - 0.2, Number(meta.format.duration) || MAX_SECONDS);
   const t = seconds.toFixed(3);
@@ -98,11 +100,13 @@ export function transcode(src, out, opts = {}) {
       `measured_LRA=${ln.input_lra}:measured_thresh=${ln.input_thresh}:offset=${ln.target_offset}:linear=true,` +
       "aresample=48000,alimiter=limit=0.84:level=false";
   }
+  // At or near the source's own width it is a token sharpen only: more just adds halos (media-conventions.md)
+  const sharpen = width > crop.w * 1.1 ? "unsharp=5:5:0.6:3:3:0.3" : "unsharp=3:3:0.3:3:3:0.0";
   // The source's own shape: a cover scale onto the snapped frame trims ≤31 px of height, never a band
   const vf =
     `[0:v]crop=${crop.w}:${crop.h}:${crop.x}:${crop.y},` +
     `scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos:out_range=tv,` +
-    `crop=${width}:${height},unsharp=5:5:0.6:3:3:0.3,setsar=1,format=yuv420p[v]` +
+    `crop=${width}:${height},${sharpen},setsar=1,format=yuv420p[v]` +
     (af ? `;[0:a:0]${af}[a]` : "");
   const audio = af
     ? ["-map", "[a]", ..."-c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 2".split(" ")]
@@ -250,4 +254,48 @@ export function writePoster(mp4, jpg, seconds) {
     if (w.status === 0) return { ok: true };
   }
   return { ok: false, reason: "no non-black poster frame found" };
+}
+
+/**
+ * One clip end to end: an earlier encode at the target width that still passes QC is kept (a re-run
+ * after a failure re-validates instead of re-encoding), else transcode -> validate -> poster.
+ */
+export function encodeClip(src, mp4, jpg, opts = {}) {
+  const t0 = Date.now();
+  const done = (r) => ({ ...r, seconds: (Date.now() - t0) / 1000 });
+  const cached = fs.existsSync(mp4) && fs.existsSync(jpg) ? validate(mp4) : null;
+  if (cached?.ok && cached.width === (opts.width ?? W)) return done({ ok: true, probe: cached });
+  const r = transcode(src, mp4, opts);
+  if (!r.ok) return done(r);
+  const probe = validate(mp4);
+  if (!probe.ok) return done({ ok: false, reason: `off-spec after encode — ${probe.problems.join("; ")}` });
+  const poster = writePoster(mp4, jpg, probe.durationMs / 1000);
+  return done(poster.ok ? { ok: true, probe } : poster);
+}
+
+/**
+ * encodeClip over `tasks` (`{ src, mp4, jpg, opts }`), `jobs` at a time, results in task order.
+ * Each clip runs on its own thread: the ffmpeg calls are synchronous and would block one another.
+ */
+export async function encodeAll(tasks, jobs, onDone = () => {}) {
+  const results = new Array(tasks.length);
+  let next = 0;
+  async function lane() {
+    for (let i = next++; i < tasks.length; i = next++) {
+      results[i] = await new Promise((resolve) => {
+        const w = new Worker(new URL(import.meta.url), { workerData: { statusEncode: tasks[i] } });
+        w.once("message", resolve);
+        w.once("error", (e) => resolve({ ok: false, reason: `encode thread failed: ${e.message}` }));
+        w.once("exit", (code) => resolve({ ok: false, reason: `encode thread exited ${code}` }));
+      });
+      onDone(i, results[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, tasks.length)) }, lane));
+  return results;
+}
+
+if (!isMainThread && workerData?.statusEncode) {
+  const t = workerData.statusEncode;
+  parentPort.postMessage(encodeClip(t.src, t.mp4, t.jpg, t.opts));
 }

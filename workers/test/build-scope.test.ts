@@ -284,6 +284,48 @@ describe("buildScope", () => {
     expect((store.get("catalog/statuses/all_1.json") as Page).items.map((i) => i["id"])).toEqual(["a"]);
   });
 
+  // postgres.js hands jsonb back parsed -> the page must carry the slot as an object, never a string
+  it("statuses carry photo_slot through as the row holds it: an object, or null for a clip with no frame", async () => {
+    const { bucket, store } = makeR2();
+    const slot = { left: 0.3583, top: 0.6865, size: 0.2917, shape: "soft_circle" };
+    await buildScope(
+      sqlReturning([
+        status("framed", { width: 768, height: 1152, category: "kannada", photo_slot: slot }),
+        status("bare", { photo_slot: null }),
+      ]),
+      bucket,
+      "statuses",
+      () => 0.5,
+    );
+    const page = store.get("catalog/statuses/all_1.json") as Page;
+    const byId = Object.fromEntries(page.items.map((i) => [i["id"], i]));
+    expect(byId["framed"]).toMatchObject({ photo_slot: slot, width: 768, height: 1152, category: "kannada" });
+    expect(byId["bare"]).toHaveProperty("photo_slot", null);
+    expect(JSON.stringify(page)).toContain(
+      '"photo_slot":{"left":0.3583,"top":0.6865,"size":0.2917,"shape":"soft_circle"}',
+    );
+  });
+
+  // The import stages a library as drafts -> only the SELECT keeps them out of every installed app's feed
+  it("a draft status (is_published=false) never reaches the page", async () => {
+    const { bucket, store } = makeR2();
+    const rows = [
+      status("live"),
+      status("draft", {
+        is_published: false,
+        published_at: null,
+        photo_slot: { left: 0, top: 0, size: 1, shape: "pin" },
+      }),
+    ];
+    // Postgres stand-in: honours the published filter only if the build's SQL asks for it
+    const sql = vi.fn(async (strings: TemplateStringsArray) =>
+      /WHERE is_published = true/.test(strings.join("?")) ? rows.filter((r) => r.is_published) : rows,
+    );
+    const r = await buildScope(sql as never, bucket, "statuses");
+    expect(r).toMatchObject({ items: 1, skipped: 0 });
+    expect((store.get("catalog/statuses/all_1.json") as Page).items.map((i) => i["id"])).toEqual(["live"]);
+  });
+
   it("a missing statuses table (42P01) writes a valid empty page instead of failing the scope", async () => {
     const { bucket, store } = makeR2();
     const missing = Object.assign(new Error('relation "statuses" does not exist'), { code: "42P01" });

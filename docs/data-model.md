@@ -83,7 +83,8 @@ Rows debited before the columns existed were backfilled once (`23_debit_backfill
   their own tables alone. It reuses wallpaper column names where the meaning matches (`full_key`,
   `feed_rank`, the `published_at` trigger, `renewed_at`/`pre_renew_published_at`) so build-catalog, the
   sweep and the CMS share code; `mime` is CHECKed to `video/mp4`. Its poster is derived, never stored
-  ([status-clips.md](status-clips.md)).
+  ([status-clips.md](status-clips.md)). `photo_slot` (jsonb, nullable, CHECKed) is where the user's photo
+  goes; NULL puts it at the avatar spot ([status.md](status.md)).
 
 ## `categories` — CMS-only
 

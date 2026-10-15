@@ -4,9 +4,10 @@ Read before encoding, uploading or re-validating a status clip (`statuses/<categ
 shared video rule and the paywall loudness recipe this builds on: [media-conventions.md](media-conventions.md).
 
 The media-verify `status` role (Worker and CMS copies identical) rejects anything but H.264 **on the
-video rule at the source's own shape** (1024 wide, height a multiple of 32: a 2:3 source is 1024×1536,
-a 9:16 one 1024×1824) with ≥1 audio track, ≤30 s, ≤10 MB. Never pad to one canvas: the blurred fill
-put a blur band above every title, and the card shows each clip at its own shape (owner, after Shubh).
+video rule at the source's own shape** (width a multiple of 128, height of 32, inside 1088×1920: a 2:3
+source at 1024 wide is 1024×1536, a 9:16 one 1024×1824) with ≥1 audio track, ≤30 s, ≤10 MB. Never pad
+to one canvas: the blurred fill put a blur band above every title, and the card shows each clip at its
+own shape (owner, after Shubh).
 The catalog carries `width`/`height` so the card is sized before the first frame. Encode to H.264 High,
 limited `yuv420p`, `+faststart`, ~2 Mbps (1.5 Mbps when 2 overshoots), AAC-LC 128k stereo 48 kHz at
 **−14 LUFS** with the paywall's two-pass `loudnorm` + limiter, so clips match each other. WhatsApp's
@@ -29,7 +30,23 @@ with no audio track is refused before converting, as the server would refuse it.
 
 **Which clips reach production is the owner's call, per library**: WhatsApp's Share to Status terms make
 us warrant the rights. The owner took that risk for the third-party Crafto set's Tamil and Telugu clips
-(categories `tamil`, `telugu`); never widen an upload to another language without asking.
+(categories `tamil`, `telugu`), then approved Kannada and Malayalam (`kannada`, `malayalam`) for the
+photo-frame set; never widen an upload to another language without asking. A category is named after
+its language because the app leads with the app language's category ([status.md](status.md) §Language).
+
+**The Crafto "with photo frame" set carries `photo_slot`** (on `statuses`: jsonb, nullable; the catalog
+row carries it as stored): `{left, top, size, shape}`, `left` and `size` as fractions of the clip's
+WIDTH, `top` of its HEIGHT, the slot a square of side `size` × width; shape `circle`, `soft_circle`,
+`pin`, `soft_square` or `square`, an unknown one drawn as a circle. Fractions, so any encode size maps
+the same.
+
+NULL (no frame: a CMS upload, any older clip) → the app's corner avatar. An app without the photo
+feature ignores the field; the clip plays like any other.
+
+**Encode that set at 768×1152, not 1024×1536**: still on the video rule, 768 is a 6.7% upscale of the
+source where 1024 was 42%, so the same bitrate buys more bits per pixel. It goes up as unpublished
+drafts through `workers/tools/status-import.mjs` (flags in its header; build-catalog ships
+`is_published` rows only), and the owner swaps old clips for new in the CMS.
 
 Bulk upload = `cd workers && node tools/status-import.mjs --langs tamil,telugu` (encode + QC + plan into
 `~/Anish/arul-import/statuses`, writes nothing), then the same with `--write`: R2 clip + poster, ONE Neon
