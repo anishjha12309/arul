@@ -293,17 +293,19 @@ abstract final class ArulTokens {
   /// transparent BLACK, and a gradient through it greys the gold on the way.
   static const Color goldClear = Color.fromRGBO(212, 160, 23, 0);
 
-  // Typography — Spec > Typography. UI is the system stack, `fontFamily` null.
-  // The bundled 'Marcellus' serif is for the Latin wordmark, titles, numerals and hero headings ONLY.
-  // NEVER a localized string.
+  // Typography — both bundled faces are Latin-only: an Indic run inside them falls back per glyph
+  // to the system Noto, which covers all five scripts at zero bundled bytes.
 
-  /// The bundled display-serif family. Latin-only; must NOT wrap Indic text.
-  static const String serif = 'Marcellus';
+  /// The bundled display serif: wordmarks, titles, numerals and the display/headline tiers.
+  static const String serif = 'Cinzel';
+
+  /// The bundled UI sans: every title, body and label tier of the text theme.
+  static const String sans = 'Jost';
 
   /// The tab titles' bundled Latin-only Cinzel; their Indic letters fall back per glyph to the system Noto.
   static const String titleSerif = paywallDisplayFamily;
 
-  /// Splash wordmark "Arul". 54px, Marcellus, ls `.04em` (54 × .04 = 2.16).
+  /// Splash wordmark "Arul". 54px, Cinzel, ls `.04em` (54 × .04 = 2.16).
   /// With no gopuram mark the type carries the splash alone -> the largest wordmark in the app.
   static const TextStyle wordmarkSplash = TextStyle(
     fontFamily: serif,
@@ -313,7 +315,7 @@ abstract final class ArulTokens {
     color: ivory,
   );
 
-  /// Sign-in wordmark "Arul". 38px, Marcellus.
+  /// Sign-in wordmark "Arul". 38px, Cinzel.
   /// The only brand element on the screen -> it takes the weight, still below the splash's.
   static const TextStyle wordmarkSignIn = TextStyle(
     fontFamily: serif,
@@ -793,7 +795,7 @@ abstract final class ArulTokens {
     stops: [0.0, 0.04],
   );
 
-  // Premium paywall typography — three BUNDLED families, paywall-only bar the tab titles' Cinzel.
+  // Premium paywall typography — three BUNDLED families; Lora and Gelasio are paywall-only.
   // Cinzel for display, Lora for everything else, Gelasio for the price numerals.
   // Tracking is quoted in `em` by the handoff and pre-multiplied here, as everywhere above.
   // Lora has no U+20B9 -> every Lora style carries Gelasio in [paywallSerifFallback].
@@ -811,7 +813,7 @@ abstract final class ArulTokens {
   ///
   /// The FACE needs no handling: Flutter falls back per GLYPH, so a Tamil run inside a Cinzel or
   /// Lora style already lands on the system stack — which covers all five scripts at zero bundled
-  /// bytes, exactly as Marcellus does for the rest of the app. The bundled Latin subsets are never
+  /// bytes, exactly as Cinzel and Jost do for the rest of the app. The bundled Latin subsets are never
   /// asked for a glyph they do not carry.
   ///
   /// The TRACK is what cannot survive. Letter-spacing is a Latin small-caps device; Indic scripts

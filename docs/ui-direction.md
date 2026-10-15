@@ -40,17 +40,17 @@ because the legacy `Gap.md` is 12.
   every tab pushes `/settings` over the shell, so the dock slot belongs to content and back returns to
   the tab that opened it. The gear draws at `dockIconSize` inside the 34 box, so the band never grows;
   `ArulScreenHeader` lays its 7 px spare target OUT into the gutter (`headerSpill`), so all 48 take taps.
-- The wordmark is the literal `Arul` in Marcellus. அருள் = grace / divine blessing — it does NOT mean
+- The wordmark is the literal `Arul` in Cinzel. அருள் = grace / divine blessing — it does NOT mean
   "the South" (the working title); never gloss it so. Copy tone: warm, festive, plain — no religious
   salutations.
 
 ## Type
 
-Base: Roboto (system). Display and wordmark: **Marcellus**, BUNDLED and wired in
-`lib/app/theme/typography.dart`. Every string must render in Tamil, Telugu, Kannada and Malayalam, so a
-serif is confined to display/headline, the Latin wordmark and ONE localized string — the tab title.
-**No bundled serif has Indic glyphs**, so those titles resolve per glyph through Noto at the same size.
-Never add a second header style to "fix" it; watch for ascender clipping.
+Display **Cinzel**, UI **Jost** (owner), BUNDLED (`ArulTokens.serif`/`sans`). Cinzel sets only
+display/headline, the wordmark, numerals and the tab title; Jost every other tier, and a null-family `Text`
+inherits it. **Neither has Indic glyphs**: localized text falls back per glyph to Noto at the same size.
+Never add a second header style to "fix" it; watch ascender clipping. Jost's line is ~1.45 em (Roboto
+~1.17), so an unfixed `height` grows: rerun the l10n matrix after any type change.
 
 - **The tab title is 24 px Cinzel SemiBold (wght 650, registered as 600), UNTRACKED** (owner's
   pick). `.04em` on lowercase spread "Ringtones" into loose letters. Tracking belongs to the wordmark (one
@@ -59,7 +59,7 @@ Never add a second header style to "fix" it; watch for ascender clipping.
   re-measure each script's three titles' ink-bbox centre against English's in the real-font harness
   (`test/l10n/support`, within ~1 dp of the device); skip anything under 1 dp.
 
-**`/premium` is the ONE screen off this stack** (bar the tab title): Cinzel/Lora/Gelasio, bundled, instanced and subset by
+**`/premium` is the ONE screen off this stack**: Cinzel over Lora/Gelasio, bundled, instanced and subset by
 `tools/build-fonts.py`, styled from the `paywall*` tokens. **No bundled serif carries U+20B9 ₹ except
 Gelasio**, so every paywall Lora style names Gelasio in `fontFamilyFallback`, or a bare ₹ drops to Roboto
 mid-sentence. Gelasio sets OLD-STYLE figures, so an amount's ink centre MOVES with its digits — centring

@@ -1,13 +1,13 @@
-"""Build the bundled paywall and tab-title font cuts (`assets/fonts/`) — the ONLY way to
+"""Build the bundled font cuts (`assets/fonts/`) — the ONLY way to
 regenerate them; do not hand-edit the TTFs.
 
-Google Fonts ships these three as VARIABLE fonts and publishes no statics, so
+Google Fonts ships these as VARIABLE fonts and publishes no statics, so
 each weight the design uses is instanced out of the variable master and then
 subset to Latin + punctuation + the currency block. English-by-decision on
 `/premium` (CLAUDE.md §5) is what makes a Latin-only subset safe; the upstream
 Lora's Cyrillic and Vietnamese would otherwise be dead weight in the APK. The
-tab titles also set Cinzel over localized text: Flutter falls back per glyph,
-so their Indic letters render in the system Noto.
+rest of the app sets Cinzel and Jost over localized text: Flutter falls back
+per glyph, so their Indic letters render in the system Noto.
 
 Gelasio is the numerals cut, subset harder still. It stands in for the handoff's
 Georgia — metric-compatible with it, same old-style figures — and is the only
@@ -17,6 +17,7 @@ behind every paywall Lora style. See docs/ui-direction.md §Type.
     pip install fonttools
     mkdir src && cd src   # then, from https://github.com/google/fonts/raw/main/ofl/
     #   cinzel/Cinzel[wght].ttf  →  Cinzel.ttf
+    #   jost/Jost[wght].ttf      →  Jost.ttf
     #   lora/Lora[wght].ttf      →  Lora.ttf
     #   lora/Lora-Italic[wght].ttf → Lora-Italic.ttf
     #   gelasio/Gelasio[wght].ttf  → Gelasio.ttf
@@ -51,13 +52,17 @@ for lo, hi in [
     UNICODES.extend(range(lo, hi + 1))
 
 # Gelasio is a numerals-only cut: it exists to supply the price lockup and the
-# one glyph Lora/Cinzel/Marcellus all lack, U+20B9 ₹.
+# one glyph Lora/Cinzel/Jost all lack, U+20B9 ₹.
 NUMERALS = [ord(c) for c in " 0123456789.,/-+₹"]
 
 JOBS = [
     ("Cinzel.ttf", 500, "Cinzel-Medium.ttf", UNICODES),
     # The tab titles: 650 sits between SemiBold and Bold, heavy enough to hold 24 px.
     ("Cinzel.ttf", 650, "Cinzel-SemiBold.ttf", UNICODES),
+    ("Jost.ttf", 400, "Jost-Regular.ttf", UNICODES),
+    ("Jost.ttf", 500, "Jost-Medium.ttf", UNICODES),
+    ("Jost.ttf", 600, "Jost-SemiBold.ttf", UNICODES),
+    ("Jost.ttf", 700, "Jost-Bold.ttf", UNICODES),
     ("Lora.ttf", 400, "Lora-Regular.ttf", UNICODES),
     ("Lora.ttf", 500, "Lora-Medium.ttf", UNICODES),
     ("Lora.ttf", 600, "Lora-SemiBold.ttf", UNICODES),

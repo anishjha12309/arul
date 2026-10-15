@@ -10,7 +10,7 @@
 /// The requested weight is never consulted, and the behaviour is PER-FONT -> some fonts look fine, which is worse.
 /// So: one family per (script, weight), a single face each -> the harness picks the family from the weight itself.
 /// See [uiFamilyFor] and [fallbackFor] -> nothing is left to the matcher.
-/// The app asks for `fontFamily: null` almost everywhere -> a null family in the test binary resolves to the box face.
+/// Many app styles ask for `fontFamily: null` -> a null family in the test binary resolves to the box face.
 /// It does NOT resolve to anything registered here -> naming the stack is `real_font_theme.dart`'s job.
 library;
 
@@ -19,9 +19,22 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// The bundled display serif, under its shipping name -> the theme's `fontFamily: 'Marcellus'` slots resolve for real.
-/// Marcellus is Latin-only -> an Indic headline falls through [fallbackFor], exactly as it does on device.
-const String kSerifFamily = 'Marcellus';
+/// The bundled display serif, under its shipping name -> the theme's Cinzel slots resolve for real.
+/// Cinzel is Latin-only -> an Indic headline falls through [fallbackFor], exactly as it does on device.
+const String kSerifFamily = 'Cinzel';
+
+/// The bundled UI sans. Registered once per weight as `Jost<w>` (Trap 2) -> see [sansFamilyFor].
+const String kSansFamily = 'Jost';
+
+/// The Jost cuts `tools/build-fonts.py` bundles.
+const List<int> kSansWeights = <int>[400, 500, 600, 700];
+
+const Map<int, String> _sansFiles = <int, String>{
+  400: 'Jost-Regular.ttf',
+  500: 'Jost-Medium.ttf',
+  600: 'Jost-SemiBold.ttf',
+  700: 'Jost-Bold.ttf',
+};
 
 /// Latin cuts the fixtures provide -> Roboto's `wght` axis spans 100-900, so every weight the theme asks for exists.
 const List<int> kLatinWeights = <int>[400, 500, 600, 700, 800];
@@ -63,8 +76,8 @@ final Set<String> kRegisteredFamilies = <String>{
   for (final w in kLatinWeights) '$_latinPrefix$w',
   for (final p in kIndicPrefixes.values)
     for (final w in kIndicWeights) '$p$w',
+  for (final w in kSansWeights) '$kSansFamily$w',
   kSerifFamily,
-  'Cinzel',
   'Lora',
   'Gelasio',
 };
@@ -80,6 +93,10 @@ int _nearest(List<int> available, int want) {
 /// The Latin family that carries [weight]'s real metrics.
 String uiFamilyFor(FontWeight weight) =>
     '$_latinPrefix${_nearest(kLatinWeights, weight.value)}';
+
+/// The Jost family that carries [weight]'s real metrics -> the cut Android's matcher would pick.
+String sansFamilyFor(FontWeight weight) =>
+    '$kSansFamily${_nearest(kSansWeights, weight.value)}';
 
 /// The fallback chain for [weight] -> Latin FIRST, because it owns digits, punctuation and Latin words in a translation.
 /// Then one family per Indic script at the same weight -> scripts share no codepoints, so their order is immaterial.
@@ -121,18 +138,20 @@ Future<void> loadRealFonts() async {
     }
   }
 
-  final marcellus = File('${_assetFonts.path}/Marcellus-Regular.ttf');
-  if (!marcellus.existsSync()) {
-    throw StateError('Missing bundled serif: ${marcellus.path}');
+  for (final w in kSansWeights) {
+    final cut = File('${_assetFonts.path}/${_sansFiles[w]}');
+    if (!cut.existsSync()) {
+      throw StateError('Missing bundled sans: ${cut.path}');
+    }
+    await _register('$kSansFamily$w', [cut]);
   }
-  await _register(kSerifFamily, [marcellus]);
 
   // The remaining bundled faces under their shipping names -> the paywall tree is English-by-decision and out of scope.
   // But the app builds these styles while constructing the theme -> a missing family would surface as noise, not signal.
   for (final entry in const {
     // The first face wins every request (Trap 2) -> the localized tab titles' 600 cut goes first.
-    // The paywall's 500 then measures a little wide, which can only fail safe.
-    'Cinzel': ['Cinzel-SemiBold.ttf', 'Cinzel-Medium.ttf'],
+    // Every 500 slot then measures a little wide, which can only fail safe.
+    kSerifFamily: ['Cinzel-SemiBold.ttf', 'Cinzel-Medium.ttf'],
     'Lora': [
       'Lora-Regular.ttf',
       'Lora-Medium.ttf',

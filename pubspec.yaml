@@ -166,28 +166,29 @@ flutter:
     # so a catalog-only addition degrades instead of breaking (deity_art.dart).
     - assets/ringtones/
   fonts:
-    # Display serif — ONLY the Latin "Arul" wordmark, screen titles, and the
-    # display numerals/headings the design README names. All other UI text
-    # stays on the system stack (covers all 5 Indic scripts at zero bytes).
-    - family: Marcellus
-      fonts:
-        - asset: assets/fonts/Marcellus-Regular.ttf
-
-    # ── Premium paywall only (design_handoff_arul_premium). BUNDLED, never
-    # fetched — google_fonts stays out for the reasons at the top of this file.
-    # All six cuts are instanced from the upstream VARIABLE fonts and subset to
-    # Latin + punctuation + the currency block by tools/build-fonts.py; that
-    # script is the record of how to regenerate them. Licenses: assets/fonts/
-    # OFL-*.txt. The paywall is English-by-decision (CLAUDE.md §5 / the handoff),
-    # so a Latin-only subset can never meet a script it does not cover.
-    # Cinzel 600 also sets the localized tab titles: Flutter falls back per
-    # glyph, so their Indic letters render in the system Noto.
+    # BUNDLED, never fetched — google_fonts stays out for the reasons at the top
+    # of this file. Every cut is instanced from the upstream VARIABLE fonts and
+    # subset to Latin + punctuation + the currency block by tools/build-fonts.py;
+    # that script is the record of how to regenerate them. Licenses:
+    # assets/fonts/OFL-*.txt. Cinzel sets the wordmark, display tiers and tab titles, Jost
+    # the rest of the UI, Lora the English-only paywall. Flutter falls back per
+    # glyph, so Indic letters in a Cinzel or Jost string render in system Noto.
     - family: Cinzel
       fonts:
         - asset: assets/fonts/Cinzel-Medium.ttf
           weight: 500
         - asset: assets/fonts/Cinzel-SemiBold.ttf
           weight: 600
+    - family: Jost
+      fonts:
+        - asset: assets/fonts/Jost-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Jost-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Jost-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Jost-Bold.ttf
+          weight: 700
     - family: Lora
       fonts:
         - asset: assets/fonts/Lora-Regular.ttf
@@ -202,8 +203,8 @@ flutter:
     # The price numerals. The handoff asks for Georgia, which Android does not
     # ship; Gelasio is Georgia's metric-compatible open twin and keeps the
     # old-style figures the design renders with (1/2 at x-height, 3/5/7/9
-    # descending). It is also the ONLY serif here that carries U+20B9 ₹ —
-    # Cinzel, Lora and Marcellus all lack it — so it doubles as the fallback
+    # descending). It is also the ONLY face here that carries U+20B9 ₹ —
+    # Cinzel, Jost and Lora all lack it — so it doubles as the fallback
     # that keeps a rupee sign inside Lora body copy from landing in Roboto.
     - family: Gelasio
       fonts:

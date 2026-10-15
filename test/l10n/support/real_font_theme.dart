@@ -23,24 +23,27 @@ bool kUseHarnessFonts = true;
 /// The app's own bundled faces render as themselves -> the transform only supplies their fallback chain.
 /// Every other family, including one this transform already assigned, is re-derived from the weight.
 /// That is what makes the transform idempotent.
-const Set<String> kBundledFamilies = <String>{
-  kSerifFamily,
-  'Cinzel',
-  'Lora',
-  'Gelasio',
-};
+const Set<String> kBundledFamilies = <String>{kSerifFamily, 'Lora', 'Gelasio'};
 
 /// Gives [style] the family and fallback chain carrying its own weight's real metrics.
-/// A bundled family is left alone apart from the chain -> `Marcellus` is Latin-only and must render as itself.
+/// A bundled family is left alone apart from the chain -> Cinzel is Latin-only and must render as itself.
 /// The Indic chain sits underneath it, exactly as Android hands a Tamil headline to the system fallback.
-/// Same for the paywall's Cinzel, Lora and Gelasio.
+/// Jost is the exception: its per-weight family is re-derived even when already assigned.
+/// A `copyWith(fontWeight:)` on a resolved `Jost400` would otherwise measure the wrong cut.
 TextStyle realizeTextStyle(TextStyle style) {
   if (!kUseHarnessFonts) return style;
   final weight = style.fontWeight ?? FontWeight.w400;
   final family = style.fontFamily;
-  final keepFamily = family != null && kBundledFamilies.contains(family);
+  final String resolved;
+  if (family != null && family.startsWith(kSansFamily)) {
+    resolved = sansFamilyFor(weight);
+  } else if (family != null && kBundledFamilies.contains(family)) {
+    resolved = family;
+  } else {
+    resolved = uiFamilyFor(weight);
+  }
   return style.copyWith(
-    fontFamily: keepFamily ? family : uiFamilyFor(weight),
+    fontFamily: resolved,
     fontFamilyFallback: fallbackFor(weight),
   );
 }

@@ -99,7 +99,12 @@ void paintStatusOverlay(Canvas canvas, Size size, StatusOverlaySpec spec) {
     canvas
       ..save()
       ..clipRect(layout.clip);
-    _paintPhoto(canvas, photo, photoRect, spec.slot?.shape ?? StatusSlotShape.circle);
+    _paintPhoto(
+      canvas,
+      photo,
+      photoRect,
+      spec.slot?.shape ?? StatusSlotShape.circle,
+    );
     canvas.restore();
   }
   final band = layout.band;
@@ -123,14 +128,29 @@ void paintStatusOverlay(Canvas canvas, Size size, StatusOverlaySpec spec) {
   }
 }
 
-void _paintPhoto(Canvas canvas, ui.Image photo, Rect rect, StatusSlotShape shape) {
-  final src = Rect.fromLTWH(0, 0, photo.width.toDouble(), photo.height.toDouble());
+void _paintPhoto(
+  Canvas canvas,
+  ui.Image photo,
+  Rect rect,
+  StatusSlotShape shape,
+) {
+  final src = Rect.fromLTWH(
+    0,
+    0,
+    photo.width.toDouble(),
+    photo.height.toDouble(),
+  );
   // A clip, never a saveLayer + dstIn mask: Impeller dropped the mask and drew every soft shape as a
   // hard square. The soft shapes keep their outline; the feather is given up.
   canvas
     ..save()
     ..clipPath(_shapePath(shape, rect))
-    ..drawImageRect(photo, src, rect, Paint()..filterQuality = FilterQuality.high)
+    ..drawImageRect(
+      photo,
+      src,
+      rect,
+      Paint()..filterQuality = FilterQuality.high,
+    )
     ..restore();
 }
 
@@ -172,6 +192,7 @@ void _paintName(Canvas canvas, String name, Rect area, double bandHeight) {
     text: TextSpan(
       text: name,
       style: TextStyle(
+        fontFamily: ArulTokens.sans,
         color: ArulTokens.ivory,
         fontSize: fontSize,
         fontWeight: FontWeight.w700,
@@ -187,7 +208,10 @@ void _paintName(Canvas canvas, String name, Rect area, double bandHeight) {
   final natural = layout(fontSize);
   if (natural.width > area.width) {
     // Long names shrink first, down to a floor that still reads on a phone; past it they ellipsise.
-    fontSize = math.max(fontSize * area.width / natural.width, bandHeight * 0.34);
+    fontSize = math.max(
+      fontSize * area.width / natural.width,
+      bandHeight * 0.34,
+    );
   }
   natural.dispose();
   final text = layout(fontSize, maxWidth: area.width);
@@ -208,7 +232,8 @@ class StatusOverlayPainter extends CustomPainter {
   final StatusOverlaySpec spec;
 
   @override
-  void paint(Canvas canvas, Size size) => paintStatusOverlay(canvas, size, spec);
+  void paint(Canvas canvas, Size size) =>
+      paintStatusOverlay(canvas, size, spec);
 
   @override
   bool shouldRepaint(StatusOverlayPainter old) =>

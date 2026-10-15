@@ -8,6 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 
+import '../../../theme/arul_tokens.dart';
+
 class ShareWatermarkException implements Exception {
   const ShareWatermarkException(this.message);
   final String message;
@@ -179,7 +181,7 @@ class ShareWatermarkService {
   ///
   /// `foreground` and `color` cannot both live on one [TextStyle] -> two painters.
   /// Shared by the wordmark and the code -> one tweak serves both, and both read on any background.
-  /// The bundled 'Marcellus'; the engine falls back to the default typeface when it is unavailable.
+  /// The bundled Cinzel; the engine falls back to the default typeface when it is unavailable.
   (TextPainter, TextPainter) _labelPainters(String value, double fontSize) {
     TextPainter build(TextStyle style) => TextPainter(
       text: TextSpan(text: value, style: style),
@@ -188,7 +190,7 @@ class ShareWatermarkService {
 
     final stroke = build(
       TextStyle(
-        fontFamily: 'Marcellus',
+        fontFamily: ArulTokens.serif,
         fontSize: fontSize,
         foreground: Paint()
           ..style = PaintingStyle.stroke
@@ -198,7 +200,7 @@ class ShareWatermarkService {
     );
     final fill = build(
       TextStyle(
-        fontFamily: 'Marcellus',
+        fontFamily: ArulTokens.serif,
         fontSize: fontSize,
         color: const Color.fromRGBO(255, 255, 255, _opacity),
         shadows: [

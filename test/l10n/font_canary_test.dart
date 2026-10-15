@@ -195,29 +195,46 @@ void main() {
     });
   });
 
-  group('the serif hands Indic to the fallback chain', () {
-    // headlineSmall carries every screen title and is Marcellus, which is Latin-only.
-    // On device the Tamil in it falls through to the system Noto -> the harness must reproduce that, not measure tofu.
-    for (final entry in _samples.entries) {
-      test('${entry.key} in a Marcellus slot matches the Noto face', () {
-        final viaSerif = _width(
-          entry.value,
-          family: kSerifFamily,
+  group('the bundled faces hand Indic to the fallback chain', () {
+    // Cinzel and Jost are Latin-only and carry every title, label and body line.
+    // On device the Tamil in them falls through to the system Noto -> the harness must reproduce that, not measure tofu.
+    for (final family in [kSerifFamily, sansFamilyFor(FontWeight.w400)]) {
+      for (final entry in _samples.entries) {
+        test('${entry.key} in a $family slot matches the Noto face', () {
+          final viaBundled = _width(
+            entry.value,
+            family: family,
+            fallback: fallbackFor(FontWeight.w400),
+            locale: entry.key,
+          );
+          expect(
+            viaBundled,
+            _viaChain(entry.value, FontWeight.w400, entry.key),
+          );
+        });
+      }
+
+      test('Latin in a $family slot stays $family', () {
+        final bundled = _width(
+          _latin,
+          family: family,
           fallback: fallbackFor(FontWeight.w400),
-          locale: entry.key,
+          locale: 'en',
         );
-        expect(viaSerif, _viaChain(entry.value, FontWeight.w400, entry.key));
+        expect(bundled, isNot(_viaChain(_latin, FontWeight.w400, 'en')));
       });
     }
 
-    test('Latin in a Marcellus slot stays Marcellus', () {
-      final serif = _width(
-        _latin,
-        family: kSerifFamily,
-        fallback: fallbackFor(FontWeight.w400),
-        locale: 'en',
-      );
-      expect(serif, isNot(_viaChain(_latin, FontWeight.w400, 'en')));
+    test('each Jost weight measures its own cut', () {
+      final widths = {
+        for (final w in _weights)
+          _width(
+            _latin,
+            family: sansFamilyFor(w),
+            weight: w,
+          ).toStringAsFixed(2),
+      };
+      expect(widths, hasLength(_weights.length));
     });
   });
 
@@ -246,6 +263,23 @@ void main() {
       expect(uiFamilyFor(FontWeight.w700), isNot(uiFamilyFor(FontWeight.w400)));
     });
 
+    test('re-derives Jost from the weight, even once assigned', () {
+      expect(
+        realizeTextStyle(const TextStyle(fontFamily: kSansFamily)).fontFamily,
+        sansFamilyFor(FontWeight.w400),
+      );
+      // A `copyWith(fontWeight:)` over a theme style that already resolved to Jost400.
+      final bumped = realizeTextStyle(
+        TextStyle(
+          fontFamily: sansFamilyFor(FontWeight.w400),
+          fontWeight: FontWeight.w700,
+        ),
+      );
+      expect(bumped.fontFamily, sansFamilyFor(FontWeight.w700));
+      expect(bumped.fontFamilyFallback, fallbackFor(FontWeight.w700));
+      expect(sansFamilyFor(FontWeight.w800), sansFamilyFor(FontWeight.w700));
+    });
+
     test('leaves bundled families alone but gives them a chain', () {
       final s = realizeTextStyle(
         const TextStyle(fontFamily: kSerifFamily, fontWeight: FontWeight.w400),
@@ -265,11 +299,18 @@ void main() {
         FontWeight.w900,
       ]) {
         expect(kRegisteredFamilies, contains(uiFamilyFor(w)));
+        expect(kRegisteredFamilies, contains(sansFamilyFor(w)));
         for (final f in fallbackFor(w)) {
           expect(kRegisteredFamilies, contains(f));
         }
         expect(
           isUnrealizedStyle(realizeTextStyle(TextStyle(fontWeight: w))),
+          isFalse,
+        );
+        expect(
+          isUnrealizedStyle(
+            realizeTextStyle(TextStyle(fontFamily: kSansFamily, fontWeight: w)),
+          ),
           isFalse,
         );
       }

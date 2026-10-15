@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/arul_tokens.dart';
 import 'tokens.dart';
 
-/// `fontFamily` is null everywhere = the platform stack (Roboto plus Android's Noto fallbacks).
+/// Display and headline tiers are Cinzel, the rest Jost; Indic letters fall back per glyph to Android's Noto.
 /// An unset slot falls back to Material's own TextTheme, in its BLACK/WHITE colour rather than ours.
 /// So every slot is filled deliberately -> no widget can silently paint outside the palette.
 abstract final class ArulType {
   static const _tight = -0.4;
 
-  /// The bundled display serif. Latin-only -> it must never wrap a localized string.
-  /// Used by the display/headline tiers and [wordmark], nothing else.
-  static const _serif = 'Marcellus';
+  static const _serif = ArulTokens.serif;
+
+  static const _sans = ArulTokens.sans;
 
   static TextTheme scale(Color ink, Color muted) => TextTheme(
     displayLarge: TextStyle(
@@ -56,6 +57,7 @@ abstract final class ArulType {
       color: ink,
     ),
     titleLarge: TextStyle(
+      fontFamily: _sans,
       fontSize: 18,
       height: 1.3,
       fontWeight: FontWeight.w600,
@@ -63,27 +65,46 @@ abstract final class ArulType {
       color: ink,
     ),
     titleMedium: TextStyle(
+      fontFamily: _sans,
       fontSize: 15,
       height: 1.35,
       fontWeight: FontWeight.w600,
       color: ink,
     ),
     titleSmall: TextStyle(
+      fontFamily: _sans,
       fontSize: 13,
       height: 1.4,
       fontWeight: FontWeight.w600,
       color: ink,
     ),
-    bodyLarge: TextStyle(fontSize: 16, height: 1.45, color: ink),
-    bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: muted),
-    bodySmall: TextStyle(fontSize: 12, height: 1.4, color: muted),
+    bodyLarge: TextStyle(
+      fontFamily: _sans,
+      fontSize: 16,
+      height: 1.45,
+      color: ink,
+    ),
+    bodyMedium: TextStyle(
+      fontFamily: _sans,
+      fontSize: 14,
+      height: 1.45,
+      color: muted,
+    ),
+    bodySmall: TextStyle(
+      fontFamily: _sans,
+      fontSize: 12,
+      height: 1.4,
+      color: muted,
+    ),
     labelLarge: TextStyle(
+      fontFamily: _sans,
       fontSize: 15,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
       color: ink,
     ),
     labelMedium: TextStyle(
+      fontFamily: _sans,
       fontSize: 13,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -91,6 +112,7 @@ abstract final class ArulType {
     ),
 
     labelSmall: TextStyle(
+      fontFamily: _sans,
       fontSize: 11,
       fontWeight: FontWeight.w600,
       letterSpacing: 1.6,
@@ -107,7 +129,7 @@ abstract final class ArulType {
   static TextTheme onMedia() => scale(Colors.white, ArulColors.ivoryText);
 
   /// The wordmark — "Arul", and ONLY "Arul".
-  /// Marcellus is Latin-only -> a localized string set in it falls back per glyph, in a face nobody chose.
+  /// Cinzel is Latin-only -> a localized string set in it falls back per glyph, in a face nobody chose.
   /// So this is a factory and NOT a TextTheme slot -> reaching for it has to be a deliberate act.
   static TextStyle wordmark(Color color) => TextStyle(
     fontFamily: _serif,
