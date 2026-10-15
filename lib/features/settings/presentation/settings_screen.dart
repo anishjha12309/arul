@@ -465,7 +465,7 @@ class _ProfileCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: ArulTokens.rowTitle.copyWith(
-                    fontSize: 16,
+                    fontSize: 15.5,
                     fontWeight: FontWeight.w600,
                     color: p.text,
                   ),

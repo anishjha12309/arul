@@ -335,21 +335,21 @@ abstract final class ArulTokens {
 
   static const TextStyle screenTitle = TextStyle(
     fontFamily: serif,
-    fontSize: 22,
+    fontSize: 19,
     height: 1.15,
     letterSpacing: 0.3,
   );
 
-  /// The title in a top-level tab's header band: 24px Cinzel 600, untracked.
+  /// The title in a top-level tab's header band: 20px Cinzel 600, untracked.
   ///
   /// ONE size for every tab — they cross-fade, so a resizing title read as the screen jumping.
   /// Never tune it per screen: change it here and every tab moves together.
   /// No tracking: `.04em` on lowercase pulled "Ringtones" apart into loose letters.
-  /// 24 × 1.15 = 27.6 clears the 34 band; past ~29 the band grows, and a bigger band resizes the reel.
+  /// 20 × 1.15 = 23 clears the 34 band; past ~29 the band grows, and a bigger band resizes the reel.
   static const TextStyle screenHeaderTitle = TextStyle(
     fontFamily: titleSerif,
     fontWeight: FontWeight.w600,
-    fontSize: 24,
+    fontSize: 20,
     height: 1.15,
     letterSpacing: 0,
   );
@@ -361,27 +361,27 @@ abstract final class ArulTokens {
   );
 
   static const TextStyle sheetTitle = TextStyle(
-    fontSize: 17,
+    fontSize: 16,
     height: 1.3,
     fontWeight: FontWeight.w600,
   );
 
   static const TextStyle rowTitle = TextStyle(
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.35,
     fontWeight: FontWeight.w500,
   );
 
-  /// Row title with the list's optical tracking. 15px w500, ls `.005em` (15 × .005 = 0.075).
+  /// Row title with the list's optical tracking. 14.5px w500, ls `.005em` (14.5 × .005 ≈ 0.07).
   /// For the ringtone row — a single ellipsised line needs air a two-line [rowTitle] block does not.
   static const TextStyle rowTitleTracked = TextStyle(
-    fontSize: 15,
+    fontSize: 14.5,
     height: 1.35,
     fontWeight: FontWeight.w500,
-    letterSpacing: 0.075,
+    letterSpacing: 0.07,
   );
 
-  static const TextStyle rowSub = TextStyle(fontSize: 12.5, height: 1.35);
+  static const TextStyle rowSub = TextStyle(fontSize: 12, height: 1.35);
 
   /// Floating-dock label, inactive. 12px w500, ls `.2`.
   ///
@@ -407,14 +407,14 @@ abstract final class ArulTokens {
   static const TextStyle caption = TextStyle(fontSize: 12, height: 1.4);
 
   static const TextStyle chip = TextStyle(
-    fontSize: 13.5,
+    fontSize: 13,
     height: 1,
     leadingDistribution: TextLeadingDistribution.even,
     fontWeight: FontWeight.w500,
   );
 
   static const TextStyle chipActive = TextStyle(
-    fontSize: 13.5,
+    fontSize: 13,
     height: 1,
     leadingDistribution: TextLeadingDistribution.even,
     fontWeight: FontWeight.w600,
@@ -430,11 +430,11 @@ abstract final class ArulTokens {
   // Anything centring one of these styles in its own box then gets it right for free.
   // A control that SIZES to the label measures ~6px shorter — why the surface chip's padding was re-cut.
 
-  /// Button label. 15px w600 from the spec's 15–16 range; `.copyWith(fontSize: 16)` where asked.
+  /// Button label. 15px w500 from the spec's 15–16 range; `.copyWith(fontSize: 16)` where asked.
   static const TextStyle button = TextStyle(
     fontSize: 15,
     height: 1.2,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w500,
   );
 
   /// Card corner. spec range 18–22; chosen 20.

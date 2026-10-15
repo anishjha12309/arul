@@ -12,6 +12,7 @@ import 'package:arul/core/analytics/analytics_provider.dart';
 import 'package:arul/core/analytics/analytics_service.dart';
 import 'package:arul/core/connectivity/connectivity_provider.dart';
 import 'package:arul/core/deeplink/deep_link_target.dart';
+import 'package:arul/core/providers/locale_provider.dart';
 import 'package:arul/core/providers/shared_preferences_provider.dart';
 import 'package:arul/data/models/app_config_model.dart';
 import 'package:arul/data/models/wallpaper.dart';
@@ -326,6 +327,42 @@ void main() {
             .dx,
       ),
     );
+  });
+
+  test('a language category maps back to its app language', () {
+    expect(appLanguageForStatusSlug('hindi'), 'hi');
+    expect(appLanguageForStatusSlug('malayalam'), 'ml');
+    expect(appLanguageForStatusSlug('krishna'), isNull);
+    expect(statusSlugForLanguage('en'), isNull);
+  });
+
+  testWidgets('a language chip sets the app language; a new language moves the chip', (
+    tester,
+  ) async {
+    await pump(tester, catalog: () async => [..._clips, _tamil]);
+    await _settle(tester);
+    final scope = ProviderScope.containerOf(
+      tester.element(find.byType(StatusScreen)),
+    );
+    expect(scope.read(activeStatusCategoryProvider), WallpaperCategory.allSlug);
+
+    await tester.tap(find.bySemanticsIdentifier('arul_status_chip_tamil'));
+    await _settle(tester);
+    expect(prefs.getString('arul_locale'), 'ta');
+    expect(scope.read(localeProvider).languageCode, 'ta');
+    expect(scope.read(activeStatusCategoryProvider), 'tamil');
+
+    await tester.tap(find.bySemanticsIdentifier('arul_status_chip_murugan'));
+    await _settle(tester);
+    expect(scope.read(localeProvider).languageCode, 'ta');
+    expect(scope.read(activeStatusCategoryProvider), 'murugan');
+
+    // A change made in Settings clears the pick, so the chips follow the app language.
+    await scope
+        .read(localeProvider.notifier)
+        .setLocale(const Locale('en'), source: LanguageSource.pick);
+    await _settle(tester);
+    expect(scope.read(activeStatusCategoryProvider), WallpaperCategory.allSlug);
   });
 
   testWidgets('a cold status link is never interrupted by the language sheet', (

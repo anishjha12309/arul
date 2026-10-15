@@ -336,7 +336,7 @@ class _PrimaryPill extends StatelessWidget {
                         maxLines: 1,
                         textAlign: TextAlign.center,
                         style: ArulTokens.button.copyWith(
-                          fontSize: 16,
+                          fontSize: 15.5,
                           color: ArulTokens.maroon,
                         ),
                       ),

@@ -1,3 +1,5 @@
+import 'dart:ui' show Locale;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/widgets/reel/reel_prefetch_service.dart';
@@ -119,14 +121,25 @@ final statusCategoriesProvider = Provider<List<WallpaperCategory>>((ref) {
   return [ordered[i], ...ordered.take(i), ...ordered.skip(i + 1)];
 });
 
-/// The status category of an app language (owner: the app language's statuses lead). Only the four
-/// South Indian languages have one; English and Hindi open on All.
-String? statusSlugForLanguage(String code) => const {
+const _statusSlugByLanguage = {
   'ta': 'tamil',
   'te': 'telugu',
   'kn': 'kannada',
   'ml': 'malayalam',
-}[code];
+  'hi': 'hindi',
+};
+
+/// The status category of an app language (owner: the app language's statuses lead). English has
+/// none and opens on All.
+String? statusSlugForLanguage(String code) => _statusSlugByLanguage[code];
+
+/// The app language a status category stands for, or null for a non-language category.
+String? appLanguageForStatusSlug(String slug) {
+  for (final e in _statusSlugByLanguage.entries) {
+    if (e.value == slug) return e.key;
+  }
+  return null;
+}
 
 /// The app language's category when the catalog has it -> first chip and the opening selection.
 /// Never while a status link waits: the link must land on All, on its own clip.
@@ -148,11 +161,25 @@ final selectedStatusCategoryProvider =
     );
 
 /// Null until a chip, a link or Browse all picks one -> until then the preferred category leads.
+/// A new app language clears the pick, so the chips follow a change made in Settings.
 class SelectedStatusCategory extends Notifier<String?> {
   @override
-  String? build() => null;
+  String? build() {
+    ref.watch(localeProvider.select((l) => l.languageCode));
+    return null;
+  }
 
   void select(String slug) => state = slug;
+
+  /// A chip tap. A language's chip also makes it the app language (owner: one language everywhere).
+  Future<void> pick(String slug) async {
+    state = slug;
+    final code = appLanguageForStatusSlug(slug);
+    if (code == null || code == ref.read(localeProvider).languageCode) return;
+    await ref
+        .read(localeProvider.notifier)
+        .setLocale(Locale(code), source: LanguageSource.pick);
+  }
 }
 
 /// The chip the reel shows: the user's pick, else the app language's category, else All.

@@ -52,7 +52,7 @@ inherits it. **Neither has Indic glyphs**: localized text falls back per glyph t
 Never add a second header style to "fix" it; watch ascender clipping. Jost's line is ~1.45 em (Roboto
 ~1.17), so an unfixed `height` grows: rerun the l10n matrix after any type change.
 
-- **The tab title is 24 px Cinzel SemiBold (wght 650, registered as 600), UNTRACKED** (owner's
+- **The tab title is 20 px Cinzel SemiBold (wght 650, registered as 600), UNTRACKED** (owner's
   pick). `.04em` on lowercase spread "Ringtones" into loose letters. Tracking belongs to the wordmark (one
   short word) and to caps, never to a lowercase title.
 - `ArulScreenHeader`'s per-script drop is in ems of the title, so it follows a size change; after one,

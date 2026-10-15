@@ -706,6 +706,8 @@ class StatusChips extends ConsumerWidget {
     return SizedBox(
       height: ArulChip.denseStripHeight,
       child: ListView.separated(
+        // A new language moves its chip to the front -> restart at the front so the pick stays in view.
+        key: ValueKey(lead),
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(
           horizontal: ArulTokens.screenPadding,
@@ -720,9 +722,9 @@ class StatusChips extends ConsumerWidget {
             variant: ArulChipVariant.category,
             dense: true,
             identifier: 'arul_status_chip_${c.slug}',
-            onTap: () => ref
-                .read(selectedStatusCategoryProvider.notifier)
-                .select(c.slug),
+            onTap: () => unawaited(
+              ref.read(selectedStatusCategoryProvider.notifier).pick(c.slug),
+            ),
           );
         },
       ),
@@ -1001,7 +1003,7 @@ class _BarPill extends StatelessWidget {
 
   static TextStyle style(Color ink) => ArulTokens.button.copyWith(
     fontSize: 13.5,
-    fontWeight: FontWeight.w600,
+    fontWeight: FontWeight.w500,
     color: ink,
   );
 
