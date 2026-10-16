@@ -76,6 +76,10 @@ Done = `flutter analyze` clean · `flutter test` green · worker `check` + `tsc`
 through `tools/deploy-safe.mjs`** · loading, empty and error states · localized edge cases ·
 analytics fire · no secrets. Checklist: the `phase-completion` skill.
 
+Tickets are GitHub Issues (`ticket` helper, `/ticket`). A change runs through the global dev loop
+`/dev <n>`: design → build → check → final (Claude reviewer + one Codex review) → ship. Inside it,
+`phase-completion` and `deploy-worker` stay the gates, and the owner gates (plan, commit) stay.
+
 One commit per phase, one-line plain message, no attribution trailers. **Never commit before the
 owner approves.** The one exception is the pubspec version bump, which `version-commit` auto-commits
 with `git add -A` — so land the phase commit first. The `.aab` is the only guarded artifact
